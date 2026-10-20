@@ -256,7 +256,10 @@ if ($entries.Count -eq 0) { throw '本次提交没有任何文件改动，无需
 
 $treeItems = ($entries | ForEach-Object {
         $shaJson = if ($null -eq $_.sha) { 'null' } else { '"' + $_.sha + '"' }
-        $modeJson = if ($null -eq $_.mode) { 'null' } else { '"' + $_.mode + '"' }
+        # 删除项（sha=null）**也必须带有效的 mode**：传 "mode":null 会被 GitHub 拒绝
+        # （实测 422 "Must supply a valid tree.mode"）。本仓库要删的都是普通文件，
+        # 故取 100644；若将来要删子模块(160000)/symlink(120000)，需改为从父 tree 查原 mode。
+        $modeJson = if ($null -eq $_.mode) { '"100644"' } else { '"' + $_.mode + '"' }
         # 手拼 JSON：PS 5.1 的 ConvertTo-Json 会把单元素数组折叠成对象，
         # 而 git/trees 的 tree 字段必须是数组，一旦折叠就会被 GitHub 拒绝。
         '{"path":' + (ToJsonStr $_.path) + ',"mode":' + $modeJson +

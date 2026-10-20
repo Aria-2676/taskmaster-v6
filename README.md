@@ -72,13 +72,30 @@ JAVA_HOME=D:/Dev/tools/jdk17 \
 | `python tool/verify_task_repo_sql.py` | `taskRepo` 的 SQL 语义，含**对照组**证明断言不是空转 |
 | `python tool/make_golden_sample.py` | 重建金样本（确定性，多次生成 sha256 一致） |
 | `python tool/check_md_blocks.py` | Markdown **渲染**结构（引用块吞段落 / 围栏未闭合 / 列表被吞） |
-| `npx jest` | `src/core/__tests__` 下的单测 |
+| `npm test` | 84 条核心单测：`src/core/__tests__/` 下 42+28+14 条（积分·循环·番茄钟 / 积分商城 / 回收站清理）<br>⚠️ **别用 `npx jest` 跑这些**——它们不是 jest 用例，是自写的迷你运行器，jest 只会报「3 个套件全失败、0 用例」。跑法见下方说明 |
 
 `fixtures/` **不入库**（金样本是二进制，且可确定性重建），
 所以校验脚本在样本缺失时会**自动重建**而不是跳过——跳过等于假通过。
 
 这些工具的判据都有**反向测试**：故意注入违规写法，必须报错并退出 1，
 否则说明工具在空转。
+
+### `npm test` 为什么不是 jest
+
+`src/core/__tests__/` 下那三个文件用的是**自写的迷你运行器**
+（自己的 `test(name, fn)` + `process.exitCode`），不是 jest 用例。
+`npm test` 实际是用 `node --experimental-strip-types` 直接跑它们。
+
+这里踩过一次：`package.json` 原本写的是 `"test": "jest"`，jest 会把这三个文件
+收进去，然后每个都报 `Your test suite must contain at least one test`
+——**3 个套件全红、0 用例**。看上去像「单测全挂了」，实际上 84 条断言全是过的。
+更糟的是 CI 会因此完全拿不到单测信号。
+
+所以现在：`jest.config.js` 用 `testPathIgnorePatterns` 把它们排除，
+`npm test` 走 node 直跑；`npm run test:jest` 留给将来的 RN 组件测试
+（当前没有组件测试，会明确输出 `No tests found`，不是默默通过）。
+
+已配反向测试：往 `recycle.test.ts` 注入一条失败断言后，`npm test` **必须**返回 1。
 
 ## 当前进度
 

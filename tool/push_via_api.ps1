@@ -13,6 +13,13 @@
 #   powershell -ExecutionPolicy Bypass -File tool\push_via_api.ps1 -Branch main -Tag v5.5.25
 #   powershell -ExecutionPolicy Bypass -File tool\push_via_api.ps1 -Force   # 远端已分叉时强制覆盖
 #
+# ⚠️ 推一个**全新的空仓库**时，GitHub 会让 git data API 全部返回
+#    409 "Git Repository is empty" —— blob / tree / commit 无一例外，
+#    本脚本会在上传第一个 blob 时就撞上。绕法：先用 Contents API 造一个提交
+#    把仓库「激活」（PUT /repos/<owner>/<repo>/contents/.init，content 传 base64）。
+#    激活之后本脚本即可直接推根提交：它会自动 force 覆盖那个占位提交，
+#    占位提交随即变成悬空对象、由 GitHub 回收，不会留在历史里。
+#
 # 让「本地与远端 sha 逐位相同」的三个关键点（少一个就会分叉，
 # 分叉后每次推送都要先 fetch，而 fetch 同样被这条烂链路卡住）：
 #   1. blob 内容必须用 git 的**规范化对象字节**。本仓库 core.autocrlf=true，
@@ -130,9 +137,26 @@ Log "仓库：$script:ownerRepo  分支：$Branch"
 
 # ── 2. 本地待推送的提交（只支持「当前 HEAD 单提交快进」这一种情况）──────────
 $headSha = (& git -C $repoRoot rev-parse HEAD).Trim()
-$parentSha = (& git -C $repoRoot rev-parse "$headSha^1").Trim()
-# 父提交的 tree 是内容寻址的，本地/远端同一个 sha；直接取本地的，省一次 API 调用。
-$baseTree = (& git -C $repoRoot log -1 --format=%T $parentSha).Trim()
+
+# 根提交（没有父提交）也要能推：仓库刚建好、第一次推初始提交正是这个情况。
+# 原本直接 `rev-parse HEAD^1` 在根提交上会报错退出，导致新仓库无法用本脚本起头。
+$hasParent = $true
+$parentSha = ''
+try {
+    $parentSha = (& git -C $repoRoot rev-parse --verify "$headSha^1").Trim()
+} catch {
+    $hasParent = $false
+}
+
+# git 的空树 sha：根提交用它当 base_tree（远端是空仓库，没有可复用的树）。
+$EMPTY_TREE = '4b825dc642cb6eb9a060e54bf8d69288fbee4904'
+if ($hasParent) {
+    # 父提交的 tree 是内容寻址的，本地/远端同一个 sha；直接取本地的，省一次 API 调用。
+    $baseTree = (& git -C $repoRoot log -1 --format=%T $parentSha).Trim()
+} else {
+    $baseTree = $EMPTY_TREE
+    Log '本次是根提交（没有父提交）→ 按初始提交处理'
+}
 $localTree = (& git -C $repoRoot log -1 --format=%T $headSha).Trim()
 
 # message 必须逐字节一致：从 commit 对象里切，不要用 `git log --format=%B`（会多带换行）。
@@ -147,12 +171,18 @@ $committerEmail = (& git -C $repoRoot log -1 --format=%ce $headSha).Trim()
 $authorDate = Convert-ToUtc ((& git -C $repoRoot log -1 --format=%aI $headSha).Trim())
 $committerDate = Convert-ToUtc ((& git -C $repoRoot log -1 --format=%cI $headSha).Trim())
 
-$remoteRef = Invoke-GitHubApi -Method GET -Path "git/ref/heads/$Branch"
-$remoteSha = $remoteRef.object.sha
-Log "远端 $Branch = $remoteSha"
+# 空仓库上还没有这个分支，GET 会 404 —— 那正是初始提交的正常情况，不能当错误抛出。
+$remoteSha = ''
+try {
+    $remoteRef = Invoke-GitHubApi -Method GET -Path "git/ref/heads/$Branch"
+    $remoteSha = $remoteRef.object.sha
+} catch {
+    Warn "远端还没有 $Branch 分支（空仓库）→ 本次按「创建分支」处理"
+}
+if ($remoteSha) { Log "远端 $Branch = $remoteSha" } else { Log "远端 $Branch = （尚不存在）" }
 Log "本地 HEAD     = $headSha"
 
-if ($remoteSha -eq $headSha) {
+if ($remoteSha -and $remoteSha -eq $headSha) {
     Log '远端已包含该提交，分支无需推送。'
     # 分支虽然同步，仍可能需要补推 tag（发版时常见：分支早已推好，tag 是新建的）。
     if (-not [string]::IsNullOrWhiteSpace($Tag)) {
@@ -170,7 +200,8 @@ if ($remoteSha -eq $headSha) {
     }
     exit 0
 }
-if ($remoteSha -ne $parentSha) {
+# 远端不存在分支（初始提交）或本地是根提交时，都没有「必须等于父提交」这回事。
+if ($remoteSha -and $hasParent -and $remoteSha -ne $parentSha) {
     if (-not $Force) {
         throw "远端 $Branch（$remoteSha）不是本地 HEAD 的父提交（$parentSha）。" +
               '本工具只做快进推送；需要先对齐远端，或用 -Force 明确覆盖。'
@@ -179,8 +210,15 @@ if ($remoteSha -ne $parentSha) {
 }
 
 # ── 3. 逐个上传本次改动文件（其余文件复用 base_tree，不必重传）──────────────
-$rawChanged = & git -C $repoRoot -c core.quotepath=false diff-tree `
-    -r --no-commit-id --name-status $parentSha $headSha
+if ($hasParent) {
+    $rawChanged = & git -C $repoRoot -c core.quotepath=false diff-tree `
+        -r --no-commit-id --name-status $parentSha $headSha
+} else {
+    # 根提交没有父提交可以 diff，改成列出整棵树；补成 diff-tree 的
+    # 「状态<TAB>路径」格式，下面的循环就不用为它分叉。
+    $rawChanged = & git -C $repoRoot -c core.quotepath=false ls-tree -r --name-only $headSha |
+        ForEach-Object { "A`t$_" }
+}
 $entries = @()
 $blobCount = 0
 foreach ($line in $rawChanged) {
@@ -234,15 +272,25 @@ if ($tree.sha -ne $localTree) {
 $identityJson = ',"author":{"name":' + (ToJsonStr $authorName) + ',"email":' + (ToJsonStr $authorEmail) +
 ',"date":' + (ToJsonStr $authorDate) + '},"committer":{"name":' + (ToJsonStr $committerName) +
 ',"email":' + (ToJsonStr $committerEmail) + ',"date":' + (ToJsonStr $committerDate) + '}'
+$parentsJson = if ($hasParent) { '[' + (ToJsonStr $parentSha) + ']' } else { '[]' }
 $commitJson = '{"message":' + (ToJsonStr $message) + ',"tree":' + (ToJsonStr $tree.sha) +
-    ',"parents":[' + (ToJsonStr $parentSha) + ']' + $identityJson + '}'
+    ',"parents":' + $parentsJson + $identityJson + '}'
 $newCommit = Invoke-GitHubApi -Method POST -Path 'git/commits' -Json $commitJson
 Log "新 commit = $($newCommit.sha)"
 
 # ── 4. 移动分支 ref（默认 force=false：不接受非快进）────────────────────────
-$forceJson = if ($Force) { 'true' } else { 'false' }
-$refJson = '{"sha":' + (ToJsonStr $newCommit.sha) + ',"force":' + $forceJson + '}'
-Invoke-GitHubApi -Method PATCH -Path "git/refs/heads/$Branch" -Json $refJson | Out-Null
+if ($remoteSha) {
+    # 初始推送（本地是根提交）必须 force：远端那个提交只是用来把空仓库激活的占位，
+    # 与本地历史毫无关系，结构上不可能构成快进。
+    $forceJson = if ($Force -or -not $hasParent) { 'true' } else { 'false' }
+    $refJson = '{"sha":' + (ToJsonStr $newCommit.sha) + ',"force":' + $forceJson + '}'
+    Invoke-GitHubApi -Method PATCH -Path "git/refs/heads/$Branch" -Json $refJson | Out-Null
+} else {
+    # 分支还不存在：这不是「移动 ref」，而是「创建 ref」（git/refs 要求带完整 ref 名）。
+    $refJson = '{"ref":"refs/heads/' + $Branch + '","sha":' + (ToJsonStr $newCommit.sha) + '}'
+    Invoke-GitHubApi -Method POST -Path 'git/refs' -Json $refJson | Out-Null
+    Log "已创建 refs/heads/$Branch"
+}
 
 # 回读校验：确认远端 ref 真的指向新提交，而不是「请求成功了但没生效」。
 $verify = Invoke-GitHubApi -Method GET -Path "git/ref/heads/$Branch"
@@ -278,7 +326,10 @@ try {
     $env:GIT_COMMITTER_NAME = $committerName
     $env:GIT_COMMITTER_EMAIL = $committerEmail
     $env:GIT_COMMITTER_DATE = $committerDate
-    $localSha = (& git -C $repoRoot commit-tree $tree.sha -p $parentSha -F $tmpMsg).Trim()
+    $ctArgs = @('commit-tree', $tree.sha)
+    if ($hasParent) { $ctArgs += @('-p', $parentSha) }
+    $ctArgs += @('-F', $tmpMsg)
+    $localSha = (& git -C $repoRoot @ctArgs).Trim()
 } finally {
     Remove-Item $tmpMsg -Force -ErrorAction SilentlyContinue
 }

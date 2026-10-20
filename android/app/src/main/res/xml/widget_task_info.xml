@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  AppWidget 元数据。
+  注意：updatePeriodMillis 系统有 30 分钟下限（1800000ms 正好等于下限），
+  更频繁的刷新必须靠 JS 侧调用 DevControl.updateWidgets() 主动触发。
+-->
+<appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
+    android:initialLayout="@layout/widget_task"
+    android:minHeight="110dp"
+    android:minWidth="250dp"
+    android:previewLayout="@layout/widget_task"
+    android:resizeMode="horizontal|vertical"
+    android:updatePeriodMillis="1800000"
+    android:widgetCategory="home_screen" />

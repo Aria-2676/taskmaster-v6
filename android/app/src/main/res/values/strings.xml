@@ -1,0 +1,11 @@
+<resources>
+    <string name="app_name">任务管家 v6</string>
+
+    <!-- 桌面小组件 -->
+    <string name="widget_task_title">今日任务</string>
+    <string name="widget_task_label_todo">待办</string>
+    <string name="widget_task_label_done">已完成</string>
+    <string name="widget_task_label_points">积分</string>
+    <!-- U+2014 EM DASH：数据不可用时的占位符 -->
+    <string name="widget_task_placeholder">—</string>
+</resources>

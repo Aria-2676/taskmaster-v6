@@ -1,0 +1,11 @@
+{
+  "extends": "@react-native/typescript-config",
+  "compilerOptions": {
+    // RN 基础配置里写死了 "types": ["jest"]，只会自动引入 @types/jest。
+    // src/core/__tests__/core.test.ts 用的是 node:assert 跑脱机型自测，
+    // 必须显式把 "node" 加进来，否则即使装了 @types/node 也依然报 TS2591。
+    "types": ["jest", "node"]
+  },
+  "include": ["**/*.ts", "**/*.tsx"],
+  "exclude": ["**/node_modules", "**/Pods"]
+}

@@ -1,0 +1,22 @@
+{
+  "_comment": [
+    "V6 的更新清单 —— 本仓库唯一一份。V5 的清单在另一个仓库（Aria-2676/note_study），两边互不相干。",
+    "发新版本时只改这里：latest.version 与 downloads（url / sha256 / sizeBytes）。",
+    "downloads 为空 = 当前没有可下载产物。客户端会判定为「无更新」，不会报错 —— 这是刚发完版、包还没传时的安全状态。",
+    "发版顺序铁律：先传 APK 到 GitHub Release → 拿到 sha256 与 sizeBytes → 再改这里。反了会让用户点更新拿到死链。",
+    "APK 必须走 GitHub Releases：jsDelivr 对单文件有 20MB 上限，本包 21~62MB 必然超限（实测 403）。",
+    "minSupported 决定强制更新：低于它的客户端只能升级、不能跳过。留空表示不强制。"
+  ],
+  "schemaVersion": 1,
+  "updatedAt": "2026-10-27T00:00:00Z",
+  "minSupported": "6.0.0",
+  "latest": {
+    "version": "6.0.0",
+    "notes": [
+      "全新的 6.x 主包：字段可配置、编辑层、可换首页、插件体系。",
+      "注意：V5 的任务与积分不会带过来，V6 从空白开始。",
+      "积分、商城、番茄钟、统计等改为插件提供，会陆续上线。"
+    ],
+    "downloads": {}
+  }
+}

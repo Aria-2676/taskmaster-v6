@@ -1,0 +1,24 @@
+{
+  "id": "demo_help",
+  "name": "使用说明",
+  "version": "1.4.0",
+  "contract": 1,
+  "entry": "index.html",
+  "description": "验证安装、读写、事件与私有存储的示例插件",
+  "icon": "help",
+  "permissions": ["task:read", "task:write"],
+  "hooks": ["task.completed"],
+  "storage": {
+    "version": 1,
+    "tables": [
+      {
+        "name": "visits",
+        "columns": [
+          { "name": "at", "type": "text", "notNull": true },
+          { "name": "via", "type": "text" }
+        ],
+        "indexes": [["at"]]
+      }
+    ]
+  }
+}

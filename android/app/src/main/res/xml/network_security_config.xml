@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  网络安全配置。
+
+  只为「本地小游戏容器」放行明文回环地址：
+  小游戏下载解压后由 App 内的 127.0.0.1 静态服务提供，WebView 需以 http 加载，
+  而 Android 自 API 28 起默认禁止明文流量，故须显式放行。
+  其余域名仍强制 HTTPS（不使用全局 usesCleartextTraffic）。
+-->
+<network-security-config>
+    <domain-config cleartextTrafficPermitted="true">
+        <domain includeSubdomains="false">127.0.0.1</domain>
+        <domain includeSubdomains="false">localhost</domain>
+    </domain-config>
+</network-security-config>

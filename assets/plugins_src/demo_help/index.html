@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>使用说明</title>
+<style>
+  :root {
+    --bg: #ffffff;
+    --fg: #1b1b1f;
+    --muted: #5f5e6a;
+    --line: #e6e1ee;
+    --accent: #6750a4;
+    --chip: #eeedfe;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #141218;
+      --fg: #e6e1e9;
+      --muted: #a8a4b3;
+      --line: #2b2830;
+      --accent: #cfbdfe;
+      --chip: #26215c;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    padding: 20px 18px 32px;
+    background: var(--bg);
+    color: var(--fg);
+    font: 14px/1.65 -apple-system, "Segoe UI", "Noto Sans SC", system-ui, sans-serif;
+    -webkit-text-size-adjust: 100%;
+  }
+  h1 { font-size: 19px; font-weight: 600; margin: 0 0 6px; }
+  .sub { color: var(--muted); font-size: 12.5px; margin: 0 0 20px; }
+  .card {
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: 14px 14px 6px;
+    margin-bottom: 14px;
+  }
+  .row { display: flex; gap: 10px; margin-bottom: 12px; }
+  .dot {
+    width: 7px; height: 7px; border-radius: 50%;
+    background: var(--accent); flex: none; margin-top: 8px;
+  }
+  .row p { margin: 0; font-size: 13px; }
+  .row strong { font-weight: 600; display: block; margin-bottom: 1px; }
+  .tag {
+    display: inline-block; padding: 2px 8px; border-radius: 999px;
+    background: var(--chip); color: var(--accent);
+    font-size: 11.5px; margin-bottom: 14px;
+  }
+  .note { color: var(--muted); font-size: 12px; line-height: 1.7; }
+  .live { display: block; color: var(--accent); font-size: 13px; margin-top: 2px; }
+  .btn {
+    display: block; width: 100%; margin: 0 0 12px;
+    padding: 10px 12px; border-radius: 10px;
+    border: 1px solid var(--accent);
+    background: transparent; color: var(--accent);
+    font: inherit; font-size: 13px;
+  }
+  .btn:active { background: var(--chip); }
+</style>
+</head>
+<body>
+  <h1>使用说明</h1>
+  <p class="sub">这是安装链路的验证插件，不是正式功能</p>
+
+  <div class="tag">契约 1 · v1.4.0</div>
+
+  <div class="card">
+    <div class="row">
+      <div class="dot"></div>
+      <p><strong>它验证了安装</strong>包从索引下载、校验 sha256、解压落盘</p>
+    </div>
+    <div class="row">
+      <div class="dot"></div>
+      <p><strong>它验证了入口</strong>装完之后，侧边栏多出这一项</p>
+    </div>
+    <div class="row">
+      <div class="dot"></div>
+      <p><strong>它验证了离线</strong>现在看到的这一页来自本地文件，断网也能打开</p>
+    </div>
+    <div class="row">
+      <div class="dot"></div>
+      <p><strong>它验证了卸载</strong>回插件市场点卸载，入口和目录一起消失</p>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="row">
+      <div class="dot"></div>
+      <p>
+        <strong>它读到了宿主的数据</strong>
+        <span id="live" class="live">正在读取…</span>
+      </p>
+    </div>
+    <div class="row">
+      <div class="dot"></div>
+      <p>
+        <strong>它还能写</strong>
+        <span id="write" class="live">点下面的按钮，往今天就加一条任务</span>
+      </p>
+    </div>
+    <div class="row">
+      <div class="dot"></div>
+      <p>
+        <strong>它在听宿主的事件</strong>
+        <span id="event" class="live">去首页勾完一条任务，这里会立刻出现</span>
+      </p>
+    </div>
+    <div class="row">
+      <div class="dot"></div>
+      <p>
+        <strong>它有自己的表</strong>
+        <span id="db" class="live">正在写…</span>
+      </p>
+    </div>
+    <button id="addTask" class="btn">加一条「来自插件的任务」</button>
+    <button id="doneFirst" class="btn">把今天第一条标记完成（会触发事件）</button>
+  </div>
+
+  <p class="note">
+    看得见这个页面，说明整条链路是通的。真正的插件（统计、番茄钟）只是换一个包而已。
+  </p>
+  <script>
+    function whenHostReady(callback, tries) {
+      tries = tries || 0;
+      if (window.host) return callback();
+      if (tries > 100) {
+        document.getElementById('live').textContent = '宿主通道没起来';
+        return;
+      }
+      setTimeout(function () { whenHostReady(callback, tries + 1); }, 30);
+    }
+
+    function today() {
+      var now = new Date();
+      var pad = function (n) { return (n < 10 ? '0' : '') + n; };
+      return now.getFullYear() + '-' + pad(now.getMonth() + 1) + '-' + pad(now.getDate());
+    }
+
+    whenHostReady(function () {
+      // 事件订阅。manifest 里声明了 task.completed，宿主才会推过来；
+      // 没声明的话这里永远不会被调用（不是"能收但收不到"，是根本不推）。
+      window.host.on('task.completed', function (payload) {
+        document.getElementById('event').textContent =
+          '刚刚完成：' + payload.title +
+          (payload.estimatedMinutes ? '（估时 ' + payload.estimatedMinutes + ' 分钟）' : '');
+      });
+
+      // 先补发一轮：插件没挂载时发生的事件都在这儿等着。
+      // ack 之后才不会重复投递（宿主没收到 ack 就会再发一次）。
+      window.host.call('event.pending', {})
+        .then(function (list) {
+          if (!list || !list.length) return;
+          var latest = list[list.length - 1];
+          var title = (latest.payload && latest.payload.title) || latest.event;
+          document.getElementById('event').textContent =
+            '补发 ' + list.length + ' 条事件，最近一条：' + title;
+          return window.host.call('event.ack', {
+            ids: list.map(function (item) { return item.id; }),
+          });
+        })
+        .catch(function (error) {
+          document.getElementById('event').textContent = '补发失败：' + error.message;
+        });
+
+      // 私有表：每次打开写一行，再读回总数 ——
+      // 用来验证「装完就建表」和「冷启动后表还在」两件事。
+      window.host.call('db.insert', {
+        table: 'visits',
+        values: { at: new Date().toISOString(), via: 'open' },
+      })
+        .then(function () {
+          return window.host.call('db.aggregate', {
+            table: 'visits',
+            metrics: [{ fn: 'count', column: '*', as: 'n' }],
+          });
+        })
+        .then(function (rows) {
+          var n = rows && rows[0] ? rows[0].n : 0;
+          document.getElementById('db').textContent = 'plg_demo_help_visits 里已有 ' + n + ' 行';
+        })
+        .catch(function (error) {
+          document.getElementById('db').textContent =
+            '写库失败：' + error.code + ' · ' + error.message;
+        });
+
+      window.host.call('task.count', { date: today() })
+        .then(function (result) {
+          document.getElementById('live').textContent =
+            '今天 ' + result.total + ' 个任务，已完成 ' + result.done + ' 个';
+        })
+        .catch(function (error) {
+          document.getElementById('live').textContent = '读取失败：' + error.message;
+        });
+    });
+
+    document.getElementById('addTask').addEventListener('click', function () {
+      var label = document.getElementById('write');
+      label.textContent = '写入中…';
+      window.host.call('task.create', {
+        title: '来自插件的任务',
+        date: today(),
+        priority: 'orange',
+        estimatedMinutes: 15,
+      })
+        .then(function (result) {
+          label.textContent = '写入成功，任务 id = ' + result.id + '；退出插件回首页就能看到';
+        })
+        .catch(function (error) {
+          // 没声明 task:write 时这里会收到 permission_denied，把原文显示出来
+          label.textContent = '写入失败：' + error.code + ' · ' + error.message;
+        });
+    });
+    document.getElementById('doneFirst').addEventListener('click', function () {
+      var label = document.getElementById('write');
+      label.textContent = '标记完成中…';
+      window.host.call('task.list', { from: today(), to: today(), limit: 1 })
+        .then(function (list) {
+          if (!list || !list.length) throw { code: 'empty', message: '今天还没有任务' };
+          return window.host.call('task.setDone', { id: list[0].id, done: true });
+        })
+        .then(function () {
+          // 这里的文字不改，等宿主把 task.completed 推回来再改 ——
+          // 改了就分不清"事件真的来了"和"我自己写了一句"
+          label.textContent = '已标记完成，等待事件…';
+        })
+        .catch(function (error) {
+          label.textContent = '失败：' + (error.message || error.code);
+        });
+    });
+  </script>
+</body>
+</html>

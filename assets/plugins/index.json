@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "plugins": [
+    {
+      "id": "demo_help",
+      "name": "使用说明",
+      "version": "1.4.0",
+      "contract": 1,
+      "description": "验证安装、读写、事件与私有存储的示例插件",
+      "icon": "help",
+      "permissions": [
+        "task:read",
+        "task:write"
+      ],
+      "package": {
+        "path": "assets/plugins/demo_help_v1.4.0.zip",
+        "sha256": "5487c1b6ba18b214367901af391dd30d5eb692128d1a26cacb31ebd1cd03d8b1",
+        "sizeBytes": 3798
+      }
+    }
+  ]
+}

@@ -1,0 +1,85 @@
+# Miscellaneous
+*.class
+*.log
+*.pyc
+*.swp
+.DS_Store
+.atom/
+.build/
+.buildlog/
+.history
+.svn/
+.swiftpm/
+migrate_working_dir/
+
+# IntelliJ related
+*.iml
+*.ipr
+*.iws
+.idea/
+
+# The .vscode folder contains launch configuration and tasks you configure in
+# VS Code which you may wish to be included in version control, so this line
+# is commented out by default.
+#.vscode/
+
+# Flutter/Dart/Pub related
+**/doc/api/
+**/ios/Flutter/.last_build_id
+.dart_tool/
+.flutter-plugins-dependencies
+.flutter_tool_state
+.pub-cache/
+.pub/
+/build/
+/coverage/
+
+# Symbolication related
+app.*.symbols
+
+# Obfuscation related
+app.*.map.json
+
+# Android Studio will place build artifacts here
+/android/app/debug
+/android/app/profile
+/android/app/release
+
+# Android 发布签名：密钥库与口令绝不能入库。
+# 一旦泄漏，任何人都能伪造以你的名义发布的安装包。
+#
+# 注意：真正的密钥库位于 D:\Dev\keystore\（在仓库之外），下列规则是纵深防御——
+# 万一有人在仓库里就地生成或复制了一份，也不会被误提交。
+/android/key.properties
+*.jks
+*.keystore
+*.jceks
+PASSWORD.txt
+key.properties
+/keystore/
+**/taskmaster-signing-*.zip
+# Widget Preview related
+.widget_preview/
+
+tool/github_token.txt
+
+# 本机数据文件：绝不入库
+#
+# 覆盖用户数据库、备份、导出包与 fixtures/ 样本库。
+# 尤其 .spike-tmp/ 下存着真机回捞的**真实用户备份**（含中文名备份），
+# 本仓库是公开的，漏一条就是隐私事故。
+/fixtures/
+*.db
+*.sqlite
+*.sqlite3
+backup-*.json
+export-*.json
+.spike-tmp/
+.spike-src/
+
+# 本地 AI 记忆目录（不进仓库）
+.workbuddy/
+
+# ── 本仓库不含 React Native（换栈已否决，见 docs/decisions.md）────────────
+# 目录里如果还留着 node_modules（旧存档的残留），不要提交
+node_modules/

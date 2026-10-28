@@ -1,6 +1,8 @@
+import 'dart:async';
 import 'dart:convert';
 
 import '../../core/plugin/plugin_index.dart';
+import '../../core/services/remote_text.dart';
 import '../../core/plugin/plugin_manifest.dart';
 import 'settings_repository.dart';
 
@@ -118,6 +120,82 @@ class PluginIndexLoader {
     );
   }
 
+  /// 并发拉所有候选源，**挑 `publishedAt` 最新的那份**。
+  ///
+  /// 为什么不能"第一个成功就用"：jsDelivr 对 `@main` 的解析结果是缓存的，
+  /// 某个节点可能还在发旧索引（purge 也不一定刷得掉，实测 gcore 就这样）。
+  /// 而客户端是**按顺序取第一个成功的** —— 表现的正是"我明明发了新插件，
+  /// 用户看不到，可我自己用浏览器访问 raw 明明是新的"。
+  ///
+  /// 所以改成：并发拿几份，谁的时间戳新用谁。单源失败不影响其它源。
+  static Future<String> fetchNewestIndex(
+    List<Uri> candidates, {
+    Uri? contentsApi,
+    Duration timeout = const Duration(seconds: 8),
+    Duration grace = const Duration(milliseconds: 600),
+    IndexTextFetcher? fetch,
+  }) async {
+    final doFetch = fetch ??
+        (Uri uri, {required bool viaContentsApi, required Duration timeout}) =>
+            RemoteText.fetch(uri, viaContentsApi: viaContentsApi, timeout: timeout);
+
+    final sources = <(Uri, bool)>[
+      for (final candidate in candidates) (candidate, false),
+      if (contentsApi != null) (contentsApi, true),
+    ];
+    if (sources.isEmpty) throw const RemoteTextException('没有可用的索引地址');
+
+    final arrived = <String>[];
+    final firstOk = Completer<void>();
+    final allDone = Completer<void>();
+    var left = sources.length;
+
+    for (final (uri, viaApi) in sources) {
+      unawaited(() async {
+        try {
+          final text = await doFetch(uri, viaContentsApi: viaApi, timeout: timeout);
+          arrived.add(text);
+          if (!firstOk.isCompleted) firstOk.complete();
+        } catch (_) {
+          // 单个源失败不该拖垮整次拉取
+        } finally {
+          left--;
+          if (left == 0 && !allDone.isCompleted) allDone.complete();
+        }
+      }());
+    }
+
+    // 等到"至少一个成功"或"全部结束"；再多等一小会儿 —— 否则拿到的只是
+    // "响应最快的那个"，不等于"最新的那个"。
+    await Future.any<void>(<Future<void>>[firstOk.future, allDone.future]);
+    await Future.any<void>(<Future<void>>[
+      allDone.future,
+      Future<void>.delayed(grace),
+    ]);
+
+    if (arrived.isEmpty) {
+      throw const RemoteTextException('所有源都失败了');
+    }
+    return arrived.reduce((a, b) {
+      final ta = _publishedAtOf(a);
+      final tb = _publishedAtOf(b);
+      return tb.isAfter(ta) ? b : a;
+    });
+  }
+
+  static DateTime _publishedAtOf(String text) {
+    try {
+      final decoded = jsonDecode(text);
+      if (decoded is Map && decoded['publishedAt'] is String) {
+        return DateTime.tryParse(decoded['publishedAt'] as String) ??
+            DateTime.fromMillisecondsSinceEpoch(0, isUtc: true);
+      }
+    } catch (_) {
+      // 不是合法 JSON 的源按"最旧"处理，反正解析阶段会再拦一次
+    }
+    return DateTime.fromMillisecondsSinceEpoch(0, isUtc: true);
+  }
+
   static PluginIndex _parse(String text) {
     final decoded = jsonDecode(text);
     if (decoded is! Map) {
@@ -126,3 +204,10 @@ class PluginIndexLoader {
     return PluginIndex.parse(Map<String, Object?>.from(decoded));
   }
 }
+
+/// 拉取一份索引原文。抽成 typedef 是为了让"多镜像取最新"这段能单测。
+typedef IndexTextFetcher = Future<String> Function(
+  Uri uri, {
+  required bool viaContentsApi,
+  required Duration timeout,
+});

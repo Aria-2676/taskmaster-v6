@@ -9,6 +9,7 @@
     python tool/make_demo_plugin.py
 """
 
+import datetime
 import glob
 import hashlib
 import json
@@ -107,7 +108,18 @@ def main() -> None:
               f"({package['sizeBytes']} bytes, {package['sha256'][:12]}…)")
 
     # 索引永远随包（断网时它就是货架的全部内容）
-    index = {"schemaVersion": 1, "plugins": entries}
+    #
+    # publishedAt 是给客户端**比新旧**用的：几个 CDN 节点里有的会缓存住旧的
+    # （jsDelivr 对 @main 的解析结果缓存很久，purge 也不一定刷得掉），
+    # 客户端并发取多份、挑 publishedAt 最大的那份，才不会被最慢的节点拖回去。
+    index = {
+        "schemaVersion": 1,
+        "publishedAt": datetime.datetime.now(datetime.timezone.utc)
+        .replace(microsecond=0)
+        .isoformat()
+        .replace("+00:00", "Z"),
+        "plugins": entries,
+    }
     index_path = os.path.join(BUNDLED_DIR, "index.json")
     with open(index_path, "w", encoding="utf-8", newline="\n") as handle:
         json.dump(index, handle, ensure_ascii=False, indent=2)

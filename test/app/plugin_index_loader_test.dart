@@ -186,6 +186,88 @@ void main() {
     });
   });
 
+  group('多镜像取最新', () {
+    PluginIndex parseOf(String text) =>
+        PluginIndex.parse(Map<String, Object?>.from(jsonDecode(text) as Map));
+
+    String idxWith(DateTime? at, String version) => jsonEncode(<String, Object?>{
+          'schemaVersion': 1,
+          if (at != null) 'publishedAt': at.toIso8601String(),
+          'plugins': <Object?>[
+            <String, Object?>{
+              'id': 'demo_help',
+              'name': '使用说明',
+              'version': version,
+              'contract': 1,
+              'permissions': <String>[],
+              'package': <String, Object?>{
+                'path': 'plugins/packages/demo_help_v$version.zip',
+                'sha256': 'c' * 64,
+                'sizeBytes': 1,
+              },
+            },
+          ],
+        });
+
+    test('旧节点先返回也不影响：取 publishedAt 最新的那份', () async {
+      final oldText = idxWith(DateTime.utc(2026, 10, 28, 9), '1.0.0');
+      final newText = idxWith(DateTime.utc(2026, 10, 28, 10), '2.0.0');
+
+      final text = await PluginIndexLoader.fetchNewestIndex(
+        <Uri>[Uri.parse('https://stale.example/i.json'), Uri.parse('https://fresh.example/i.json')],
+        grace: const Duration(milliseconds: 80),
+        fetch: (uri, {required bool viaContentsApi, required Duration timeout}) async {
+          // 旧节点"更快" —— 这正是线上 gcore 的样子
+          if (uri.host == 'stale.example') return oldText;
+          await Future<void>.delayed(const Duration(milliseconds: 10));
+          return newText;
+        },
+      );
+
+      expect(parseOf(text).plugins.single.version, '2.0.0');
+      expect(parseOf(text).publishedAt, DateTime.utc(2026, 10, 28, 10));
+    });
+
+    test('老索引没有 publishedAt：按最旧处理，输给带时间戳的', () async {
+      final legacy = idxWith(null, '1.0.0');
+      final fresh = idxWith(DateTime.utc(2026, 10, 28, 10), '1.1.0');
+
+      final text = await PluginIndexLoader.fetchNewestIndex(
+        <Uri>[Uri.parse('https://a.example/i.json'), Uri.parse('https://b.example/i.json')],
+        grace: const Duration(milliseconds: 80),
+        fetch: (uri, {required bool viaContentsApi, required Duration timeout}) async =>
+            uri.host == 'a.example' ? legacy : fresh,
+      );
+
+      expect(parseOf(text).plugins.single.version, '1.1.0');
+    });
+
+    test('一个源挂了不影响：用活着的那份', () async {
+      final fresh = idxWith(DateTime.utc(2026, 10, 28, 10), '1.1.0');
+      final text = await PluginIndexLoader.fetchNewestIndex(
+        <Uri>[Uri.parse('https://dead.example/i.json'), Uri.parse('https://ok.example/i.json')],
+        grace: const Duration(milliseconds: 50),
+        fetch: (uri, {required bool viaContentsApi, required Duration timeout}) async {
+          if (uri.host == 'dead.example') throw Exception('HTTP 503');
+          return fresh;
+        },
+      );
+      expect(parseOf(text).plugins.single.version, '1.1.0');
+    });
+
+    test('全部失败：抛出来，让上层退到缓存', () async {
+      await expectLater(
+        PluginIndexLoader.fetchNewestIndex(
+          <Uri>[Uri.parse('https://a.example/i.json')],
+          grace: const Duration(milliseconds: 20),
+          fetch: (uri, {required bool viaContentsApi, required Duration timeout}) async =>
+              throw Exception('offline'),
+        ),
+        throwsA(isA<Object>()),
+      );
+    });
+  });
+
   group('重试', () {
     test('刷新期间连点只拉一次（不然每点一次都是一轮多源超时）', () async {
       var calls = 0;

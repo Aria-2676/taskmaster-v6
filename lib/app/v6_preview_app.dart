@@ -16,7 +16,6 @@ import '../core/plugin/plugin_installer.dart';
 import '../core/plugin/plugin_store.dart';
 import '../core/config/cdn_bases.dart';
 import '../core/services/file_downloader.dart';
-import '../core/services/remote_text.dart';
 import '../core/updater/services/app_update_service.dart';
 import 'data/plugin_index_loader.dart';
 import '../core/plugin/plugin_manifest.dart';
@@ -327,8 +326,12 @@ class _V6PreviewAppState extends State<V6PreviewApp> {
   /// 不新开 `plugins/` 目录，否则一定会出现"线上那份和随包那份不一样"。
   static const String _pluginIndexPath = 'assets/plugins/index.json';
 
-  /// 远端索引：jsDelivr 各节点 → raw → Contents API 兜底。
-  static Future<String> _fetchRemoteIndex() => RemoteText.fetchFromCandidates(
+  /// 远端索引：jsDelivr 各节点 + raw + Contents API 兜底。
+  ///
+  /// **并发取、挑 publishedAt 最新的**，不是"第一个成功就用" —— jsDelivr 对
+  /// `@main` 的解析结果是缓存的，有的节点会继续发旧索引，而它可能恰好最快。
+  static Future<String> _fetchRemoteIndex() =>
+      PluginIndexLoader.fetchNewestIndex(
         CdnBases.resolve(
           CdnBases.manifest,
           CdnBases.manifestFallbacks,

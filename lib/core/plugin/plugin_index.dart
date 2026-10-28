@@ -86,7 +86,11 @@ class PluginIndexEntry {
 /// 设计原则：**索引是信任根**，但不是权威内容。它决定"有哪些可装"，
 /// 装完之后一切以包内 `plugin.json` 为准。
 class PluginIndex {
-  const PluginIndex({required this.schemaVersion, required this.plugins});
+  const PluginIndex({
+    required this.schemaVersion,
+    required this.plugins,
+    this.publishedAt,
+  });
 
   factory PluginIndex.parse(Map<String, Object?> json) {
     final schema = json['schemaVersion'];
@@ -118,7 +122,16 @@ class PluginIndex {
       entries.add(entry);
     }
 
-    return PluginIndex(schemaVersion: schema, plugins: entries);
+    // 发布时刻。**缺少就是 null**（老索引没有这个字段，别把它当坏索引）。
+    final rawPublished = json['publishedAt'];
+    final publishedAt =
+        rawPublished is String ? DateTime.tryParse(rawPublished) : null;
+
+    return PluginIndex(
+      schemaVersion: schema,
+      plugins: entries,
+      publishedAt: publishedAt,
+    );
   }
 
   static const int supportedSchema = 1;
@@ -128,6 +141,11 @@ class PluginIndex {
 
   final int schemaVersion;
   final List<PluginIndexEntry> plugins;
+
+  /// 这份索引是什么时候生成的（UTC）。客户端在几个 CDN 节点之间**比新旧**用它。
+  ///
+  /// 老索引没有这个字段 → null，按"最旧"处理：任何带时间戳的都赢它。
+  final DateTime? publishedAt;
 
   PluginIndexEntry? findById(String id) {
     for (final p in plugins) {

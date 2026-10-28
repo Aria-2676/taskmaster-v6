@@ -350,7 +350,7 @@ class _PluginMarketPageState extends State<PluginMarketPage> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: <Widget>[
               const Text(
-                '插件和它的入口会被移除，但相关数据仍保留。',
+                '插件和它的入口会被移除，但相关数据仍保留。或————',
                 style: TextStyle(fontSize: 13.5),
               ),
               const SizedBox(height: 4),

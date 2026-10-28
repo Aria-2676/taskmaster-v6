@@ -36,7 +36,12 @@ class CurrencyStore extends ChangeNotifier implements SlotProvider {
   bool get installed => _providerId != null;
 
   Future<void> load() async {
-    _providerId = await _settings.get(SettingsKeys.activeCurrency);
+    final stored = await _settings.get(SettingsKeys.activeCurrency);
+    // **空串必须归一化成 null**。`onPluginUninstalled` / `select(null)` 写的是
+    // 空串而不是删行，如果这里原样赋给 `_providerId`，它就变成"有货币、但 id 是空"
+    // 的状态：`report` 里 `_providerId == null` 永远为假，插件再也抢不回货币位。
+    // 真机表现就是「停用再启用，顶栏徽章不回来」——排查了两轮才落到这一行。
+    _providerId = (stored == null || stored.isEmpty) ? null : stored;
     final id = _providerId;
     _balance = id == null
         ? 0
@@ -108,14 +113,31 @@ class CurrencyStore extends ChangeNotifier implements SlotProvider {
     notifyListeners();
   }
 
-  /// 插件被卸载：它提供的货币要跟着失效，否则顶栏会一直挂着一个
-  /// 已经没人维护的数字。
+  /// 插件被停用：它提供的货币要跟着失效（顶栏不能再挂着一个没人维护的数字）。
+  ///
+  /// 和卸载走同一个方法，因为对外壳来说两者是一回事：**这个位置现在没人了**。
+  /// 余额镜像不动，重新启用时 [resumeIfHadProvider] 用旧值接回来。
   Future<void> onPluginUninstalled(String pluginId) async {
     if (_providerId != pluginId) return;
     _providerId = null;
     _balance = 0;
     await _settings.set(SettingsKeys.activeCurrency, '');
     notifyListeners();
+  }
+
+  /// 停用之后又启用：**只有真的提供货币的插件**才接回货币位。
+  ///
+  /// [providesCurrency] 由调用方按权限声明（`currency:write`）判定 ——
+  /// 不能用"有没有余额镜像"当判据：镜像只有在插件**报过一次余额**之后才存在，
+  /// 而它可能装完就没被打开过（真机上就是这么漏掉的：重新启用后徽章不回来）。
+  /// 也不能无条件调 [ensureProvider]：它在没有镜像时会写 0，于是任何插件
+  /// 被停用再启用一次都会被错认成货币提供者，顶栏多出一个莫名其妙的 0。
+  Future<void> resumeAfterEnable(
+    String pluginId, {
+    required bool providesCurrency,
+  }) async {
+    if (!providesCurrency) return;
+    await ensureProvider(pluginId);
   }
 
   // ---- SlotProvider：让现有的顶栏徽章直接复用 ----

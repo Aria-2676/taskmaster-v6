@@ -49,6 +49,14 @@ class SettingsKeys {
   /// 插件每次余额变化都要回报一次（见 bridge 的 `currency.set`）。
   static String currencyBalance(String pluginId) =>
       'currency.balance.$pluginId';
+
+  /// 插件**最后一次被启用**的时刻（ISO-8601 UTC）。
+  ///
+  /// 停用期间不攒事件：桥的 `event.pending` 只投递这个时刻之后发生的事件。
+  /// 没有这个键（从没停用过 / 全新安装）= 不做时间过滤，照旧全投。
+  /// 前缀是 `plg.<id>.`，所以"删数据卸载"会连它一起清掉。
+  static String pluginEnabledAt(String pluginId) =>
+      'plg.$pluginId.enabled_at';
 }
 
 /// `settings` 表的读写。主包所有"用户开关"都走这里，

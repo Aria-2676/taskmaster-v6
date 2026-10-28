@@ -68,9 +68,7 @@ class _PluginMarketPageState extends State<PluginMarketPage> {
               padding: const EdgeInsets.only(bottom: 8),
               child: _PluginTile(
                 title: _nameOf(store, item.pluginId),
-                subtitle: store.updateFor(item) == null
-                    ? 'v${item.version} · 契约 ${item.contract}'
-                    : 'v${item.version} → v${store.updateFor(item)!.version}',
+                subtitle: _installedSubtitle(store, item),
                 iconName: store.index.findById(item.pluginId)?.icon,
                 seed: item.pluginId,
                 action: _installedAction(context, store, item),
@@ -133,33 +131,73 @@ class _PluginMarketPageState extends State<PluginMarketPage> {
       store.index.findById(pluginId)?.name ?? pluginId;
 
   /// 已安装条目的动作区：有新版本时「升级」在前，卸载永远在。
+  /// 已安装条目的副标题：版本（有新版就写成 `旧 → 新`）+ 停用标记。
+  ///
+  /// 「已停用」必须写成**字**，不能只靠灰一下：光变灰的话用户会以为
+  /// 是加载中或者坏了，然后去点卸载。
+  String _installedSubtitle(PluginMarketStore store, InstalledPlugin item) {
+    final update = store.updateFor(item);
+    final base = update == null
+        ? 'v${item.version} · 契约 ${item.contract}'
+        : 'v${item.version} → v${update.version}';
+    return item.enabled ? base : '$base · 已停用';
+  }
+
   Widget _installedAction(
     BuildContext context,
     PluginMarketStore store,
     InstalledPlugin item,
   ) {
     final update = store.updateFor(item);
-    if (update == null) {
-      return _DangerButton(
-        label: '卸载',
-        onTap: () => _confirmUninstall(context, store, item),
-      );
-    }
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: <Widget>[
+    final buttons = <Widget>[
+      if (update != null)
         _PillButton(
           label: '升级',
           primary: true,
           onTap: () => _confirmInstall(context, store, update, isUpdate: true),
         ),
-        const SizedBox(width: 6),
-        _DangerButton(
-          label: '卸载',
-          onTap: () => _confirmUninstall(context, store, item),
+      if (update != null) const SizedBox(width: 6),
+      _DangerButton(
+        label: '卸载',
+        onTap: () => _confirmUninstall(context, store, item),
+      ),
+    ];
+
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: <Widget>[
+        // 开关放在按钮左边：右边留给"破坏性"的那个（卸载），
+        // 两者颜色和形态都不一样，不会误触。
+        _EnableSwitch(
+          value: item.enabled,
+          onChanged: (value) => _toggleEnabled(store, item, value),
         ),
+        const SizedBox(width: 2),
+        ...buttons,
       ],
     );
+  }
+
+  /// 停用 / 启用。**不弹确认**：它不删任何东西，随手能开回来；
+  /// 弹框只会让这个高频小开关变得烦人。
+  Future<void> _toggleEnabled(
+    PluginMarketStore store,
+    InstalledPlugin item,
+    bool enabled,
+  ) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final name = _nameOf(store, item.pluginId);
+    try {
+      await store.setEnabled(item.pluginId, enabled);
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(enabled ? '已启用「$name」' : '已停用「$name」，入口和货币位已撤下'),
+          duration: const Duration(seconds: 2),
+        ),
+      );
+    } catch (error) {
+      messenger.showSnackBar(SnackBar(content: Text('操作失败：$error')));
+    }
   }
 
   Widget _actionFor(BuildContext context, PluginMarketStore store, PluginIndexEntry entry) {
@@ -512,6 +550,36 @@ class _PluginTile extends StatelessWidget {
       hash = (hash * 31 + unit) & 0x7fffffff;
     }
     return hash;
+  }
+}
+
+/// 停用 / 启用开关。
+///
+/// 尺寸压小是为了不把条目撑高、不把插件名挤窄 —— 条目里已经有两个按钮，
+/// 再加一个默认尺寸的 Switch 会把标题压到只能显示两个字。
+class _EnableSwitch extends StatelessWidget {
+  const _EnableSwitch({required this.value, required this.onChanged});
+
+  final bool value;
+  final ValueChanged<bool> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return Tooltip(
+      message: value ? '停用' : '启用',
+      child: SizedBox(
+        width: 44,
+        height: 30,
+        child: Transform.scale(
+          scale: 0.72,
+          child: Switch(
+            value: value,
+            onChanged: onChanged,
+            materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+          ),
+        ),
+      ),
+    );
   }
 }
 

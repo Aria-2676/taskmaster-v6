@@ -202,6 +202,17 @@ class _V6PreviewAppState extends State<V6PreviewApp> {
             unawaited(_home?.onPluginUninstalled(pluginId));
             unawaited(_currency?.onPluginUninstalled(pluginId));
           },
+          // 停用 = 完全停机：外壳上的两个持久化指针都要撤。
+          // 启用时反向接回货币位 —— `ensureProvider` 用的是镜像里的旧余额，
+          // 不会像 `onInstalled` 那样清零，所以余额不会因为"停一下再开"丢掉。
+          onEnabledChanged: (pluginId, enabled) {
+            if (!enabled) {
+              unawaited(_home?.onPluginUninstalled(pluginId));
+              unawaited(_currency?.onPluginUninstalled(pluginId));
+              return;
+            }
+            unawaited(_resumePluginCurrency(pluginId));
+          },
         );
       });
     } catch (e) {
@@ -223,6 +234,36 @@ class _V6PreviewAppState extends State<V6PreviewApp> {
           // 恢复之后首页要能立刻看到
           onChanged: store.load,
         );
+  }
+
+  /// 插件被重新启用：它声明了 `currency:write` 就把货币位接回来。
+  ///
+  /// 判据必须是**权限声明**，不能是"有没有余额镜像"——镜像要插件报过一次
+  /// 余额才存在，而它可能装完就没被打开过。真机上就是这么漏的：
+  /// 停用再启用，顶栏徽章不回来。
+  Future<void> _resumePluginCurrency(String pluginId) async {
+    final market = _market;
+    final currency = _currency;
+    if (market == null || currency == null) return;
+
+    // 索引里一般就有权限声明（列表是这个来源）；索引没加载时退回读包内 manifest，
+    // 那是权威来源，只是多一次磁盘读。
+    bool provides;
+    final indexed = market.index.findById(pluginId);
+    if (indexed != null) {
+      provides = indexed.permissions.contains('currency:write');
+    } else {
+      try {
+        final plugin = await market.installer.store.find(pluginId);
+        if (plugin == null) return;
+        final manifest = await market.installer.manifestOf(plugin);
+        provides = manifest.permissions.contains('currency:write');
+      } catch (error) {
+        debugPrint('[plugin] 读不到 $pluginId 的 manifest：$error');
+        return;
+      }
+    }
+    await currency.resumeAfterEnable(pluginId, providesCurrency: provides);
   }
 
   /// 把一个已装插件变成可打开的页面：入口路径、权限都取自包内 `plugin.json`。

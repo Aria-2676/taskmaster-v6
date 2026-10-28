@@ -67,20 +67,33 @@ class EventJournal implements HookListener {
   /// 某个插件该收到的事件。按 id 升序（先发生的先投递），只取它声明过的钩子。
   ///
   /// [since] 用于分页：传上一批的最后一条 id，避免一次拉太多。
+  ///
+  /// [createdAfter] 是 ISO-8601 UTC 时间串，只投递**这个时刻之后**记录的事件。
+  /// 用途是"停用期间不攒"：插件停用一周也不该在启用瞬间收到几十条奖励。
+  /// 时间是 UTC ISO 串，字典序即时间序，所以直接用字符串比较。
   Future<List<StoredEvent>> pending(
     Set<HookId> hooks, {
     int limit = 50,
     int? since,
+    String? createdAfter,
   }) async {
     if (hooks.isEmpty) return const <StoredEvent>[];
     final ids = <String>[for (final hook in hooks) hook.id];
     final placeholders = List<String>.filled(ids.length, '?').join(',');
+    final conditions = <String>['${PluginEventCol.hook} IN ($placeholders)'];
+    final args = <Object?>[...ids];
+    if (since != null) {
+      conditions.add('${PluginEventCol.id} > ?');
+      args.add(since);
+    }
+    if (createdAfter != null && createdAfter.isNotEmpty) {
+      conditions.add('${PluginEventCol.createdAt} >= ?');
+      args.add(createdAfter);
+    }
     final rows = await _db.query(
       V6Table.pluginEvents,
-      where: since == null
-          ? '${PluginEventCol.hook} IN ($placeholders)'
-          : '${PluginEventCol.hook} IN ($placeholders) AND ${PluginEventCol.id} > ?',
-      whereArgs: since == null ? ids : <Object?>[...ids, since],
+      where: conditions.join(' AND '),
+      whereArgs: args,
       orderBy: '${PluginEventCol.id} ASC',
       limit: limit.clamp(1, 200),
     );

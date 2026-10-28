@@ -26,7 +26,7 @@
 | `docs/editor-extension-plan.md` | 编辑面板：字段归主包、开关/排序/默认值、弹层与全屏 | 动编辑页之前 | 120 行 | **已实现** |
 | `docs/home-mode.md` | 可换首页（插件整页开屏即享）+ 熔断三件套 + 顶栏快捷切换 | 动首页/启动流程之前 | 80 行 | **已实现** |
 | `docs/self-update-v5-to-v6.md` | V5 原地升级到 V6：能复用什么、缺什么、为什么不迁移数据 | 动升级/发版之前 | 110 行 | **已定案，入口已切，未发版** |
-| `docs/update-channels.md` | 更新双渠道：V5 冻结在 6.0.0、V6 自己一份清单 + 本地状态隔离 | 改 updater / 发版之前 | 110 行 | **已实现** |
+| `docs/update-channels.md` | 更新清单：**一个仓库一份**（V6 用本仓库根 `update.json`，V5 那份在 note_study）+ 本地状态隔离 + 发版顺序 | 改 updater / 发版之前 | 110 行 | **已实现（2026-10-28 重写）** |
 | `docs/acceptance/` | 每次交付的量化验收清单 + 签收记录 | 交付与验收时 | 不限（记录性） | 维护中 |
 | `docs/handoff-2026-10-28.md` | **交接说明**：现在到哪、下一步三件事各做到什么程度、环境与设备状态 | 换对话窗口 / 隔天接手时**先读它** | 80 行 | 时效性，过时即删 |
 | `.workbuddy/skills/delivery-protocol/` | 交付纪律：先定案、未验收不推送、验收清单写法、仓库命令 | 每次动手前 | — | 维护中 |
@@ -44,6 +44,7 @@
 | 「核心包控制在 **2MB** 以内」 | 实测 arm64 APK 23MB = `libflutter.so` 12MB + `libapp.so` 8.5MB + 其余 2.5MB。引擎减不动，下限约 13MB |
 | 「多个模块**打包为独立库**，避免主库体积过大」 | Flutter 没有"可运行时加载的 Dart 库"这种东西，见第一条 |
 | 「多平台支持：**iOS**」 | `ios/` 只有 `flutter create` 骨架，**无 Podfile.lock、从未 pod install、从未构建**。iOS 已明确放弃 |
+| 「V6 读 `update_v6.json`」 | 那是分仓之前的方案，**没落地**：`update_v6.json` 在本仓库从未存在过（`git log --all` 查过）。分仓后 V6 读本仓库根 `update.json`，V5 那份在 `note_study` |
 
 > 测试可正常跑。若遇到 `WebSocketException: Invalid WebSocket upgrade request`，
 > **先清代理变量**（`env -u HTTP_PROXY -u HTTPS_PROXY -u http_proxy -u https_proxy NO_PROXY=127.0.0.1,localhost`），

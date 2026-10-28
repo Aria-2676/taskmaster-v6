@@ -279,7 +279,15 @@ class PluginBridge {
 
     final since = params['since'] is int ? params['since']! as int : null;
     final limit = (params['limit'] is int ? params['limit']! as int : 50).clamp(1, 200);
-    final events = await journal.pending(hooks, limit: limit, since: since);
+    // 停用期间**不攒事件**：只投递"最后一次启用之后"记录的事件。
+    // 没有这个键（全新安装、从没停用过）就是 null，照旧全投。
+    final enabledAt = await _settings.get(SettingsKeys.pluginEnabledAt(pluginId));
+    final events = await journal.pending(
+      hooks,
+      limit: limit,
+      since: since,
+      createdAfter: enabledAt,
+    );
     return _ok(<Object?>[for (final event in events) event.toJson()]);
   }
 

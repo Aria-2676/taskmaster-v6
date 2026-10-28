@@ -185,8 +185,9 @@ class _MainShellState extends State<MainShell> {
     final market = widget.marketStore;
     if (launcher == null || market == null) return;
 
+    // 只在**启用中**的里面找：停用等于这个位置没人了，和卸载一样回内置。
     InstalledPlugin? plugin;
-    for (final item in market.installed) {
+    for (final item in market.active) {
       if (item.pluginId == id) {
         plugin = item;
         break;
@@ -300,6 +301,17 @@ class _MainShellState extends State<MainShell> {
   Future<void> _openPlugin(InstalledPlugin plugin) async {
     final launcher = widget.pluginLauncher;
     final navigator = Navigator.of(context);
+    // 兜底：入口已经被过滤掉了，还能走到这里说明是从别处（首页、旧调用点）
+    // 传进来的。停用的插件不该能打开 —— 否则"停用"只挡住了一处入口。
+    if (!plugin.enabled) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('「${_pluginName(plugin.pluginId)}」已停用，先在插件市场里启用'),
+          duration: const Duration(seconds: 2),
+        ),
+      );
+      return;
+    }
     if (launcher == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('插件运行环境未接入'), duration: Duration(seconds: 1)),
@@ -479,7 +491,7 @@ class _MainShellState extends State<MainShell> {
           MaterialPageRoute<void>(
             builder: (_) => HomeModePage(
               store: home,
-              plugins: widget.marketStore?.installed ?? const <InstalledPlugin>[],
+              plugins: widget.marketStore?.active ?? const <InstalledPlugin>[],
               nameOf: _pluginName,
             ),
           ),
@@ -654,7 +666,7 @@ class _MainShellState extends State<MainShell> {
             child: SideNav(
               currentTab: _tab,
               onOpenDestination: _openDestination,
-              installedPlugins: widget.marketStore?.installed ?? const <InstalledPlugin>[],
+              installedPlugins: widget.marketStore?.active ?? const <InstalledPlugin>[],
               pluginNameOf: (id) => widget.marketStore?.index.findById(id)?.name ?? id,
               onOpenPlugin: _openPlugin,
             ),
@@ -742,7 +754,7 @@ class _MainShellState extends State<MainShell> {
     showModeSwitcher(
       context,
       store: home,
-      plugins: widget.marketStore?.installed ?? const <InstalledPlugin>[],
+      plugins: widget.marketStore?.active ?? const <InstalledPlugin>[],
       nameOf: _pluginName,
       onOpenManager: () => _openDestination(AppDestination.homeMode),
     );
@@ -792,7 +804,7 @@ class _MainShellState extends State<MainShell> {
     final currency = widget.currencyStore;
     final market = widget.marketStore;
     if (currency != null && currency.installed && market != null) {
-      final alive = market.installed.any((p) => p.pluginId == currency.providerId);
+      final alive = market.active.any((p) => p.pluginId == currency.providerId);
       if (!alive) return null;
     }
     final slot = SlotRegistry.instance.resolve(SlotId.currencyBadge);

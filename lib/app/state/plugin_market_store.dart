@@ -19,6 +19,7 @@ class PluginMarketStore extends ChangeNotifier {
     required Uri Function(PluginPackage package) urlFor,
     this.onInstalled,
     this.onUninstalled,
+    this.onEnabledChanged,
   })  : _installer = installer,
         _indexLoader = indexLoader,
         _urlFor = urlFor;
@@ -40,6 +41,14 @@ class PluginMarketStore extends ChangeNotifier {
   /// 一直指向一个已经不存在的插件 —— 表现是「首页模式」页打开后没有任何
   /// 一项被选中，顶栏货币则靠"再查一次已装列表"临时兜住。
   final void Function(String pluginId)? onUninstalled;
+
+  /// 停用 / 启用之后回调。
+  ///
+  /// 停用是**完全停机**：入口、事件、首页、货币位全撤。其中首页与货币位是
+  /// 持久化指针（`ui.home_mode` / `ui.active_currency`），必须由应用层改，
+  /// 状态层不能自己去碰这两个 store。启用时反向把货币位接回来
+  /// （`ensureProvider` 用镜像里的旧余额，不会清成 0）。
+  final void Function(String pluginId, bool enabled)? onEnabledChanged;
 
   /// 设置表：删数据卸载时要用它清插件留下的键
   late final SettingsRepository _settings = SettingsRepository(_installer.db);
@@ -63,6 +72,14 @@ class PluginMarketStore extends ChangeNotifier {
 
   bool isInstalled(String pluginId) =>
       installed.any((p) => p.pluginId == pluginId);
+
+  /// 停用中的插件对**外壳**不可见：侧边栏入口、首页候选、货币位都不给它。
+  ///
+  /// 市场页仍然用 [installed]（用户得看得见它、把它开回来）。
+  /// 两个列表分开，是为了让"停用"只有一个判据（`enabled` 字段），
+  /// 而不是每个调用点各自记得过滤一次 —— 漏一处就是"停用了还占着位置"。
+  List<InstalledPlugin> get active =>
+      installed.where((p) => p.enabled).toList(growable: false);
 
   /// 索引里有、但还没装的
   List<PluginIndexEntry> get available =>
@@ -137,6 +154,32 @@ class PluginMarketStore extends ChangeNotifier {
       rethrow;
     } finally {
       _progress.remove(entry.id);
+      installed = await _installer.store.all();
+      notifyListeners();
+    }
+  }
+
+  /// 停用 / 启用。
+  ///
+  /// 顺序：**先撤外壳上的指针（onEnabledChanged）→ 再落库**，和卸载一致：
+  /// 反过来在中间那一瞬界面还按"它还在"渲染。
+  Future<void> setEnabled(String pluginId, bool enabled) async {
+    if (!isInstalled(pluginId)) return;
+    lastError = null;
+    try {
+      onEnabledChanged?.call(pluginId, enabled);
+      await _installer.store.setEnabled(pluginId, enabled);
+      if (enabled) {
+        // 启用时刻的戳：停用期间的事件不补发（见 SettingsKeys.pluginEnabledAt）
+        await _settings.set(
+          SettingsKeys.pluginEnabledAt(pluginId),
+          DateTime.now().toUtc().toIso8601String(),
+        );
+      }
+    } catch (error) {
+      lastError = '$error';
+      rethrow;
+    } finally {
       installed = await _installer.store.all();
       notifyListeners();
     }

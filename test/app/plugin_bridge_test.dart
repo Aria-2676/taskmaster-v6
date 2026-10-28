@@ -9,6 +9,7 @@ import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'package:v5_app/app/data/plugin_bridge.dart';
 import 'package:v5_app/app/data/settings_repository.dart';
 import 'package:v5_app/app/data/task_repository.dart';
+import 'package:v5_app/app/state/currency_store.dart';
 import 'package:v5_app/app/models/task.dart';
 import 'package:v5_app/core/data/v6_database.dart';
 import 'package:v5_app/core/data/v6_plugin_tables.dart';
@@ -42,6 +43,7 @@ void main() {
     String pluginId = 'demo_help',
     Set<HookId> hooks = const <HookId>{},
     EventJournal? journal,
+    CurrencyStore? currency,
   }) =>
       PluginBridge(
         pluginId: pluginId,
@@ -51,6 +53,7 @@ void main() {
         contract: 1,
         hooks: hooks,
         journal: journal,
+        currency: currency,
       );
 
   Map<String, Object?> errorOf(Map<String, Object?> response) =>
@@ -392,6 +395,26 @@ void main() {
       expect(errorOf(response)['code'], 'permission_denied');
     });
 
+    test('pending 的字段名是 event（插件靠它分发），payload 是对象', () async {
+      await seed();
+      final response = await bridge(
+        hooks: <HookId>{HookId.taskCompleted},
+        journal: journal,
+      ).dispatch('event.pending', const <String, Object?>{});
+
+      final list = (response['result']! as List).cast<Map<String, Object?>>();
+      expect(list, hasLength(1));
+
+      final first = list.single;
+      // 这条断言是拿真机 bug 换来的：插件里写成 evt.hook 时条件永远为假，
+      // 事件被 ack 掉了、奖励却没发，而且表面上没有任何错误。
+      expect(first['event'], 'task.completed');
+      expect(first.containsKey('hook'), isFalse,
+          reason: '插件按 event 分发；多一个 hook 只会让人写错');
+      expect(first['payload'], isA<Map>(), reason: 'payload 必须是对象，不能是 JSON 字符串');
+      expect((first['payload']! as Map)['title'], '完成了一条');
+    });
+
     test('没声明 hooks：返回空数组，不是报错', () async {
       await seed();
       final response = await bridge(journal: journal)
@@ -563,6 +586,81 @@ void main() {
       final first = Map<String, Object?>.from(rows.first! as Map);
       expect(first['day'], '2026-10-26');
       expect(first['n'], 2);
+    });
+  });
+
+  group('货币', () {
+    late CurrencyStore currency;
+
+    setUp(() async {
+      currency = CurrencyStore(settings);
+      await currency.load();
+    });
+
+    test('没声明 currency:read 读不了', () async {
+      final response = await bridge(currency: currency)
+          .dispatch('currency.get', const <String, Object?>{});
+      expect(errorOf(response)['code'], 'permission_denied');
+    });
+
+    test('读到的是自己的余额，第一次写入就成为当前货币', () async {
+      final bridge0 = bridge(
+        currency: currency,
+        permissions: const <String>{'currency:read', 'currency:write'},
+      );
+
+      final before = await bridge0.dispatch('currency.get', const <String, Object?>{});
+      expect((before['result']! as Map)['amount'], 0);
+      expect((before['result']! as Map)['active'], isFalse);
+
+      final set = await bridge0.dispatch(
+        'currency.set',
+        <String, Object?>{'amount': 120},
+      );
+      expect(set['ok'], isTrue);
+      expect(currency.providerId, 'demo_help');
+      expect(currency.balance, 120);
+
+      final after = await bridge0.dispatch('currency.get', const <String, Object?>{});
+      expect((after['result']! as Map)['amount'], 120);
+      expect((after['result']! as Map)['active'], isTrue);
+    });
+
+    test('看不到别的插件的余额', () async {
+      await currency.report('other', 999);
+
+      final response = await bridge(
+        currency: currency,
+        permissions: const <String>{'currency:read'},
+      ).dispatch('currency.get', const <String, Object?>{});
+
+      expect((response['result']! as Map)['amount'], 0,
+          reason: '只返回自己的镜像，不泄露别人的');
+    });
+
+    test('坏参数一律拒绝，不落库', () async {
+      final b = bridge(
+        currency: currency,
+        permissions: const <String>{'currency:write'},
+      );
+
+      for (final bad in <Object?>['120', 12.5, -1, null, 200000000]) {
+        final response = await b.dispatch(
+          'currency.set',
+          <String, Object?>{'amount': bad},
+        );
+        expect(errorOf(response)['code'], 'bad_params', reason: 'amount=$bad');
+      }
+      expect(currency.installed, isFalse);
+    });
+
+    test('宿主没接货币时明确报错，而不是假装成功', () async {
+      final response = await bridge(
+        permissions: const <String>{'currency:write'},
+      ).dispatch('currency.set', <String, Object?>{'amount': 10});
+
+      expect(errorOf(response)['code'], 'bad_params');
+      expect(errorOf(response)['message'], contains('没有接入货币'));
     });
   });
 }

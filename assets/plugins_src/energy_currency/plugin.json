@@ -1,0 +1,27 @@
+{
+  "id": "energy_currency",
+  "name": "能量",
+  "version": "1.0.0",
+  "contract": 1,
+  "entry": "index.html",
+  "description": "完成任务得能量。能量是任务管家的通用货币，以后商城、抽奖都花它。",
+  "icon": "bolt",
+  "permissions": ["task:read", "currency:read", "currency:write"],
+  "hooks": ["task.completed"],
+  "storage": {
+    "version": 1,
+    "tables": [
+      {
+        "name": "entries",
+        "columns": [
+          { "name": "kind", "type": "text" },
+          { "name": "amount", "type": "integer" },
+          { "name": "note", "type": "text" },
+          { "name": "at", "type": "text" },
+          { "name": "task_id", "type": "integer" }
+        ],
+        "indexes": [["at"]]
+      }
+    ]
+  }
+}

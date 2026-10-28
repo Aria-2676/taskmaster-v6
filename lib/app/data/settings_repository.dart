@@ -35,6 +35,20 @@ class SettingsKeys {
 
   /// 某个插件当首页失败的次数
   static String homeFailures(String pluginId) => 'sys.home_failures.$pluginId';
+
+  /// 当前生效的货币由哪个插件提供（插件 id）；没有则为空。
+  ///
+  /// **第一个报告余额的插件自动成为当前货币** —— 不需要用户先去某处"启用"，
+  /// 装完打开一次就生效，这是最省事的心智模型。
+  static const String activeCurrency = 'ui.active_currency';
+
+  /// 某个插件的货币余额**镜像**。
+  ///
+  /// 权威数据在插件自己的表里（流水求和），主包只存这一份用于画顶栏徽章 ——
+  /// 否则每次重建界面都要去读插件的私有表，耦合且慢。
+  /// 插件每次余额变化都要回报一次（见 bridge 的 `currency.set`）。
+  static String currencyBalance(String pluginId) =>
+      'currency.balance.$pluginId';
 }
 
 /// `settings` 表的读写。主包所有"用户开关"都走这里，

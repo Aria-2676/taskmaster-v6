@@ -10,6 +10,7 @@ import 'destinations.dart';
 class ProfileStubPage extends StatelessWidget {
   const ProfileStubPage({
     super.key,
+    required this.currencyLabel,
     required this.calendarStyle,
     required this.onCalendarStyleChanged,
     required this.editorForm,
@@ -22,6 +23,9 @@ class ProfileStubPage extends StatelessWidget {
     required this.onRetentionDaysChanged,
     required this.onOpenDestination,
   });
+
+  /// 顶部那行货币文案（由主壳算好，这里不碰状态）
+  final String currencyLabel;
 
   final CalendarStripStyle calendarStyle;
   final ValueChanged<CalendarStripStyle> onCalendarStyleChanged;
@@ -63,7 +67,7 @@ class ProfileStubPage extends StatelessWidget {
               const SizedBox(width: 10),
               Expanded(
                 child: Text(
-                  '当前货币：未安装',
+                  currencyLabel,
                   style: TextStyle(fontSize: 13, color: scheme.onSurfaceVariant),
                 ),
               ),

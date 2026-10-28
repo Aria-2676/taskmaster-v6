@@ -7,6 +7,7 @@ import '../../core/plugin/plugin_storage.dart';
 import '../models/task.dart';
 import '../data/settings_repository.dart';
 import '../data/task_repository.dart';
+import '../state/currency_store.dart';
 
 /// 插件 ↔ 宿主的数据通道（宿主侧）。
 ///
@@ -30,8 +31,10 @@ class PluginBridge {
     this.journal,
     this.data,
     this.onChanged,
+    CurrencyStore? currency,
   })  : _tasks = tasks,
-        _settings = settings;
+        _settings = settings,
+        _currency = currency;
 
   final String pluginId;
   final Set<String> permissions;
@@ -57,6 +60,10 @@ class PluginBridge {
   final TaskRepository _tasks;
   final SettingsRepository _settings;
 
+  /// 货币镜像。为 null 时（宿主没接线）`currency.*` 一律回 `bad_params`，
+  /// 而不是静默返回 0 —— 静默会让插件以为自己写成功了。
+  final CurrencyStore? _currency;
+
   Future<Map<String, Object?>> dispatch(String method, Map<String, Object?> params) async {
     try {
       return switch (method) {
@@ -78,6 +85,8 @@ class PluginBridge {
         'db.update' => await _dbUpdate(params),
         'db.delete' => await _dbDelete(params),
         'db.aggregate' => await _dbAggregate(params),
+        'currency.get' => await _currencyGet(),
+        'currency.set' => await _currencySet(params),
         'tag.list' => await _tagList(),
         'store.get' => await _storeGet(params),
         'store.set' => await _storeSet(params),
@@ -378,6 +387,54 @@ class PluginBridge {
     return _ok(<String, Object?>{'deleted': deleted});
   }
 
+  // ---- 货币 ----
+
+  /// 读**自己的**余额镜像。别的插件的余额看不到。
+  Future<Map<String, Object?>> _currencyGet() async {
+    _require(PluginPermissions.currencyRead);
+    final store = _currency;
+    if (store == null) {
+      throw const _BridgeError('bad_params', '宿主没有接入货币，无法读取');
+    }
+    final amount = await store.balanceOf(pluginId);
+    final active = store.providerId == pluginId;
+    return _ok(<String, Object?>{
+      'amount': amount,
+      // 这个插件是不是当前显示在顶栏的那个
+      'active': active,
+      // 顶栏已经被**别人**占着了吗。
+      // 和 active 分开是因为"还没有任何货币"和"有别的货币"要给用户
+      // 完全不同的提示：前者是"完成一条任务就会出现"，后者才是"显示的是别的"。
+      'occupied': !active && store.installed,
+    });
+  }
+
+  /// 更新余额。**插件负责算**，主包只存镜像。
+  ///
+  /// 为什么不让主包算：货币规则属于插件（有的加经验、有的加金币、
+  /// 有的按难度加权），主包一旦插手就得懂每个插件的算法。
+  /// 主包只做两件事：存下来、画出来。
+  Future<Map<String, Object?>> _currencySet(Map<String, Object?> params) async {
+    _require(PluginPermissions.currencyWrite);
+    final store = _currency;
+    if (store == null) {
+      throw const _BridgeError('bad_params', '宿主没有接入货币，无法写入');
+    }
+    final amount = params['amount'];
+    if (amount is! int) {
+      throw const _BridgeError('bad_params', 'amount 必须是整数');
+    }
+    if (amount < 0) {
+      throw const _BridgeError('bad_params', 'amount 不能为负');
+    }
+    // 上限防呆：插件写错了不该让主包显示一个天文数字
+    if (amount > 100000000) {
+      throw const _BridgeError('bad_params', 'amount 超出上限（1 亿）');
+    }
+    await store.report(pluginId, amount);
+    return _ok(<String, Object?>{'amount': amount});
+  }
+
   // ---- 插件私有 KV ----
 
   String _kvKey(String key) => 'plg.$pluginId.$key';
@@ -554,6 +611,12 @@ class PluginPermissions {
   static const String taskDelete = 'task:delete';
 
   static const String tagRead = 'tag:read';
+
+  /// 读自己的货币余额
+  static const String currencyRead = 'currency:read';
+
+  /// 更新货币余额（会显示在主包顶栏）
+  static const String currencyWrite = 'currency:write';
 }
 
 class _BridgeError implements Exception {

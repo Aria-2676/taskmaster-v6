@@ -14,8 +14,26 @@
       ],
       "package": {
         "path": "assets/plugins/demo_help_v1.4.0.zip",
-        "sha256": "5487c1b6ba18b214367901af391dd30d5eb692128d1a26cacb31ebd1cd03d8b1",
-        "sizeBytes": 3798
+        "sha256": "310db6821f62013d44bc2e1c038498c2234fc0776e4c4ffa0234ce113d26ba94",
+        "sizeBytes": 3814
+      }
+    },
+    {
+      "id": "energy_currency",
+      "name": "能量",
+      "version": "1.0.0",
+      "contract": 1,
+      "description": "完成任务得能量。能量是任务管家的通用货币，以后商城、抽奖都花它。",
+      "icon": "bolt",
+      "permissions": [
+        "task:read",
+        "currency:read",
+        "currency:write"
+      ],
+      "package": {
+        "path": "assets/plugins/energy_currency_v1.0.0.zip",
+        "sha256": "1cf71dcbf9dd88880c9b388d0dcb6ace613bb90f1be06df5674472e83b1e3fc9",
+        "sizeBytes": 4146
       }
     }
   ]

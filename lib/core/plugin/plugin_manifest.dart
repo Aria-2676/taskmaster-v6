@@ -176,6 +176,8 @@ class PluginManifest {
     'task:write',
     'task:delete',
     'tag:read',
+    'currency:read',
+    'currency:write',
   };
 
   bool has(String permission) => permissions.contains(permission);

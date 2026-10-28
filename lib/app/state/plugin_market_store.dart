@@ -15,6 +15,7 @@ class PluginMarketStore extends ChangeNotifier {
     required PluginInstaller installer,
     required Future<PluginIndex> Function() indexLoader,
     required Uri Function(PluginPackage package) urlFor,
+    this.onInstalled,
   })  : _installer = installer,
         _indexLoader = indexLoader,
         _urlFor = urlFor;
@@ -22,6 +23,12 @@ class PluginMarketStore extends ChangeNotifier {
   final PluginInstaller _installer;
   final Future<PluginIndex> Function() _indexLoader;
   final Uri Function(PluginPackage package) _urlFor;
+
+  /// 安装成功后回调（参数是索引条目，含权限声明）。
+  ///
+  /// 用途是"装完立刻生效"：声明了 `currency:write` 的插件装上就该在顶栏
+  /// 出现一个 0，而不是等用户点进去打开一次才有反应。
+  final void Function(PluginIndexEntry entry)? onInstalled;
 
   PluginIndex index = PluginIndex.empty;
   List<InstalledPlugin> installed = const <InstalledPlugin>[];
@@ -88,6 +95,7 @@ class PluginMarketStore extends ChangeNotifier {
           notifyListeners();
         },
       );
+      onInstalled?.call(entry);
     } on PluginInstallException catch (error) {
       lastError = error.message;
       rethrow;

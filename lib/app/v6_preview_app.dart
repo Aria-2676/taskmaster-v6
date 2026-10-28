@@ -11,6 +11,7 @@ import 'package:provider/provider.dart';
 
 import '../core/data/v6_database.dart';
 import '../core/extension/extension_hook.dart';
+import '../core/extension/extension_slot.dart';
 import '../core/plugin/event_journal.dart';
 import '../core/plugin/plugin_index.dart';
 import '../core/plugin/plugin_installer.dart';
@@ -29,6 +30,7 @@ import 'data/settings_repository.dart';
 import 'data/task_repository.dart';
 import 'shell/main_shell.dart';
 import 'state/field_store.dart';
+import 'state/currency_store.dart';
 import 'state/home_mode_store.dart';
 import 'state/plugin_market_store.dart';
 import 'state/task_store.dart';
@@ -81,6 +83,7 @@ class _V6PreviewAppState extends State<V6PreviewApp> {
   PluginMarketStore? _market;
   FieldStore? _fields;
   HomeModeStore? _home;
+  CurrencyStore? _currency;
   EventJournal? _journal;
   AppUpdateProvider? _update;
   Object? _error;
@@ -118,6 +121,8 @@ class _V6PreviewAppState extends State<V6PreviewApp> {
 
   @override
   void dispose() {
+    // 插槽是进程内单例，不摘掉会让测试互相污染（上一个用例的余额漏到下一个）
+    if (_currency != null) SlotRegistry.instance.unregister(_currency!.pluginId);
     // 只销毁自己造的：注入进来的实例归调用方
     if (widget.injectedUpdate == null) _update?.dispose();
     super.dispose();
@@ -157,6 +162,13 @@ class _V6PreviewAppState extends State<V6PreviewApp> {
       final home = HomeModeStore(settings);
       await home.load();
 
+      // 货币：余额镜像 + 顶上徽章的插槽提供者。
+      // **注册进 SlotRegistry**，这样主壳的 `_badge` 不用知道货币是怎么来的 ——
+      // 插槽体系本来就是给"外壳上的外来数据"准备的。
+      final currency = CurrencyStore(settings);
+      await currency.load();
+      SlotRegistry.instance.register(currency);
+
       // 事件日志：插件没挂载时收到的事件先落库，等它下次上来补发。
       // **全局只注册一次**，不是每次打开插件都注册 —— 否则同一条事件会写多份。
       final journal = EventJournal(db);
@@ -167,12 +179,21 @@ class _V6PreviewAppState extends State<V6PreviewApp> {
         _store = TaskStore(repo, settings);
         _fields = fields;
         _home = home;
+        _currency = currency;
         _journal = journal;
         _market = PluginMarketStore(
           installer: installer,
           indexLoader: _loadIndex,
           // 首版从内置 asset 装包；接远程时只改这一行
           urlFor: (pkg) => Uri(scheme: 'asset', path: pkg.path),
+          // 声明了「能写货币」的插件，装上就把自己报成当前货币（余额 0）。
+          // 不这样的话用户装完看不到任何变化，得点进去打开一次才有反应 ——
+          // 那一步没人告诉他。
+          onInstalled: (entry) {
+            if (entry.permissions.contains('currency:write')) {
+              _currency?.report(entry.id, 0);
+            }
+          },
         );
       });
     } catch (e) {
@@ -234,6 +255,8 @@ class _V6PreviewAppState extends State<V6PreviewApp> {
         // 插件写完要通知主包重读：否则"插件里加了任务、退出插件首页还是旧的"。
         // 用闭包读 `_store`，避免热重载后拿到已失效的实例。
         onChanged: () => _store?.load(),
+        // 宿主没接货币时传 null，bridge 会回 bad_params 而不是静默成功
+        currency: _currency,
       ),
       hooks: manifest.hooks,
     );
@@ -336,6 +359,7 @@ class _V6PreviewAppState extends State<V6PreviewApp> {
           : (_) => const AppUpdatePage(title: '关于'),
       fieldStore: _fields,
       homeStore: _home,
+      currencyStore: _currency,
     );
   }
 }

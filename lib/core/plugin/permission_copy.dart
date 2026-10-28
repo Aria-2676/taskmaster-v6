@@ -16,6 +16,8 @@ class PermissionCopy {
     'task:write': '新建和修改你的任务',
     'task:delete': '删除你的任务',
     'tag:read': '读取你的标签',
+    'currency:read': '读取自己的货币余额',
+    'currency:write': '更新货币余额（会显示在顶栏）',
   };
 
   /// 会造成不可逆后果的权限。展示时要单独提出来说一句。
@@ -31,7 +33,9 @@ class PermissionCopy {
   static const List<String> _order = <String>[
     'task:read',
     'tag:read',
+    'currency:read',
     'task:write',
+    'currency:write',
     'task:delete',
   ];
 

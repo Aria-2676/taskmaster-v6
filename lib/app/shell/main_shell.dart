@@ -15,6 +15,7 @@ import '../pages/tag_manager_page.dart';
 import '../pages/task_editor_page.dart';
 import '../widgets/mode_switcher.dart';
 import 'destinations.dart';
+import '../state/currency_store.dart';
 import '../state/field_store.dart';
 import '../state/home_mode_store.dart';
 import '../state/pending_delete_guard.dart';
@@ -37,6 +38,7 @@ class MainShell extends StatefulWidget {
     this.aboutPageBuilder,
     this.fieldStore,
     this.homeStore,
+    this.currencyStore,
   });
 
   final TaskStore store;
@@ -61,6 +63,9 @@ class MainShell extends StatefulWidget {
 
   /// 首页形态 + 熔断。为 null 时永远用内置首页。
   final HomeModeStore? homeStore;
+
+  /// 当前货币（余额镜像 + 提供者）。为 null 时顶栏不显示徽章。
+  final CurrencyStore? currencyStore;
 
   @override
   State<MainShell> createState() => _MainShellState();
@@ -137,6 +142,7 @@ class _MainShellState extends State<MainShell> {
     _store,
     if (widget.marketStore != null) widget.marketStore!,
     if (widget.homeStore != null) widget.homeStore!,
+    if (widget.currencyStore != null) widget.currencyStore!,
   ]);
 
   @override
@@ -742,6 +748,17 @@ class _MainShellState extends State<MainShell> {
     );
   }
 
+  /// 「我的」页顶部那行货币文案。
+  ///
+  /// 没装货币插件时保持"未安装"，装了之后显示名字与余额 ——
+  /// 用户得能看出顶栏那个数字是谁给的。
+  String get _currencyLabel {
+    final currency = widget.currencyStore;
+    if (currency == null || !currency.installed) return '当前货币：未安装';
+    final id = currency.providerId!;
+    return '当前货币：${_pluginName(id)} · ${currency.balance}';
+  }
+
   /// 当前模式是否允许用 `+` 建任务。插件模式下不允许（见 [build] 里的注释）。
   bool get _modeAllowsAdd {
     final home = widget.homeStore;
@@ -770,6 +787,14 @@ class _MainShellState extends State<MainShell> {
   }
 
   Widget? get _badge {
+    // 提供货币的插件已经卸掉了，就别再挂着一个没人维护的数字。
+    // 这里只做"不显示"，不动持久化 —— 用户重装同一个插件后余额自然回来。
+    final currency = widget.currencyStore;
+    final market = widget.marketStore;
+    if (currency != null && currency.installed && market != null) {
+      final alive = market.installed.any((p) => p.pluginId == currency.providerId);
+      if (!alive) return null;
+    }
     final slot = SlotRegistry.instance.resolve(SlotId.currencyBadge);
     if (slot is! CurrencyBadgeValue) return null;
     return _CurrencyBadge(value: slot.value);
@@ -789,6 +814,7 @@ class _MainShellState extends State<MainShell> {
         // 顶栏、底栏、添加按钮都在外面，插件崩了用户总能切回「我的」。
         _homeView(),
         ProfileStubPage(
+          currencyLabel: _currencyLabel,
           calendarStyle: _calendarStyle,
           onCalendarStyleChanged: (s) => setState(() => _calendarStyle = s),
           editorForm: _store.editorForm,

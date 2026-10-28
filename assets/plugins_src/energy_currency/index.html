@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>能量</title>
+  <style>
+    :root {
+      --bg: #f7f4fb;
+      --card: #ffffff;
+      --text: #1d1b20;
+      --muted: #6f6b76;
+      --accent: #6750a4;
+      --earn: #2e7d32;
+      --spend: #c62828;
+      --line: #e7e0ec;
+    }
+    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    body {
+      margin: 0;
+      padding: 18px 16px 28px;
+      background: var(--bg);
+      color: var(--text);
+      font: 14px/1.5 -apple-system, "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+    }
+    .tag {
+      display: inline-block;
+      font-size: 11px;
+      color: #fff;
+      background: var(--accent);
+      border-radius: 999px;
+      padding: 2px 9px;
+      letter-spacing: .3px;
+    }
+    .balance {
+      margin: 14px 0 4px;
+      font-size: 46px;
+      font-weight: 700;
+      letter-spacing: -1px;
+      font-variant-numeric: tabular-nums;
+    }
+    .balance small { font-size: 15px; font-weight: 500; color: var(--muted); margin-left: 6px; }
+    .hint { color: var(--muted); font-size: 12.5px; margin-bottom: 18px; }
+
+    .card {
+      background: var(--card);
+      border-radius: 14px;
+      padding: 14px 15px;
+      margin-bottom: 12px;
+      box-shadow: 0 1px 2px rgba(29, 27, 32, .05);
+    }
+    .card h3 {
+      margin: 0 0 10px;
+      font-size: 12.5px;
+      font-weight: 600;
+      color: var(--muted);
+      letter-spacing: .3px;
+    }
+    .row {
+      display: flex;
+      align-items: baseline;
+      gap: 10px;
+      padding: 7px 0;
+      border-top: 1px solid var(--line);
+    }
+    .row:first-of-type { border-top: 0; }
+    .row .note {
+      flex: 1;
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .row .amt {
+      font-variant-numeric: tabular-nums;
+      font-weight: 600;
+      font-size: 13.5px;
+    }
+    .amt.earn { color: var(--earn); }
+    .amt.spend { color: var(--spend); }
+    .empty { color: var(--muted); font-size: 12.5px; padding: 6px 0; }
+
+    button {
+      width: 100%;
+      border: 0;
+      border-radius: 12px;
+      padding: 12px;
+      font-size: 14px;
+      font-weight: 600;
+      background: var(--accent);
+      color: #fff;
+    }
+    button:active { opacity: .8; }
+    .rule { font-size: 12px; color: var(--muted); line-height: 1.7; }
+  </style>
+</head>
+<body>
+  <div class="tag">契约 1 · v1.0.0</div>
+  <div class="balance" id="balance">—</div>
+  <div class="hint" id="hint">正在读取…</div>
+
+  <div class="card">
+    <h3>最近记录</h3>
+    <div id="list"><div class="empty">还没有记录</div></div>
+  </div>
+
+  <div class="card">
+    <h3>怎么算的</h3>
+    <div class="rule">
+      完成一条任务 <b>+10</b><br>
+      估时 ≥30 分钟 <b>+5</b>，≥60 分钟 <b>+10</b><br>
+      优先级「橙」<b>+5</b>，「红」<b>+10</b><br>
+      规则在本插件里算，主包只负责存和显示。
+    </div>
+  </div>
+
+  <button id="audit">核对余额</button>
+
+  <script>
+    var STATE = { balance: 0, entries: [] };
+
+    function pad(n) { return (n < 10 ? '0' : '') + n; }
+    function now() {
+      var d = new Date();
+      return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()) +
+        ' ' + pad(d.getHours()) + ':' + pad(d.getMinutes());
+    }
+
+    function render() {
+      document.getElementById('balance').innerHTML =
+        STATE.balance + '<small>能量</small>';
+      document.getElementById('hint').textContent =
+        '完成任务自动入账，共 ' + STATE.entries.length + ' 条记录';
+
+      var list = document.getElementById('list');
+      if (!STATE.entries.length) {
+        list.innerHTML = '<div class="empty">还没有记录</div>';
+        return;
+      }
+      list.innerHTML = STATE.entries.map(function (e) {
+        var sign = e.amount > 0 ? '+' : '';
+        var cls = e.amount >= 0 ? 'earn' : 'spend';
+        return '<div class="row"><span class="note">' +
+          (e.note || '—') + '</span><span class="amt ' + cls + '">' +
+          sign + e.amount + '</span></div>';
+      }).join('');
+    }
+
+    // 一次入账：先写流水，再报余额。
+    // 顺序不能反 —— 先报余额后写流水的话，中途失败会出现
+    // "余额涨了但查不到任何记录"，而反过来最坏只是"记录在、余额没跟上"，
+    // 用下面的『核对余额』能修。
+    async function book(kind, amount, note, taskId) {
+      await window.host.call('db.insert', {
+        table: 'entries',
+        values: {
+          kind: kind,
+          amount: amount,
+          note: note || '',
+          at: now(),
+          task_id: taskId == null ? null : taskId
+        }
+      });
+      var next = Math.max(0, STATE.balance + amount);
+      await window.host.call('currency.set', { amount: next });
+      STATE.balance = next;
+      await reload();
+    }
+
+    function rewardFor(payload) {
+      var gain = 10;
+      var minutes = payload.estimatedMinutes || 0;
+      if (minutes >= 60) gain += 10;
+      else if (minutes >= 30) gain += 5;
+      if (payload.priority === 'red') gain += 10;
+      else if (payload.priority === 'orange') gain += 5;
+      return gain;
+    }
+
+    async function handleCompleted(payload) {
+      if (!payload || !payload.title) return;
+      await book('earn', rewardFor(payload), '完成「' + payload.title + '」', payload.taskId);
+    }
+
+    async function reload() {
+      var rows = await window.host.call('db.select', {
+        table: 'entries',
+        orderBy: [{ column: 'id', desc: true }],
+        limit: 20
+      });
+      STATE.entries = rows || [];
+      render();
+    }
+
+    function whenHostReady(callback, tries) {
+      tries = tries || 0;
+      if (window.host) return callback();
+      if (tries > 100) {
+        document.getElementById('hint').textContent = '宿主通道没起来';
+        return;
+      }
+      setTimeout(function () { whenHostReady(callback, tries + 1); }, 30);
+    }
+
+    whenHostReady(async function () {
+      try {
+        // 1) 先补发：插件没开着的时候完成的任务，事件已经落在宿主的队列里。
+        //    不处理的话用户会以为"这次白干了"。
+        var pending = await window.host.call('event.pending', { limit: 50 });
+        var acked = [];
+        for (var i = 0; i < pending.length; i++) {
+          var evt = pending[i];
+          // 字段名是 `event`，不是 `hook` —— 宿主返回 {id, event, payload}。
+          // 写成 evt.hook 的话条件永远为假：事件被 ack 掉、奖励却没发，
+          // 而且表面上一点错误都看不出来。
+          if (evt.event === 'task.completed') {
+            await handleCompleted(evt.payload);
+          }
+          acked.push(evt.id);
+        }
+        if (acked.length) {
+          // ack 之后宿主就不再重发；不 ack 会重复投递，所以必须幂等（这里是）
+          await window.host.call('event.ack', { ids: acked });
+        }
+
+        // 2) 再读当前余额与流水
+        var info = await window.host.call('currency.get', {});
+        STATE.balance = info.amount;
+        await reload();
+
+        if (!info.active) {
+          // 两种"不在顶栏"要分开说：还没人认领 vs 被别人占着
+          document.getElementById('hint').textContent = info.occupied
+            ? '余额已记录，但顶栏显示的是别的货币'
+            : '完成一条任务，余额就会出现在顶栏';
+        }
+
+        // 3) 订阅后续事件
+        window.host.on('task.completed', handleCompleted);
+      } catch (error) {
+        document.getElementById('hint').textContent = '读取失败：' + error.message;
+      }
+    });
+
+    document.getElementById('audit').addEventListener('click', async function () {
+      try {
+        // 从流水求和，和宿主里的镜像对一次。
+        // 不需要 GROUP BY：这张表只属于本插件，一次全量求和够用。
+        var sum = await window.host.call('db.aggregate', {
+          table: 'entries',
+          metrics: [{ fn: 'sum', column: 'amount', as: 'total' }]
+        });
+        var total = (sum && sum.length && sum[0].total) ? sum[0].total : 0;
+        total = Math.max(0, Number(total));
+        if (total !== STATE.balance) {
+          await window.host.call('currency.set', { amount: total });
+          STATE.balance = total;
+          document.getElementById('hint').textContent =
+            '已按流水修正：' + total + ' 能量';
+        } else {
+          document.getElementById('hint').textContent =
+            '账目一致：' + total + ' 能量';
+        }
+        await reload();
+      } catch (error) {
+        document.getElementById('hint').textContent = '核对失败：' + error.message;
+      }
+    });
+  </script>
+</body>
+</html>

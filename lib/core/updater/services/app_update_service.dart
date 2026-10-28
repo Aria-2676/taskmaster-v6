@@ -1,7 +1,7 @@
 import 'dart:convert';
-import 'dart:io';
 
 import '../../config/cdn_bases.dart';
+import '../../services/remote_text.dart';
 import '../../utils/app_logger.dart';
 import '../models/app_update_decision.dart';
 import '../models/app_update_manifest.dart';
@@ -139,33 +139,16 @@ class AppUpdateService {
   /// 所有请求都带 `Cache-Control: no-cache`：中间透明缓存（运营商/企业网关）
   /// 不得缓存清单，尽量缩短「发布 → 客户端发现」的延迟。
   Future<String> _httpGetString(Uri uri, {required bool viaContentsApi}) async {
-    final client = HttpClient()..connectionTimeout = timeout;
+    // 具体怎么拉、Contents API 的信封怎么解，统一在 RemoteText 里 —
+    // 插件索引也用它，那段 base64 剥换行的逻辑不能有两份。
     try {
-      final request = await client.getUrl(uri);
-      request.headers.set(HttpHeaders.acceptHeader, 'application/json');
-      request.headers.set(HttpHeaders.cacheControlHeader, 'no-cache');
-      request.headers.set('Pragma', 'no-cache');
-      if (viaContentsApi) {
-        request.headers.set('Accept', 'application/vnd.github+json');
-      }
-      final response = await request.close().timeout(timeout);
-      if (response.statusCode != HttpStatus.ok) {
-        throw AppUpdateException('HTTP ${response.statusCode}');
-      }
-      final rawBody = await response.transform(utf8.decoder).join().timeout(timeout);
-      if (!viaContentsApi) return rawBody;
-
-      final envelope = jsonDecode(rawBody);
-      if (envelope is! Map ||
-          envelope['encoding']?.toString() != 'base64' ||
-          envelope['content'] is! String) {
-        throw const AppUpdateException('Contents API 响应结构异常');
-      }
-      // Contents API 的 base64 内容按 76 列插了换行，解码前必须剥掉。
-      final compact = (envelope['content'] as String).replaceAll(RegExp(r'\s'), '');
-      return utf8.decode(base64.decode(compact));
-    } finally {
-      client.close(force: true);
+      return await RemoteText.fetch(
+        uri,
+        viaContentsApi: viaContentsApi,
+        timeout: timeout,
+      );
+    } on RemoteTextException catch (error) {
+      throw AppUpdateException(error.message);
     }
   }
 }

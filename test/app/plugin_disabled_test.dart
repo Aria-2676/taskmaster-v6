@@ -13,6 +13,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as p;
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'package:v5_app/app/data/plugin_bridge.dart';
+import 'package:v5_app/app/data/plugin_index_loader.dart';
 import 'package:v5_app/app/data/settings_repository.dart';
 import 'package:v5_app/app/data/task_repository.dart';
 import 'package:v5_app/app/pages/plugin_market_page.dart';
@@ -78,7 +79,7 @@ void main() {
           }) async {},
         ),
         // 索引读不读得到与停用无关，这里给个空索引
-        indexLoader: () async => PluginIndex.empty,
+        indexLoader: () async => PluginIndexResult.bundled(PluginIndex.empty),
         urlFor: (pkg) => Uri.file(pkg.path),
         onEnabledChanged: onEnabledChanged,
       );

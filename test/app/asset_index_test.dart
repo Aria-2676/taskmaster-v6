@@ -1,11 +1,14 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:archive/archive.dart';
 import 'package:crypto/crypto.dart';
 import 'package:flutter/services.dart' show rootBundle;
 import 'package:flutter_test/flutter_test.dart';
+import 'package:path/path.dart' as p;
 import 'package:v5_app/core/plugin/plugin_index.dart';
+import 'package:v5_app/core/plugin/plugin_manifest.dart';
 
 /// 内置索引与包的一致性。
 ///
@@ -19,6 +22,21 @@ void main() {
     return PluginIndex.parse(jsonDecode(text) as Map<String, Object?>);
   }
 
+  /// 包里那份文件从哪儿读：随包的从 asset，仓库分发的从磁盘。
+  ///
+  /// 两个用例都要它 —— 以后加一个"只从仓库分发"的插件，别让某一条测试
+  /// 还傻等着 rootBundle 里有一份。
+  Future<Uint8List> bytesOf(PluginPackage pkg) async {
+    if (pkg.path.startsWith('assets/')) {
+      final data = await rootBundle.load(pkg.path);
+      return data.buffer.asUint8List(data.offsetInBytes, data.lengthInBytes);
+    }
+    final file = File(pkg.path);
+    expect(file.existsSync(), isTrue,
+        reason: '索引指向 ${pkg.path}，但仓库里没有这个文件（线上会 404）');
+    return file.readAsBytesSync();
+  }
+
   test('内置索引可读、能解析、至少有一个插件', () async {
     final index = await loadIndex();
     expect(index.plugins, isNotEmpty);
@@ -30,12 +48,23 @@ void main() {
     }
   });
 
-  test('每个内置 zip 的大小与 sha256 都与索引一致', () async {
+  test('每个包的体积与 sha256 都与索引一致（随包的读 asset，仓库分发的读磁盘）', () async {
+    // 包的**路径**就是分发方式：
+    //   assets/plugins/…     打进 APK，断网也能装（离线兜底）
+    //   plugins/packages/…   只从仓库分发，装的时候联网下载
+    // 两种都要在这里守住 —— 前者漏打包 = 断网装不上；后者漏提交 = 线上 404。
     final index = await loadIndex();
     for (final entry in index.plugins) {
       final pkg = entry.package;
-      final data = await rootBundle.load(pkg.path);
-      final bytes = data.buffer.asUint8List(data.offsetInBytes, data.lengthInBytes);
+      final bytes = await bytesOf(pkg);
+
+      if (!pkg.path.startsWith('assets/')) {
+        // 同一个包两边都有 = 打包脚本没清旧的。这会让"仓库分发"名不副实：
+        // APK 里还悄悄躺着那份，用户以为自己下的是新的。
+        final stray = File(p.join('assets', 'plugins', p.basename(pkg.path)));
+        expect(stray.existsSync(), isFalse,
+            reason: '${entry.id}: 同一个包在 assets/ 和 plugins/packages/ 各有一份，重新跑 make_demo_plugin.py');
+      }
 
       expect(bytes.length, pkg.sizeBytes,
           reason: '${entry.id}: 索引里的 sizeBytes 与包不一致（重新跑 make_demo_plugin.py）');
@@ -67,9 +96,7 @@ void main() {
     final index = await loadIndex();
 
     for (final entry in index.plugins) {
-      final data = await rootBundle.load(entry.package.path);
-      final bytes = data.buffer.asUint8List(data.offsetInBytes, data.lengthInBytes);
-      final archive = ZipDecoder().decodeBytes(bytes);
+      final archive = ZipDecoder().decodeBytes(await bytesOf(entry.package));
 
       final page = archive.findFile('index.html');
       expect(page, isNotNull, reason: '${entry.id}: 包里没有 index.html');

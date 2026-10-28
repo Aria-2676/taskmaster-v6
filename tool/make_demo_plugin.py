@@ -9,6 +9,7 @@
     python tool/make_demo_plugin.py
 """
 
+import glob
 import hashlib
 import json
 import os
@@ -16,7 +17,16 @@ import zipfile
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SRC_ROOT = os.path.join(ROOT, "assets", "plugins_src")
-OUT_DIR = os.path.join(ROOT, "assets", "plugins")
+
+# 包放哪儿 = 它怎么分发。这不是排版问题，是功能问题：
+#   assets/plugins/        → 打进 APK，随包的离线兜底（断网也能装）
+#   plugins/packages/      → 只从仓库分发，装的时候联网下载
+# 同一个插件不要两边都有：两份同样内容放在两个地方，迟早有一份忘了重新打。
+BUNDLED_DIR = os.path.join(ROOT, "assets", "plugins")
+REPO_DIR = os.path.join(ROOT, "plugins", "packages")
+
+# 只从仓库分发的插件（不进 APK）。改这里等于改"谁会随包发出去"。
+REPO_ONLY = {"energy_currency"}
 
 FIXED_TIME = (1980, 1, 1, 0, 0, 0)
 
@@ -25,7 +35,17 @@ def pack(plugin_dir: str, manifest: dict) -> dict:
     plugin_id = manifest["id"]
     version = manifest["version"]
     name = f"{plugin_id}_v{version}.zip"
-    dest = os.path.join(OUT_DIR, name)
+    out_dir = REPO_DIR if plugin_id in REPO_ONLY else BUNDLED_DIR
+    dest = os.path.join(out_dir, name)
+    os.makedirs(out_dir, exist_ok=True)
+
+    # 反向清掉另一边的旧包：插件从"随包"改成"仓库分发"之后，
+    # 留在 assets/ 里的那个旧 zip 还会被打进 APK，且索引已经不指向它 ——
+    # 白占体积、还容易让人以为它还在随包。
+    stale_dir = BUNDLED_DIR if plugin_id in REPO_ONLY else REPO_DIR
+    for stale in glob.glob(os.path.join(stale_dir, f"{plugin_id}_v*.zip")):
+        os.remove(stale)
+        print(f"removed stale {stale}")
 
     files = []
     for current, _, names in os.walk(plugin_dir):
@@ -47,15 +67,15 @@ def pack(plugin_dir: str, manifest: dict) -> dict:
     with open(dest, "rb") as handle:
         digest = hashlib.sha256(handle.read()).hexdigest()
 
+    rel_dir = "plugins/packages" if plugin_id in REPO_ONLY else "assets/plugins"
     return {
-        "path": f"assets/plugins/{name}",
+        "path": f"{rel_dir}/{name}",
         "sha256": digest,
         "sizeBytes": os.path.getsize(dest),
     }
 
 
 def main() -> None:
-    os.makedirs(OUT_DIR, exist_ok=True)
     entries = []
 
     for plugin_id in sorted(os.listdir(SRC_ROOT)):
@@ -86,8 +106,9 @@ def main() -> None:
         print(f"packed {manifest['id']} v{manifest['version']} -> {package['path']} "
               f"({package['sizeBytes']} bytes, {package['sha256'][:12]}…)")
 
+    # 索引永远随包（断网时它就是货架的全部内容）
     index = {"schemaVersion": 1, "plugins": entries}
-    index_path = os.path.join(OUT_DIR, "index.json")
+    index_path = os.path.join(BUNDLED_DIR, "index.json")
     with open(index_path, "w", encoding="utf-8", newline="\n") as handle:
         json.dump(index, handle, ensure_ascii=False, indent=2)
         handle.write("\n")

@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -13,9 +12,13 @@ import '../core/data/v6_database.dart';
 import '../core/extension/extension_hook.dart';
 import '../core/extension/extension_slot.dart';
 import '../core/plugin/event_journal.dart';
-import '../core/plugin/plugin_index.dart';
 import '../core/plugin/plugin_installer.dart';
 import '../core/plugin/plugin_store.dart';
+import '../core/config/cdn_bases.dart';
+import '../core/services/file_downloader.dart';
+import '../core/services/remote_text.dart';
+import '../core/updater/services/app_update_service.dart';
+import 'data/plugin_index_loader.dart';
 import '../core/plugin/plugin_manifest.dart';
 import '../core/plugin/plugin_storage.dart';
 import '../core/updater/providers/app_update_provider.dart';
@@ -140,7 +143,7 @@ class _V6PreviewAppState extends State<V6PreviewApp> {
       final installer = PluginInstaller(
         db: db,
         rootDir: Directory(p.join(support.path, 'plugins')),
-        fetch: _assetFetch,
+        fetch: _pluginPackageFetch,
       );
       // 启动自愈：上次卸载/安装中断留下的残渣在这里清掉
       await installer.reconcile();
@@ -183,9 +186,15 @@ class _V6PreviewAppState extends State<V6PreviewApp> {
         _journal = journal;
         _market = PluginMarketStore(
           installer: installer,
-          indexLoader: _loadIndex,
-          // 首版从内置 asset 装包；接远程时只改这一行
-          urlFor: (pkg) => Uri(scheme: 'asset', path: pkg.path),
+          // 索引：远端 → 本地缓存 → 随包的兜底（见 PluginIndexLoader）
+          indexLoader: PluginIndexLoader(
+            fetchRemote: _fetchRemoteIndex,
+            loadBundled: _loadBundledIndex,
+            settings: settings,
+          ).load,
+          // 包路径原样带过去（`assets/plugins/xxx.zip`）：取包时先看随包的
+          // asset 有没有这个路径，没有才按同一路径去 CDN 拉。
+          urlFor: (pkg) => Uri(scheme: 'plugin', path: pkg.path),
           // 声明了「能写货币」的插件，装上就把自己报成当前货币（余额 0）。
           // 不这样的话用户装完看不到任何变化，得点进去打开一次才有反应 ——
           // 那一步没人告诉他。
@@ -314,24 +323,66 @@ class _V6PreviewAppState extends State<V6PreviewApp> {
     );
   }
 
-  static Future<PluginIndex> _loadIndex() async {
-    final text = await rootBundle.loadString('assets/plugins/index.json');
-    final decoded = jsonDecode(text);
-    if (decoded is! Map) {
-      throw const PluginFormatException('index.json 顶层必须是对象');
-    }
-    return PluginIndex.parse(Map<String, Object?>.from(decoded));
-  }
+  /// 索引在仓库里的路径。**和打进 APK 的那份是同一个文件** ——
+  /// 不新开 `plugins/` 目录，否则一定会出现"线上那份和随包那份不一样"。
+  static const String _pluginIndexPath = 'assets/plugins/index.json';
 
-  static Future<void> _assetFetch({
+  /// 远端索引：jsDelivr 各节点 → raw → Contents API 兜底。
+  static Future<String> _fetchRemoteIndex() => RemoteText.fetchFromCandidates(
+        CdnBases.resolve(
+          CdnBases.manifest,
+          CdnBases.manifestFallbacks,
+          _pluginIndexPath,
+        ),
+        contentsApi: Uri.parse(
+          '${AppUpdateService.contentsApiBase}/$_pluginIndexPath',
+        ),
+      );
+
+  /// 随包的兜底索引（APK 里那份，永远存在）
+  static Future<String> _loadBundledIndex() =>
+      rootBundle.loadString(_pluginIndexPath);
+
+  /// 取插件包：**先看随包 asset，再走远端多源**。
+  ///
+  /// 顺序理由：内置的两个插件离线也该能装（而且省一次下载）；
+  /// 新插件不在 APK 里，才需要联网。两边的字节最终都要过 sha256 校验，
+  /// 所以"先本地"不会放过被篡改的包。
+  static Future<void> _pluginPackageFetch({
     required Uri url,
     required String destPath,
     void Function(int received, int? total)? onProgress,
   }) async {
-    final data = await rootBundle.load(url.path);
-    final bytes = data.buffer.asUint8List(data.offsetInBytes, data.lengthInBytes);
-    await File(destPath).writeAsBytes(bytes);
-    onProgress?.call(bytes.length, bytes.length);
+    final path = url.path;
+    try {
+      final data = await rootBundle.load(path);
+      final bytes = data.buffer.asUint8List(data.offsetInBytes, data.lengthInBytes);
+      await File(destPath).writeAsBytes(bytes);
+      onProgress?.call(bytes.length, bytes.length);
+      return;
+    } catch (_) {
+      // 不是随包的包，往下走网络
+    }
+
+    Object? lastError;
+    for (final candidate in CdnBases.resolve(
+      CdnBases.largeFile,
+      CdnBases.largeFileFallbacks,
+      path,
+    )) {
+      try {
+        await FileDownloader.download(
+          url: candidate,
+          destPath: destPath,
+          onProgress: onProgress,
+        );
+        return;
+      } catch (error) {
+        lastError = error;
+        debugPrint('[plugin] 下载失败 $candidate：$error');
+      }
+    }
+    throw PluginInstallException('下载失败：所有源都不可用（$lastError）');
   }
 
   ThemeData _theme(Brightness brightness) => ThemeData(

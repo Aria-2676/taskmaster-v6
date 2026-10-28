@@ -31,7 +31,7 @@
         "currency:write"
       ],
       "package": {
-        "path": "assets/plugins/energy_currency_v1.0.0.zip",
+        "path": "plugins/packages/energy_currency_v1.0.0.zip",
         "sha256": "ffb1dd8a641991b9e9b7238b23224730c7eda86f3a13dd216d9f78a4bceb17b0",
         "sizeBytes": 4367
       }

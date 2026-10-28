@@ -5,6 +5,7 @@ import '../../core/plugin/plugin_installer.dart';
 import '../../core/plugin/plugin_manifest.dart';
 import '../../core/plugin/plugin_store.dart';
 import '../../core/utils/version_utils.dart';
+import '../data/plugin_index_loader.dart';
 import '../data/settings_repository.dart';
 
 /// 插件市场的状态。
@@ -15,7 +16,7 @@ import '../data/settings_repository.dart';
 class PluginMarketStore extends ChangeNotifier {
   PluginMarketStore({
     required PluginInstaller installer,
-    required Future<PluginIndex> Function() indexLoader,
+    required Future<PluginIndexResult> Function() indexLoader,
     required Uri Function(PluginPackage package) urlFor,
     this.onInstalled,
     this.onUninstalled,
@@ -25,7 +26,7 @@ class PluginMarketStore extends ChangeNotifier {
         _urlFor = urlFor;
 
   final PluginInstaller _installer;
-  final Future<PluginIndex> Function() _indexLoader;
+  final Future<PluginIndexResult> Function() _indexLoader;
   final Uri Function(PluginPackage package) _urlFor;
 
   /// 安装成功后回调（参数是索引条目，含权限声明）。
@@ -57,8 +58,30 @@ class PluginMarketStore extends ChangeNotifier {
   List<InstalledPlugin> installed = const <InstalledPlugin>[];
   bool loading = true;
 
-  /// 索引获取失败的原因。已安装部分不受它影响。
+  /// 索引**彻底**取不到的原因（远端、缓存、随包三份都坏了）。
+  /// 已安装部分不受它影响。
   String? indexError;
+
+  /// 这份索引是远端 / 缓存 / 随包 —— 界面据此写状态行。
+  PluginIndexSource indexSource = PluginIndexSource.bundled;
+
+  /// 远端那份是什么时候拉到的（缓存态时可能为 null）
+  DateTime? indexFetchedAt;
+
+  /// 远端失败的原始错误（降级时才有）。露给用户，别用文案盖住。
+  String? indexRemoteError;
+
+  /// 正在重拉索引。
+  ///
+  /// 存在的理由很实际：拉一次可能好几秒（三个 CDN 逐个超时），按钮不给反馈的话
+  /// 用户以为没点上，会连点五六次 —— 每次都是一轮完整的多源重试。
+  bool indexRefreshing = false;
+
+  /// 单个插件包的体积上限：jsDelivr 单文件硬限 20MB。
+  ///
+  /// 超了在**装之前**就拒绝，给一句人话。不做"超限改走 Releases"的分流 ——
+  /// 现在没有这么大的插件，多一条分支就多一处没被测过的地方。
+  static const int maxPackageBytes = 20 * 1024 * 1024;
 
   /// 安装/卸载失败的原因，页面显示一次后清掉
   String? lastError;
@@ -112,20 +135,54 @@ class PluginMarketStore extends ChangeNotifier {
     // 本地库先读：这一步不会失败，先让"已安装"有内容
     installed = await _installer.store.all();
 
-    try {
-      index = await _indexLoader();
-      indexError = null;
-    } catch (error) {
-      index = PluginIndex.empty;
-      indexError = '$error';
-    }
+    await _loadIndex(notify: false);
 
     loading = false;
     notifyListeners();
   }
 
+  /// 单独重拉索引（状态行那个「重试」按钮）。
+  ///
+  /// 已经装了什么不受影响，所以不必整页 loading —— 只更新索引与状态行。
+  Future<void> refreshIndex() async {
+    if (indexRefreshing) return;
+    indexRefreshing = true;
+    notifyListeners();
+    try {
+      await _loadIndex(notify: false);
+    } finally {
+      indexRefreshing = false;
+      notifyListeners();
+    }
+  }
+
+  Future<void> _loadIndex({required bool notify}) async {
+    try {
+      final result = await _indexLoader();
+      index = result.index;
+      indexSource = result.source;
+      indexFetchedAt = result.fetchedAt;
+      indexRemoteError = result.remoteError;
+      indexError = null;
+    } catch (error) {
+      index = PluginIndex.empty;
+      indexError = '$error';
+    }
+    if (notify) notifyListeners();
+  }
+
   Future<void> install(PluginIndexEntry entry) async {
     if (_progress.containsKey(entry.id)) return;
+
+    // 体积上限在**下载之前**挡：20MB 是 jsDelivr 的单文件硬限，
+    // 超了必然下不来，先给一句人话比让用户等一轮失败强。
+    if (entry.package.sizeBytes > maxPackageBytes) {
+      lastError = '「${entry.name}」的包有 '
+          '${(entry.package.sizeBytes / 1024 / 1024).toStringAsFixed(1)}MB，'
+          '超过 ${maxPackageBytes ~/ (1024 * 1024)}MB 上限，装不了';
+      notifyListeners();
+      throw PluginInstallException(lastError!);
+    }
 
     // 升级 = 对已装插件再走一遍 install。首次安装才需要 onInstalled
     // （报余额 0 / 点亮徽章）；升级时镜像和数据都在，再报 0 会把

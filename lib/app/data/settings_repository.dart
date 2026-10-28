@@ -57,6 +57,15 @@ class SettingsKeys {
   /// 前缀是 `plg.<id>.`，所以"删数据卸载"会连它一起清掉。
   static String pluginEnabledAt(String pluginId) =>
       'plg.$pluginId.enabled_at';
+
+  /// 上一次成功拉到的插件索引原文（JSON）。
+  ///
+  /// 断网时用它，避免"打开插件市场一片空白"。放在 settings 表里而不是
+  /// SharedPreferences，是为了跟数据库一起备份 —— 换机恢复后货架不退回出厂。
+  static const String pluginIndexJson = 'plugins.index.json';
+
+  /// 上面那份索引是什么时候拉到的（ISO-8601 UTC），界面用来写"显示 X 的索引"。
+  static const String pluginIndexFetchedAt = 'plugins.index.fetched_at';
 }
 
 /// `settings` 表的读写。主包所有"用户开关"都走这里，

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../core/plugin/permission_copy.dart';
 import '../../core/plugin/plugin_index.dart';
 import '../../core/plugin/plugin_store.dart';
+import '../data/plugin_index_loader.dart';
 import '../state/plugin_market_store.dart';
 
 /// 插件市场：上「已安装」，下「可安装」。
@@ -75,6 +76,7 @@ class _PluginMarketPageState extends State<PluginMarketPage> {
               ),
             ),
         const SizedBox(height: 18),
+        _indexStatusRow(context, store),
         _sectionHeader('可安装 · ${store.available.length}'),
         if (store.indexError != null)
           _EmptyBox(
@@ -88,7 +90,9 @@ class _PluginMarketPageState extends State<PluginMarketPage> {
           _EmptyBox(
             icon: Icons.download_outlined,
             text: '暂无可用插件',
-            hint: '离线时只显示已安装的',
+            // 以前这里写「离线时只显示已安装的」—— 现在断网会退到缓存/随包索引，
+            // 那句话已经不成立了，留着会让人以为断网就看不到货架。
+            hint: '新插件正在策马奔来',
           )
         else
           for (final entry in store.available)
@@ -110,6 +114,86 @@ class _PluginMarketPageState extends State<PluginMarketPage> {
         ),
       ],
     );
+  }
+
+  /// 索引状态行：这份货架是刚拉到的、还是退到缓存/随包那份了。
+  ///
+  /// 只用一行小字，不弹窗不挡操作 —— 它解释的是"你看到的东西可能不是最新的"，
+  /// 不是错误。
+  Widget _indexStatusRow(BuildContext context, PluginMarketStore store) {
+    final scheme = Theme.of(context).colorScheme;
+    final refreshing = store.indexRefreshing;
+    final (text, canRetry) = switch (store.indexSource) {
+      PluginIndexSource.remote => ('插件索引 · 刚刚更新', false),
+      PluginIndexSource.cache =>
+        ('离线 · 显示 ${_stamp(store.indexFetchedAt)} 的索引', true),
+      PluginIndexSource.bundled => ('离线 · 用随 App 发布的内置索引', true),
+    };
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(2, 0, 2, 8),
+      child: Row(
+        children: <Widget>[
+          Expanded(
+            child: Text(
+              // 刷新中要改字：不给反馈的话用户以为没点上，会连点 —— 每点一次都是
+              // 一轮完整的"三个 CDN 逐个超时"，反而更慢。
+              refreshing ? '正在刷新索引…' : text,
+              style: TextStyle(fontSize: 11, color: scheme.onSurfaceVariant),
+            ),
+          ),
+          if (refreshing)
+            SizedBox(
+              width: 12,
+              height: 12,
+              child: CircularProgressIndicator(
+                strokeWidth: 1.6,
+                color: scheme.primary.withValues(alpha: 0.7),
+              ),
+            )
+          else if (canRetry)
+            InkWell(
+              borderRadius: BorderRadius.circular(6),
+              onTap: () => _retryIndex(store),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                child: Text(
+                  '重试',
+                  style: TextStyle(fontSize: 11.5, color: scheme.primary),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  /// 重试索引。**总要有结果提示**：失败也说出来，不然"点了没反应"。
+  Future<void> _retryIndex(PluginMarketStore store) async {
+    final messenger = ScaffoldMessenger.of(context);
+    await store.refreshIndex();
+    if (!mounted) return;
+    if (store.indexSource == PluginIndexSource.remote) {
+      messenger.showSnackBar(
+        const SnackBar(content: Text('索引已更新'), duration: Duration(seconds: 2)),
+      );
+      return;
+    }
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text('还是连不上，继续用 ${_stamp(store.indexFetchedAt)} 的索引'),
+        duration: const Duration(seconds: 2),
+      ),
+    );
+  }
+
+  /// `MM-dd HH:mm`，按手机本地时区。时间为空说明缓存里没记（旧的缓存）
+  String _stamp(DateTime? at) {
+    if (at == null) return '未知时间';
+    final local = at.toLocal();
+    String two(int value) => value.toString().padLeft(2, '0');
+    return '${two(local.month)}-${two(local.day)} '
+        '${two(local.hour)}:${two(local.minute)}';
   }
 
   Widget _sectionHeader(String text) {
@@ -231,11 +315,38 @@ class _PluginMarketPageState extends State<PluginMarketPage> {
     }
 
     if (!entry.installable) {
-      return Text(
-        '需要更新',
-        style: TextStyle(
-          fontSize: 11,
-          color: Theme.of(context).colorScheme.onSurfaceVariant,
+      // 写全"与当前 app 版本不匹配"：原来那句「需要更新」有歧义 ——
+      // 是在催插件更新，还是在催 App？用户看不出该找谁。
+      return Tooltip(
+        message: '这个插件要求的接口版本比你这版 App 新，装上会跑不起来',
+        child: SizedBox(
+          width: 78,
+          child: Text(
+            '与当前app版本不匹配',
+            textAlign: TextAlign.right,
+            style: TextStyle(
+              fontSize: 10.5,
+              height: 1.3,
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
+          ),
+        ),
+      );
+    }
+
+    if (entry.package.sizeBytes > PluginMarketStore.maxPackageBytes) {
+      return Tooltip(
+        message: '包超过 20MB，超出下载源的单文件上限',
+        child: SizedBox(
+          width: 78,
+          child: Text(
+            '包太大',
+            textAlign: TextAlign.right,
+            style: TextStyle(
+              fontSize: 10.5,
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
+          ),
         ),
       );
     }

@@ -306,13 +306,31 @@ window.host.call('event.pending').then(function (list) {
 
 ## 6. 分发
 
-沿用现有更新体系，不新建服务器：
+沿用现有更新体系，不新建服务器（2026-10-28 按实际实现校准）：
 
-- **索引**：`plugins/index.json`（托管在现有 GitHub 仓库，走 jsDelivr 多源 + Contents API 兜底）
-- **包**：GitHub Releases 或仓库内 `plugins/packages/<id>-<version>.zip`
-- **体积**：单包 ≤ 20MB（jsDelivr 硬限；超过走 Releases）
-- **校验**：索引里带 `sha256` 与 `sizeBytes`，装前必验，不符即删包重试下一源
-- **离线**：索引拉取失败 → 用本地缓存的索引；缓存也没有 → 只显示已装插件
+- **索引**：`assets/plugins/index.json` —— **和打进 APK 的那份是同一个文件**。
+  线上由 jsDelivr 按仓库路径提供（`...@main/assets/plugins/index.json`），
+  走 jsDelivr 三节点 → raw → GitHub Contents API 兜底。
+  索引永远随包：断网时它就是货架的全部内容。
+- **包放哪儿 = 怎么分发**（路径本身就是判据，不另设开关）：
+
+  | 路径 | 是否打进 APK | 谁在用 |
+  |---|---|---|
+  | `assets/plugins/<id>_v<ver>.zip` | 是 | 随包的兜底插件，断网也能装 |
+  | `plugins/packages/<id>_v<ver>.zip` | 否 | 仓库分发，装的时候联网下载 |
+
+  同一个插件**不许两边都有**（`asset_index_test` 会红）。
+  哪些插件只走仓库，由 `tool/make_demo_plugin.py` 里的 `REPO_ONLY` 决定；
+  脚本会顺手删掉另一边的旧包，免得"改成仓库分发了、APK 里还躺着旧的"。
+
+  取包顺序：**先看随包的 asset，没有才走远端**。两边最后都要过 sha256，
+  所以"先本地"不会放过被改过的包。
+- **体积**：单包 ≤ 20MB（jsDelivr 硬限）。超限在**下载之前**就拒绝并给一句人话，
+  不做"超限改走 Releases"的分流 —— 现在没有这么大的插件，多一条分支就多一处没被测过的地方。
+- **校验**：索引里带 `sha256` 与 `sizeBytes`，装前必验，不符即删包报错。
+- **离线降级是三级**：远端 → 本地缓存（settings 表 `plugins.index.json`）→ 随包那份。
+  第三级是"随包的兜底"，不是"只显示已安装"—— 后者会让从没联网的首次启动一片空白。
+  代价是随包那份可能过时（会列出已被删的插件，点了装失败并报错）。
 
 索引结构（**与代码一致**，`assets/plugins/index.json`）：
 
@@ -349,6 +367,21 @@ window.host.call('event.pending').then(function (list) {
 没有权限也要弹（明确说"不需要任何数据权限"）。文案映射在
 `lib/core/plugin/permission_copy.dart`，新增权限必须同步加一句，
 否则界面会露出 `未知权限：xxx`。
+
+### 上架一个新插件（**不需要发版**）
+
+1. 把包放进 `assets/plugins_src/<id>/`，写 `plugin.json`（含 `contract` 与权限声明）
+2. 决定它随包还是只走仓库：要只走仓库就把 id 加进 `tool/make_demo_plugin.py`
+   的 `REPO_ONLY`（默认随包 —— 首次要联网才能装的门槛更高）
+3. `python tool/make_demo_plugin.py` —— 打包 + 重算 `index.json` 的 sha/size，
+   **版本号从 plugin.json 来，不手写**
+4. commit + push 到 `main`
+5. 刷 jsDelivr 缓存（它默认缓存 `@main` 约 12 小时；不刷就要等过期）
+6. 用户下次打开插件市场即可看到 —— 索引是运行时拉的，跟 APK 版本无关
+
+**只有一种情况需要用户更新 App**：插件用到的扩展点比宿主的 `contract.current` 新
+（新权限名 / 新 bridge 方法 / 新插槽）。那时市场里照常列出它，右侧显示
+「与当前app版本不匹配」，装不了但看得见 —— 比"世上没有这个插件"好解释。
 
 **信任根**：索引 JSON 本身。谁能改仓库谁就能投毒 → 首版靠"仓库只有你一个写入者"，
 如果将来要更严，加一层 `index.json.sig`（离线私钥签名，App 内置公钥验签）。

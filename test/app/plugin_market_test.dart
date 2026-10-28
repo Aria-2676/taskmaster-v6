@@ -13,6 +13,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as p;
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'package:v5_app/app/data/settings_repository.dart';
+import 'package:v5_app/app/data/plugin_index_loader.dart';
 import 'package:v5_app/app/pages/plugin_market_page.dart';
 import 'package:v5_app/app/state/plugin_market_store.dart';
 import 'package:v5_app/core/data/v6_database.dart';
@@ -117,26 +118,10 @@ void main() {
     );
     return PluginMarketStore(
       installer: installer,
-      indexLoader: loader ??
-          () async => PluginIndex.parse(<String, Object?>{
-                'schemaVersion': 1,
-                'plugins': <Object?>[
-                  <String, Object?>{
-                    'id': 'demo_help',
-                    'name': '使用说明',
-                    'version': '1.0.0',
-                    'contract': 1,
-                    'description': '验证安装链路的示例插件',
-                    'icon': 'help',
-                    'permissions': <String>['task:read', 'task:write'],
-                    'package': <String, Object?>{
-                      'path': 'assets/plugins/demo_help_v1.0.0.zip',
-                      'sha256': sha,
-                      'sizeBytes': 1024,
-                    },
-                  },
-                ],
-              }),
+      // 默认索引就是 _indexWithVersion 造的那份；这一层只负责包成"来源=bundled"
+      indexLoader: () async => PluginIndexResult.bundled(
+        await (loader ?? () async => _indexWithVersion('1.0.0', sha))(),
+      ),
       // urlFor 拿到的是 PluginPackage，版本号从包路径里抠出来
       urlFor: (pkg) {
         final match = RegExp(r'_v([\d.]+)\.zip$').firstMatch(pkg.path)!;

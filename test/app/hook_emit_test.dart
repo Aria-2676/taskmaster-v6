@@ -123,6 +123,7 @@ void main() {
     PluginBridge writer({Set<String> permissions = const <String>{'task:write', 'task:delete'}}) =>
         PluginBridge(
           pluginId: 'demo_help',
+          version: '1.0.0',
           permissions: permissions,
           tasks: repo,
           settings: settings,

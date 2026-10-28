@@ -68,7 +68,8 @@
   <h1>使用说明</h1>
   <p class="sub">这是安装链路的验证插件，不是正式功能</p>
 
-  <div class="tag">契约 1 · v1.4.0</div>
+  <!-- 版本号由宿主经 system.info 给出。写死的话升级后这里还是旧版本。 -->
+  <div class="tag" id="tag">契约 1</div>
 
   <div class="card">
     <div class="row">
@@ -143,6 +144,14 @@
     }
 
     whenHostReady(function () {
+      // 版本号只能从宿主拿，不能写死在 HTML 里（升级后会显示旧版本）。
+      window.host.call('system.info', {})
+        .then(function (sys) {
+          document.getElementById('tag').textContent =
+            '契约 ' + sys.contract + ' · v' + sys.version;
+        })
+        .catch(function () { /* 拿不到就留着兜底文案，不影响下面 */ });
+
       // 事件订阅。manifest 里声明了 task.completed，宿主才会推过来；
       // 没声明的话这里永远不会被调用（不是"能收但收不到"，是根本不推）。
       window.host.on('task.completed', function (payload) {

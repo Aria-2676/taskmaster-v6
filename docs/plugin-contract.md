@@ -59,6 +59,11 @@
 **什么情况要升 `contract`**：变了插槽的数据结构、变了权限名、变了 API 签名。
 只是主包加了个页面、改了任务页交互 → **不升**。这条是让插件不必跟着每次发版重打的唯一办法。
 
+**`system.info` 回的 `version` 是给插件页显示用的**：版本号只能由宿主给
+（取自包内 `plugin.json`），插件**不许在 HTML 里写死**——写死的话升级后页面上
+还是旧版本号。加这个字段只是加返回值，不改任何入参，所以不必升 `contract`；
+老插件不读它，照旧工作。
+
 ---
 
 ## 3. 数据 API
@@ -91,7 +96,7 @@
 
 | 方法 | 参数 | 返回 |
 |---|---|---|
-| `system.info` | — | `{pluginId, contract, permissions}` |
+| `system.info` | — | `{pluginId, version, contract, permissions}` |
 | `task.count` | `date` 或 `from`+`to` | `{from, to, total, done}` |
 | `task.list` | `from`+`to`+`limit`(≤200) | 裁剪过的任务数组（不含 description） |
 | `task.create` | `title`（必填）、`date`、`priority`、`estimatedMinutes`、`description`、`tagIds` | `{id}` |

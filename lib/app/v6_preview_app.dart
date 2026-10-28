@@ -245,6 +245,9 @@ class _V6PreviewAppState extends State<V6PreviewApp> {
       entryPath: p.join(directory, manifest.entry),
       bridge: PluginBridge(
         pluginId: plugin.pluginId,
+        // 用包内 plugin.json 的版本，不是安装记录里那份：插件页显示的是
+        // "正在运行的这份代码"的版本。升级后目录换了，manifest 跟着换。
+        version: manifest.version,
         permissions: manifest.permissions,
         tasks: TaskRepository(db),
         settings: SettingsRepository(db),

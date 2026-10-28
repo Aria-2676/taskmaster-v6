@@ -41,12 +41,14 @@ void main() {
   PluginBridge bridge({
     Set<String> permissions = const <String>{'task:read', 'tag:read'},
     String pluginId = 'demo_help',
+    String version = '1.0.0',
     Set<HookId> hooks = const <HookId>{},
     EventJournal? journal,
     CurrencyStore? currency,
   }) =>
       PluginBridge(
         pluginId: pluginId,
+        version: version,
         permissions: permissions,
         tasks: tasks,
         settings: settings,
@@ -131,14 +133,17 @@ void main() {
     expect(Map<String, Object?>.from(leaked['result']! as Map)['value'], isNull);
   });
 
-  test('系统信息里带契约版本与已授予权限', () async {
-    final response = await bridge(permissions: const <String>{'task:read'})
+  test('系统信息里带版本、契约版本与已授予权限', () async {
+    final response = await bridge(permissions: const <String>{'task:read'}, version: '1.1.0')
         .dispatch('system.info', const <String, Object?>{});
 
     final result = Map<String, Object?>.from(response['result']! as Map);
     expect(result['pluginId'], 'demo_help');
     expect(result['contract'], 1);
     expect(result['permissions'], <String>['task:read']);
+    // 插件页显示版本只能靠这一条：宿主不回，插件就只能写死在 HTML 里，
+    // 于是升级后显示旧版本号。
+    expect(result['version'], '1.1.0');
   });
 
   test('未知方法与坏参数都走错误码，不抛', () async {
@@ -167,6 +172,7 @@ void main() {
     }) =>
         PluginBridge(
           pluginId: 'demo_help',
+          version: '1.0.0',
           permissions: permissions,
           tasks: tasks,
           settings: settings,
@@ -506,6 +512,7 @@ void main() {
 
     PluginBridge withData() => PluginBridge(
           pluginId: 'demo_help',
+          version: '1.0.0',
           permissions: const <String>{'task:read'},
           tasks: tasks,
           settings: settings,

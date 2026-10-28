@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:archive/archive.dart';
 import 'package:crypto/crypto.dart';
 import 'package:flutter/services.dart' show rootBundle;
 import 'package:flutter_test/flutter_test.dart';
@@ -56,6 +57,28 @@ void main() {
 
       expect(entry.permissions.toSet(), declared.toSet(),
           reason: '${entry.id}: 索引与 plugin.json 的权限对不上');
+    }
+  });
+
+  test('内置插件页不写死自身版本，一律从 system.info 取', () async {
+    // 守卫的是一个真发生过的 bug：`energy_currency` 页面里写着
+    // `契约 1 · v1.0.0`，升级到 1.1.0 之后页面还挂着旧版本号。
+    // 版本只能由宿主（包内 plugin.json）给，页面自己不许存。
+    final index = await loadIndex();
+
+    for (final entry in index.plugins) {
+      final data = await rootBundle.load(entry.package.path);
+      final bytes = data.buffer.asUint8List(data.offsetInBytes, data.lengthInBytes);
+      final archive = ZipDecoder().decodeBytes(bytes);
+
+      final page = archive.findFile('index.html');
+      expect(page, isNotNull, reason: '${entry.id}: 包里没有 index.html');
+      final html = utf8.decode(page!.content);
+
+      expect(html.contains('v${entry.version}'), isFalse,
+          reason: '${entry.id}: 页面里把版本 v${entry.version} 写死了，升级后不会跟着变');
+      expect(html.contains('system.info'), isTrue,
+          reason: '${entry.id}: 页面没有通过 system.info 读版本；升级后显示的会是旧版本号');
     }
   });
 }

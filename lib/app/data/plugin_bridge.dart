@@ -23,6 +23,7 @@ import '../state/currency_store.dart';
 class PluginBridge {
   PluginBridge({
     required this.pluginId,
+    required this.version,
     required this.permissions,
     required TaskRepository tasks,
     required SettingsRepository settings,
@@ -37,6 +38,13 @@ class PluginBridge {
         _currency = currency;
 
   final String pluginId;
+
+  /// 插件自己的版本，取自包内 `plugin.json`（不是索引，也不是安装记录）。
+  ///
+  /// 给插件页显示用。**插件不许把版本写死在 HTML 里** —— 写死的话升级后
+  /// 页面上还是旧版本号（这个 bug 真出现过）。
+  final String version;
+
   final Set<String> permissions;
   final int contract;
 
@@ -69,6 +77,9 @@ class PluginBridge {
       return switch (method) {
         'system.info' => _ok(<String, Object?>{
             'pluginId': pluginId,
+            // 加字段不改契约：老插件不读它，照旧工作，所以
+            // `PluginContract.current` 不动。
+            'version': version,
             'contract': contract,
             'permissions': (permissions.toList()..sort()),
           }),

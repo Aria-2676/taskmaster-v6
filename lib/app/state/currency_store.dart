@@ -68,6 +68,31 @@ class CurrencyStore extends ChangeNotifier implements SlotProvider {
     notifyListeners();
   }
 
+  /// 刚装上一个声明了 `currency:write` 的插件时点亮顶栏徽章。
+  ///
+  /// **和 [report] 的区别**：这里不写余额，只"接手"。
+  /// - 没有历史镜像（真·首次安装）→ 写 0，让用户立刻看到一个徽章，
+  ///   而不是"装完了什么都没发生"。
+  /// - 有历史镜像（卸载时选了保留数据，又装回来）→ 用旧值显示，
+  ///   绝不盖成 0。插件自己的表里余额还在，盖 0 等于显示一个假的数字；
+  ///   等用户打开插件，它会用真实余额再 report 一次。
+  Future<void> ensureProvider(String pluginId) async {
+    final existing = await _settings.get(SettingsKeys.currencyBalance(pluginId));
+    if (existing == null) {
+      await report(pluginId, 0);
+      return;
+    }
+
+    if (_providerId == null) {
+      _providerId = pluginId;
+      await _settings.set(SettingsKeys.activeCurrency, pluginId);
+    }
+    if (_providerId != pluginId) return; // 已经有别的货币在位，不抢
+
+    _balance = int.tryParse(existing) ?? 0;
+    notifyListeners();
+  }
+
   /// 用户手动指定当前货币（`null` = 不要货币）。
   Future<void> select(String? pluginId) async {
     if (pluginId == null) {

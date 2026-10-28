@@ -68,13 +68,12 @@ class _PluginMarketPageState extends State<PluginMarketPage> {
               padding: const EdgeInsets.only(bottom: 8),
               child: _PluginTile(
                 title: _nameOf(store, item.pluginId),
-                subtitle: 'v${item.version} · 契约 ${item.contract}',
+                subtitle: store.updateFor(item) == null
+                    ? 'v${item.version} · 契约 ${item.contract}'
+                    : 'v${item.version} → v${store.updateFor(item)!.version}',
                 iconName: store.index.findById(item.pluginId)?.icon,
                 seed: item.pluginId,
-                action: _DangerButton(
-                  label: '卸载',
-                  onTap: () => _confirmUninstall(context, store, item),
-                ),
+                action: _installedAction(context, store, item),
               ),
             ),
         const SizedBox(height: 18),
@@ -133,6 +132,36 @@ class _PluginMarketPageState extends State<PluginMarketPage> {
   String _nameOf(PluginMarketStore store, String pluginId) =>
       store.index.findById(pluginId)?.name ?? pluginId;
 
+  /// 已安装条目的动作区：有新版本时「升级」在前，卸载永远在。
+  Widget _installedAction(
+    BuildContext context,
+    PluginMarketStore store,
+    InstalledPlugin item,
+  ) {
+    final update = store.updateFor(item);
+    if (update == null) {
+      return _DangerButton(
+        label: '卸载',
+        onTap: () => _confirmUninstall(context, store, item),
+      );
+    }
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: <Widget>[
+        _PillButton(
+          label: '升级',
+          primary: true,
+          onTap: () => _confirmInstall(context, store, update, isUpdate: true),
+        ),
+        const SizedBox(width: 6),
+        _DangerButton(
+          label: '卸载',
+          onTap: () => _confirmUninstall(context, store, item),
+        ),
+      ],
+    );
+  }
+
   Widget _actionFor(BuildContext context, PluginMarketStore store, PluginIndexEntry entry) {
     final progress = store.progressOf(entry.id);
     if (progress != null) {
@@ -184,11 +213,15 @@ class _PluginMarketPageState extends State<PluginMarketPage> {
 
   /// 安装前告知权限。**没有权限也要弹** ——
   /// 让"这个插件什么都不碰"成为一个明确的信息，而不是一片空白。
+  ///
+  /// [isUpdate] 时走升级话术：覆盖安装不清插件自己的数据，这句必须说，
+  /// 否则用户会以为升级 = 卸载重装、攒的数据没了。
   Future<void> _confirmInstall(
     BuildContext context,
     PluginMarketStore store,
-    PluginIndexEntry entry,
-  ) async {
+    PluginIndexEntry entry, {
+    bool isUpdate = false,
+  }) async {
     final scheme = Theme.of(context).colorScheme;
     final permissions = PermissionCopy.sorted(entry.permissions);
     final hasDestructive = permissions.any(PermissionCopy.isDestructive);
@@ -196,7 +229,10 @@ class _PluginMarketPageState extends State<PluginMarketPage> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: Text('安装「${entry.name}」？', style: const TextStyle(fontSize: 16)),
+        title: Text(
+          isUpdate ? '升级「${entry.name}」？' : '安装「${entry.name}」？',
+          style: const TextStyle(fontSize: 16),
+        ),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -205,6 +241,13 @@ class _PluginMarketPageState extends State<PluginMarketPage> {
               'v${entry.version} · ${_formatSize(entry.package.sizeBytes)}',
               style: TextStyle(fontSize: 12, color: scheme.onSurfaceVariant),
             ),
+            if (isUpdate) ...<Widget>[
+              const SizedBox(height: 6),
+              Text(
+                '升级会保留这个插件已有的数据。',
+                style: TextStyle(fontSize: 12, color: scheme.onSurfaceVariant),
+              ),
+            ],
             const SizedBox(height: 14),
             if (permissions.isEmpty)
               Text(
@@ -261,7 +304,10 @@ class _PluginMarketPageState extends State<PluginMarketPage> {
         ),
         actions: <Widget>[
           TextButton(onPressed: () => Navigator.of(ctx).pop(false), child: const Text('取消')),
-          TextButton(onPressed: () => Navigator.of(ctx).pop(true), child: const Text('安装')),
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: Text(isUpdate ? '升级' : '安装'),
+          ),
         ],
       ),
     );
@@ -280,34 +326,67 @@ class _PluginMarketPageState extends State<PluginMarketPage> {
     }
   }
 
+  /// 卸载确认。**默认保留数据**，勾一下才连数据一起删。
+  ///
+  /// 为什么默认保留：卸载是"我不想用了"，不等于"把攒的记录扔掉"。
+  /// 而数据一旦删掉没有回收站（插件表是 `DROP TABLE`），
+  /// 所以破坏性的那个选项必须由用户主动勾选。
   Future<void> _confirmUninstall(
     BuildContext context,
     PluginMarketStore store,
     InstalledPlugin item,
   ) async {
     final scheme = Theme.of(context).colorScheme;
+    final name = _nameOf(store, item.pluginId);
+    var deleteData = false;
+
     final confirmed = await showDialog<bool>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('卸载插件', style: TextStyle(fontSize: 16)),
-        content: Text(
-          '「${_nameOf(store, item.pluginId)}」会被删除，它自己的数据也会一起清掉。',
-          style: const TextStyle(fontSize: 13.5),
-        ),
-        actions: <Widget>[
-          TextButton(onPressed: () => Navigator.of(ctx).pop(), child: const Text('取消')),
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(true),
-            style: TextButton.styleFrom(foregroundColor: scheme.error),
-            child: const Text('卸载'),
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) => AlertDialog(
+          title: Text('卸载「$name」？', style: const TextStyle(fontSize: 16)),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              const Text(
+                '插件和它的入口会被移除。它自己攒的数据默认留着，装回来还在。',
+                style: TextStyle(fontSize: 13.5),
+              ),
+              const SizedBox(height: 4),
+              CheckboxListTile(
+                value: deleteData,
+                onChanged: (value) =>
+                    setDialogState(() => deleteData = value ?? false),
+                dense: true,
+                contentPadding: EdgeInsets.zero,
+                controlAffinity: ListTileControlAffinity.leading,
+                title: const Text('同时删除它的数据', style: TextStyle(fontSize: 13.5)),
+                subtitle: Text(
+                  '删掉就找不回来了',
+                  style: TextStyle(fontSize: 11.5, color: scheme.onSurfaceVariant),
+                ),
+              ),
+            ],
           ),
-        ],
+          actions: <Widget>[
+            TextButton(onPressed: () => Navigator.of(ctx).pop(), child: const Text('取消')),
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(true),
+              style: TextButton.styleFrom(foregroundColor: scheme.error),
+              child: const Text('卸载'),
+            ),
+          ],
+        ),
       ),
     );
     if (confirmed != true) return;
 
     try {
-      await store.uninstall(item.pluginId);
+      await store.uninstall(item.pluginId, keepData: !deleteData);
+      if (!mounted) return;
+      // 说清楚到底删没删。不然用户下次装回来发现数据还在/没了，都会觉得奇怪
+      _toast(deleteData ? '已卸载，数据已删除' : '已卸载，数据保留');
     } catch (_) {
       if (!mounted) return;
       _toast(store.lastError ?? '卸载失败');
@@ -369,6 +448,7 @@ class _PluginTile extends StatelessWidget {
         'stats' || 'bar_chart' => Icons.bar_chart,
         'palette' => Icons.palette_outlined,
         'shopping' || 'shop' => Icons.storefront_outlined,
+        'bolt' => Icons.bolt,
         _ => Icons.extension_outlined,
       };
 

@@ -191,8 +191,16 @@ class _V6PreviewAppState extends State<V6PreviewApp> {
           // 那一步没人告诉他。
           onInstalled: (entry) {
             if (entry.permissions.contains('currency:write')) {
-              _currency?.report(entry.id, 0);
+              // 不是无脑 report(0)：卸载时选了「保留数据」的插件重装回来，
+              // 余额在它自己的表里还在，写 0 会让顶栏显示一个假的数字。
+              unawaited(_currency?.ensureProvider(entry.id));
             }
+          },
+          // 卸载会留下指向它的持久化状态（谁是首页、谁是货币）。
+          // 不通知的话「首页模式」页会一个都不选中，货币则会挂着一个空壳。
+          onUninstalled: (pluginId) {
+            unawaited(_home?.onPluginUninstalled(pluginId));
+            unawaited(_currency?.onPluginUninstalled(pluginId));
           },
         );
       });

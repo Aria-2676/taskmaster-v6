@@ -114,4 +114,42 @@ void main() {
     expect(fresh.providerId, 'energy_currency');
     expect(fresh.balance, 45);
   });
+
+  group('刚装上插件时点亮徽章（ensureProvider）', () {
+    test('没有历史：写 0，让用户立刻看到一个徽章', () async {
+      await store.load();
+
+      await store.ensureProvider('energy_currency');
+
+      expect(store.providerId, 'energy_currency');
+      expect(store.balance, 0);
+    });
+
+    test('卸载时保留过数据：用旧余额显示，绝不盖成 0', () async {
+      await store.load();
+      await store.report('energy_currency', 120);
+      await store.onPluginUninstalled('energy_currency');
+      expect(store.installed, isFalse);
+
+      await store.ensureProvider('energy_currency');
+
+      expect(store.providerId, 'energy_currency');
+      expect(store.balance, 120, reason: '插件表里余额还在，盖 0 就是显示假数字');
+      expect(
+        await settings.getInt(SettingsKeys.currencyBalance('energy_currency'), fallback: -1),
+        120,
+      );
+    });
+
+    test('已经有别的货币在位：只接手余额，不抢显示位', () async {
+      await store.load();
+      await store.report('coins', 999);
+      await settings.setInt(SettingsKeys.currencyBalance('energy_currency'), 120);
+
+      await store.ensureProvider('energy_currency');
+
+      expect(store.providerId, 'coins');
+      expect(store.balance, 999);
+    });
+  });
 }

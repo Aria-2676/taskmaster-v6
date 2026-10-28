@@ -92,4 +92,45 @@ class SettingsRepository {
   }
 
   Future<void> setInt(String key, int value) => set(key, '$value');
+
+  /// 删掉某个插件在 settings 表里留下的**全部**键，返回删了几条。
+  ///
+  /// 插件会在这里留下三类键：
+  /// - `plg.<id>.*` —— 插件自己的 KV（`store.set` 写的）
+  /// - `currency.balance.<id>` —— 主包替它存的余额镜像
+  /// - `sys.home_failures.<id>` —— 它当首页时失败过几次
+  ///
+  /// 只删表不清键的话，重装回来会看到一个**陈旧的余额**，
+  /// 比"什么都没留下"更让人困惑 —— 明明数据删了，数字却还在。
+  ///
+  /// 前提是调用方已经不再需要这份数据（卸载时用户勾了"一起删掉"）。
+  Future<int> erasePlugin(String pluginId) async {
+    final prefix = 'plg.$pluginId.';
+    // 前缀只用来缩小候选，判断仍用 startsWith：LIKE 里的 `_` 是单字符通配符，
+    // 而插件 id **本身就带下划线**，`plg.a_b.%` 会误伤 `plg.axb.xxx`
+    final candidates = await _db.query(
+      V6Table.settings,
+      columns: <String>[SettingsCol.key],
+      where: '${SettingsCol.key} LIKE ?',
+      whereArgs: <Object?>['$prefix%'],
+    );
+    final keys = <String>{
+      for (final row in candidates)
+        if ((row[SettingsCol.key] as String).startsWith(prefix))
+          row[SettingsCol.key] as String,
+      SettingsKeys.currencyBalance(pluginId),
+      SettingsKeys.homeFailures(pluginId),
+    };
+
+    if (await get(SettingsKeys.activeCurrency) == pluginId) {
+      keys.add(SettingsKeys.activeCurrency);
+    }
+
+    final placeholders = List<String>.filled(keys.length, '?').join(',');
+    return _db.delete(
+      V6Table.settings,
+      where: '${SettingsCol.key} IN ($placeholders)',
+      whereArgs: keys.toList(),
+    );
+  }
 }

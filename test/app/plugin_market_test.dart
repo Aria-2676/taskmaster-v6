@@ -12,6 +12,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as p;
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
+import 'package:v5_app/app/data/settings_repository.dart';
 import 'package:v5_app/app/pages/plugin_market_page.dart';
 import 'package:v5_app/app/state/plugin_market_store.dart';
 import 'package:v5_app/core/data/v6_database.dart';
@@ -20,6 +21,32 @@ import 'package:v5_app/core/plugin/plugin_index.dart';
 import 'package:v5_app/core/plugin/plugin_installer.dart';
 import 'package:v5_app/core/plugin/plugin_manifest.dart';
 import 'package:v5_app/core/services/file_downloader.dart';
+
+/// 版本号参数化的索引（只含 demo_help 一项）
+PluginIndex _indexWithVersion(String version, String sha) =>
+    PluginIndex.parse(<String, Object?>{
+      'schemaVersion': 1,
+      'plugins': <Object?>[
+        <String, Object?>{
+          'id': 'demo_help',
+          'name': '使用说明',
+          'version': version,
+          'contract': 1,
+          'description': '验证安装链路的示例插件',
+          'icon': 'help',
+          'permissions': <String>['task:read', 'task:write'],
+          'package': <String, Object?>{
+            'path': 'assets/plugins/demo_help_v$version.zip',
+            'sha256': sha,
+            'sizeBytes': 1024,
+          },
+        },
+      ],
+    });
+
+/// 版本号参数化的索引条目
+PluginIndexEntry _entryWithVersion(String version, String sha) =>
+    _indexWithVersion(version, sha).plugins.single;
 
 void main() {
   setUpAll(() {
@@ -30,7 +57,6 @@ void main() {
   late Directory tempRoot;
   late Directory pluginRoot;
   late Database db;
-  late String zipPath;
   late String shaValue;
 
   Future<void> fakeFetch({
@@ -42,21 +68,37 @@ void main() {
     onProgress?.call(1, 1);
   }
 
-  /// 造一个与 assets 里那个示例插件同构的 zip
-  Future<String> buildZip() async {
+  /// 造一个与 assets 里那个示例插件同构的 zip。
+  ///
+  /// [withStorage] 让包内声明一张私有表 —— 卸载"保留数据/删数据"两条路
+  /// 只有真的有表才验得出来。
+  Future<String> buildZip({String version = '1.0.0', bool withStorage = false}) async {
     final archive = Archive();
     final manifest = utf8.encode(jsonEncode(<String, Object?>{
       'id': 'demo_help',
       'name': '使用说明',
-      'version': '1.0.0',
+      'version': version,
       'contract': 1,
       'entry': 'index.html',
       'icon': 'help',
+      if (withStorage)
+        'storage': <String, Object?>{
+          'version': 1,
+          'tables': <Object?>[
+            <String, Object?>{
+              'name': 'entries',
+              'columns': <Object?>[
+                <String, Object?>{'name': 'day', 'type': 'text', 'notNull': true},
+                <String, Object?>{'name': 'minutes', 'type': 'integer'},
+              ],
+            },
+          ],
+        },
     }));
     final html = utf8.encode('<html><body>hi</body></html>');
     archive.addFile(ArchiveFile('plugin.json', manifest.length, manifest));
     archive.addFile(ArchiveFile('index.html', html.length, html));
-    final file = File(p.join(tempRoot.path, 'demo_help.zip'));
+    final file = File(p.join(tempRoot.path, 'demo_help_v$version.zip'));
     await file.writeAsBytes(ZipEncoder().encode(archive));
     return await FileDownloader.sha256OfFile(file.path);
   }
@@ -64,6 +106,8 @@ void main() {
   PluginMarketStore buildStore({
     required String sha,
     Future<PluginIndex> Function()? loader,
+    void Function(PluginIndexEntry entry)? onInstalled,
+    void Function(String pluginId)? onUninstalled,
   }) {
     final installer = PluginInstaller(
       db: db,
@@ -93,7 +137,13 @@ void main() {
                   },
                 ],
               }),
-      urlFor: (_) => Uri.file(zipPath),
+      // urlFor 拿到的是 PluginPackage，版本号从包路径里抠出来
+      urlFor: (pkg) {
+        final match = RegExp(r'_v([\d.]+)\.zip$').firstMatch(pkg.path)!;
+        return Uri.file(p.join(tempRoot.path, 'demo_help_v${match.group(1)}.zip'));
+      },
+      onInstalled: onInstalled,
+      onUninstalled: onUninstalled,
     );
   }
 
@@ -105,7 +155,6 @@ void main() {
       pluginSchema: PluginSchemaRegistry(),
     );
     shaValue = await buildZip();
-    zipPath = p.join(tempRoot.path, 'demo_help.zip');
   });
 
   tearDown(() async {
@@ -203,6 +252,125 @@ void main() {
       );
       expect(store.installed, hasLength(1));
     });
+
+    test('装 1.0.0、索引升到 1.1.0：updateFor 给出新条目', () async {
+      final sha110 = await buildZip(version: '1.1.0');
+      final store = buildStore(
+        sha: shaValue,
+        loader: () async => _indexWithVersion('1.1.0', sha110),
+      );
+
+      // 先手动装 1.0.0（索引此时没有 1.0.0 条目，走与"索引没了也能操作"同一路径）
+      await store.install(_entryWithVersion('1.0.0', shaValue));
+      await store.refresh();
+
+      expect(store.installed.single.version, '1.0.0');
+      final update = store.updateFor(store.installed.single);
+      expect(update, isNotNull);
+      expect(update!.version, '1.1.0');
+      // 有更新时不该出现在"可安装"里（那条货架位是升级按钮的）
+      expect(store.available, isEmpty);
+    });
+
+    test('升级：版本号变 1.1.0，旧版本目录清掉，数据保留，不再触发 onInstalled', () async {
+      final sha110 = await buildZip(version: '1.1.0');
+      var installCalls = 0;
+      final store = buildStore(
+        sha: shaValue,
+        loader: () async => _indexWithVersion('1.1.0', sha110),
+        onInstalled: (_) => installCalls++,
+      );
+
+      await store.install(_entryWithVersion('1.0.0', shaValue));
+      expect(installCalls, 1, reason: '首次安装触发 onInstalled');
+      await store.refresh();
+
+      final update = store.updateFor(store.installed.single)!;
+      await store.install(update);
+
+      expect(store.installed.single.version, '1.1.0');
+      expect(installCalls, 1, reason: '升级不是首次安装，不能再报一次初始状态');
+      expect(
+        Directory(p.join(pluginRoot.path, 'demo_help', '1.0.0')).existsSync(),
+        isFalse,
+        reason: '旧版本目录应被清掉',
+      );
+      expect(
+        Directory(p.join(pluginRoot.path, 'demo_help', '1.1.0')).existsSync(),
+        isTrue,
+      );
+      expect(store.updateFor(store.installed.single), isNull, reason: '升完就没有更新了');
+    });
+
+    /// 装一个**声明了私有表**的 1.2.0，并在表里放一行数据
+    Future<PluginMarketStore> installWithData({void Function(String id)? onUninstalled}) async {
+      final shaStorage = await buildZip(version: '1.2.0', withStorage: true);
+      final store = buildStore(
+        sha: shaStorage,
+        loader: () async => _indexWithVersion('1.2.0', shaStorage),
+        onUninstalled: onUninstalled,
+      );
+      await store.refresh();
+      await store.install(store.available.single);
+      await db.insert('plg_demo_help_entries', <String, Object?>{
+        'day': '2026-10-28',
+        'minutes': 25,
+      });
+      return store;
+    }
+
+    test('卸载默认保留数据：表和数据都还在，装回来能读到', () async {
+      final store = await installWithData();
+
+      await store.uninstall('demo_help');
+
+      expect(store.installed, isEmpty, reason: '代码和登记都清了');
+      expect(
+        Directory(p.join(pluginRoot.path, 'demo_help')).existsSync(),
+        isFalse,
+        reason: '插件目录要删掉',
+      );
+      final kept = await db.query('plg_demo_help_entries');
+      expect(kept, hasLength(1), reason: '默认保留 = 插件表不能 DROP');
+
+      // 装回来：数据还在（建表是 IF NOT EXISTS，不会把表清空）
+      await store.install(store.available.single);
+      final back = await db.query('plg_demo_help_entries');
+      expect(back.single['minutes'], 25);
+    });
+
+    test('卸载时勾了删数据：插件表、KV、余额镜像一起没', () async {
+      final store = await installWithData();
+      final settings = SettingsRepository(db);
+      await settings.set('plg.demo_help.balance', '10');
+      await settings.setInt(SettingsKeys.currencyBalance('demo_help'), 10);
+      await settings.set(SettingsKeys.activeCurrency, 'demo_help');
+      await settings.setInt(SettingsKeys.homeFailures('demo_help'), 2);
+      // 另一个插件的前缀相近，必须不能被误删（`_` 在 LIKE 里是通配符）
+      await settings.set('plg.demoXhelp.balance', '99');
+
+      await store.uninstall('demo_help', keepData: false);
+
+      await expectLater(db.query('plg_demo_help_entries'), throwsA(anything));
+      expect(await settings.get('plg.demo_help.balance'), isNull);
+      expect(await settings.get(SettingsKeys.currencyBalance('demo_help')), isNull);
+      expect(await settings.get(SettingsKeys.activeCurrency), isNull);
+      expect(await settings.get(SettingsKeys.homeFailures('demo_help')), isNull);
+      expect(
+        await settings.get('plg.demoXhelp.balance'),
+        '99',
+        reason: '前缀相近的另一个插件不能连坐',
+      );
+    });
+
+    test('卸载会通知应用层（首页/货币要跟着失效）', () async {
+      String? notified;
+      final store = await installWithData(onUninstalled: (id) => notified = id);
+
+      await store.uninstall('demo_help');
+
+      expect(notified, 'demo_help');
+    });
   });
 
   group('PluginMarketPage', () {
@@ -274,7 +442,7 @@ void main() {
 
       await tester.tap(find.text('卸载'));
       await tester.pumpAndSettle();
-      expect(find.text('卸载插件'), findsOneWidget, reason: '卸载要先确认');
+      expect(find.text('卸载「使用说明」？'), findsOneWidget, reason: '卸载要先确认');
 
       await tester.tap(find.widgetWithText(TextButton, '卸载'));
       await waitFor(tester, () => store.installed.isEmpty);
@@ -283,6 +451,112 @@ void main() {
       expect(find.text('已安装 · 0'), findsOneWidget);
       expect(
         Directory(p.join(pluginRoot.path, 'demo_help')).existsSync(),
+        isFalse,
+      );
+    });
+
+    testWidgets('卸载弹窗默认不删数据；勾上「同时删除」才清表', (tester) async {
+      final shaStorage = (await tester.runAsync(
+        () => buildZip(version: '1.2.0', withStorage: true),
+      ))!;
+      final store = buildStore(
+        sha: shaStorage,
+        loader: () async => _indexWithVersion('1.2.0', shaStorage),
+      );
+      await tester.pumpWidget(MaterialApp(home: PluginMarketPage(store: store)));
+      await settle(tester);
+
+      await tester.tap(find.text('安装'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(TextButton, '安装'));
+      await waitFor(tester, () => store.installed.isNotEmpty);
+      await settle(tester);
+      await tester.runAsync(
+        () => db.insert('plg_demo_help_entries', <String, Object?>{
+          'day': '2026-10-28',
+          'minutes': 25,
+        }),
+      );
+
+      // 第一次：不勾，数据留着
+      await tester.tap(find.text('卸载'));
+      await tester.pumpAndSettle();
+      expect(find.text('同时删除它的数据'), findsOneWidget);
+      expect(tester.widget<Checkbox>(find.byType(Checkbox)).value, isFalse,
+          reason: '破坏性选项默认不勾');
+      await tester.tap(find.widgetWithText(TextButton, '卸载'));
+      await waitFor(tester, () => store.installed.isEmpty);
+      await settle(tester);
+      expect(find.text('已卸载，数据保留'), findsOneWidget);
+      expect(
+        (await tester.runAsync(() => db.query('plg_demo_help_entries')))!,
+        hasLength(1),
+      );
+
+      // 第二次：勾上，表清空
+      await tester.tap(find.text('安装'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(TextButton, '安装'));
+      await waitFor(tester, () => store.installed.isNotEmpty);
+      await settle(tester);
+
+      await tester.tap(find.text('卸载'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byType(Checkbox));
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(TextButton, '卸载'));
+      await waitFor(tester, () => store.installed.isEmpty);
+      await settle(tester);
+
+      expect(find.text('已卸载，数据已删除'), findsOneWidget);
+      // 表已被 DROP。查 sqlite_master 而不是直接 query 表 ——
+      // `runAsync` 会把异常吞成本 test 之外的错误，断言不到。
+      final tables = await tester.runAsync(
+        () => db.query(
+          'sqlite_master',
+          where: 'name = ?',
+          whereArgs: <Object?>['plg_demo_help_entries'],
+        ),
+      );
+      expect(tables, isEmpty, reason: '勾了删数据，插件表要被 DROP');
+    });
+
+    testWidgets('有新版本时：显示升级按钮；确认后版本落盘、升级按钮消失', (tester) async {
+      // 造包、安装、刷新**全都得包 runAsync**：`testWidgets` 跑在假时钟里，
+      // 真实文件 IO 的 Future 不会被推进，直接 await 会一直挂到用例超时
+      // （报错只有一句 "did not complete"，看不出是哪一行）。
+      final sha110 = (await tester.runAsync(() => buildZip(version: '1.1.0')))!;
+      final store = buildStore(
+        sha: shaValue,
+        loader: () async => _indexWithVersion('1.1.0', sha110),
+      );
+      await tester.pumpWidget(MaterialApp(home: PluginMarketPage(store: store)));
+      await settle(tester);
+
+      // 先装 1.0.0（手动条目，绕过"索引里没有 1.0.0"）
+      await tester.runAsync(() => store.install(_entryWithVersion('1.0.0', shaValue)));
+      await tester.runAsync(store.refresh);
+      await settle(tester);
+
+      expect(find.text('升级'), findsOneWidget, reason: '已安装区出现升级按钮');
+      expect(find.text('v1.0.0 → v1.1.0'), findsOneWidget);
+
+      await tester.tap(find.text('升级'));
+      await tester.pumpAndSettle();
+      expect(find.text('升级「使用说明」？'), findsOneWidget);
+      expect(find.text('升级会保留这个插件已有的数据。'), findsOneWidget);
+
+      await tester.tap(find.widgetWithText(TextButton, '升级').last);
+      await waitFor(tester, () => store.installed.single.version == '1.1.0');
+      await settle(tester);
+
+      expect(find.text('升级'), findsNothing, reason: '升完就没有更新了');
+      expect(
+        File(p.join(pluginRoot.path, 'demo_help', '1.1.0', 'index.html')).existsSync(),
+        isTrue,
+      );
+      expect(
+        Directory(p.join(pluginRoot.path, 'demo_help', '1.0.0')).existsSync(),
         isFalse,
       );
     });

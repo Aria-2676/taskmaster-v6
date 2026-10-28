@@ -153,11 +153,21 @@ class PluginInstaller {
   ///
   /// 反过来会在中途失败时留下"登记说有、文件没有"，插件出现在列表里却打不开。
   /// 现在这个顺序最坏也只会留下孤儿目录，下次 [reconcile] 会扫掉。
-  Future<void> uninstall(String pluginId) async {
+  ///
+  /// [keepData] 为 true（默认）时**不删插件表**：用户选了"保留数据"，
+  /// 重装同一个插件时表还在、内容还在（建表用的是 `CREATE TABLE IF NOT EXISTS`）。
+  /// 代价是留下一批没人读的孤儿表，直到用户真的装回来 —— 这比"手滑卸一次，
+  /// 攒了半年的记录全没了"可接受得多。
+  ///
+  /// 设置表里的键不在这里清：那是应用层的命名约定（`plg.<id>.*` 等），
+  /// core 不该知道。删数据时由 `SettingsRepository.erasePlugin` 收尾。
+  Future<void> uninstall(String pluginId, {bool keepData = true}) async {
     final installed = await _store.find(pluginId);
     if (installed == null) return;
 
-    await _schemas.dropPlugin(_db, pluginId);
+    if (!keepData) {
+      await _schemas.dropPlugin(_db, pluginId);
+    }
     await _deleteQuietly(Directory(p.join(_rootDir.path, pluginId)));
     await _store.remove(pluginId);
   }

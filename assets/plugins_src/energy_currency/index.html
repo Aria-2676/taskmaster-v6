@@ -95,8 +95,9 @@
   </style>
 </head>
 <body>
-  <!-- 版本号由宿主经 system.info 给出。写死的话升级后这里还是旧版本。 -->
-  <div class="tag" id="tag">契约 1</div>
+  <!-- 版本号由宿主经 system.info 给出，写死的话升级后这里还是旧版本。
+       契约版本（contract）不回显：它对用户没有可操作含义，排查时看市场页那行。 -->
+  <div class="tag" id="tag">v—</div>
   <div class="balance" id="balance">—</div>
   <div class="hint" id="hint">正在读取…</div>
 
@@ -207,8 +208,7 @@
       try {
         // 0) 先问宿主我是谁：版本号只能从这儿拿，不能写死。
         var sys = await window.host.call('system.info', {});
-        document.getElementById('tag').textContent =
-          '契约 ' + sys.contract + ' · v' + sys.version;
+        document.getElementById('tag').textContent = 'v' + sys.version;
 
         // 1) 先补发：插件没开着的时候完成的任务，事件已经落在宿主的队列里。
         //    不处理的话用户会以为"这次白干了"。

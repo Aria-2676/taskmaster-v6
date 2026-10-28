@@ -14,8 +14,8 @@
       ],
       "package": {
         "path": "assets/plugins/demo_help_v1.4.0.zip",
-        "sha256": "dee47ce5488434f1f1a41227d232c35ab933fceb18feb08cd4b97861ddf1ab1d",
-        "sizeBytes": 4008
+        "sha256": "57e7bea881be1ab2528da6dc88a9cddf02f1fddfffb9db1b94e01cba6a38cbdc",
+        "sizeBytes": 4071
       }
     },
     {
@@ -32,8 +32,8 @@
       ],
       "package": {
         "path": "assets/plugins/energy_currency_v1.0.0.zip",
-        "sha256": "5ee780bc13fd060ae419fa7989c2401c98c65a3b460a4404cc367c4cff7818b4",
-        "sizeBytes": 4312
+        "sha256": "ffb1dd8a641991b9e9b7238b23224730c7eda86f3a13dd216d9f78a4bceb17b0",
+        "sizeBytes": 4367
       }
     }
   ]

@@ -68,8 +68,9 @@
   <h1>使用说明</h1>
   <p class="sub">这是安装链路的验证插件，不是正式功能</p>
 
-  <!-- 版本号由宿主经 system.info 给出。写死的话升级后这里还是旧版本。 -->
-  <div class="tag" id="tag">契约 1</div>
+  <!-- 版本号由宿主经 system.info 给出，写死的话升级后这里还是旧版本。
+       契约版本（contract）不回显：它对用户没有可操作含义，排查时看市场页那行。 -->
+  <div class="tag" id="tag">v—</div>
 
   <div class="card">
     <div class="row">
@@ -147,8 +148,7 @@
       // 版本号只能从宿主拿，不能写死在 HTML 里（升级后会显示旧版本）。
       window.host.call('system.info', {})
         .then(function (sys) {
-          document.getElementById('tag').textContent =
-            '契约 ' + sys.contract + ' · v' + sys.version;
+          document.getElementById('tag').textContent = 'v' + sys.version;
         })
         .catch(function () { /* 拿不到就留着兜底文案，不影响下面 */ });
 

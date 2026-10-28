@@ -350,7 +350,7 @@ class _PluginMarketPageState extends State<PluginMarketPage> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: <Widget>[
               const Text(
-                '插件和它的入口会被移除。它自己攒的数据默认留着，装回来还在。',
+                '插件和它的入口会被移除，但相关数据仍保留。',
                 style: TextStyle(fontSize: 13.5),
               ),
               const SizedBox(height: 4),
@@ -363,7 +363,7 @@ class _PluginMarketPageState extends State<PluginMarketPage> {
                 controlAffinity: ListTileControlAffinity.leading,
                 title: const Text('同时删除它的数据', style: TextStyle(fontSize: 13.5)),
                 subtitle: Text(
-                  '删掉就找不回来了',
+                  '删除不可逆',
                   style: TextStyle(fontSize: 11.5, color: scheme.onSurfaceVariant),
                 ),
               ),

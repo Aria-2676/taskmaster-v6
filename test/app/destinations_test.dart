@@ -1,8 +1,9 @@
 // 入口注册表的契约测试。
 //
-// 侧边栏和「我的」有大量重复入口。这些断言锁住两件事：
+// 侧边栏和「我的」有大量重复入口。这些断言锁住三件事：
 //   1. 同一条目只定义一次，两个面都从同一处取
-//   2. 没做完的入口必须**看得出来**（灰显 + 「未接入」），而不是点了没反应
+//   2. **发版前不该有"未接入"的灰入口**（2026-10-29 设置页接完后清零）
+//   3. 数据备份**不在侧边栏** —— 它属于 设置→数据 那一个角落
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -16,7 +17,7 @@ void main() {
       }
     });
 
-    test('侧边栏与「我的」都不为空，且数据备份/插件市场/设置/关于 同时在两边', () {
+    test('侧边栏与「我的」都不为空，插件市场/设置/关于 同时在两边', () {
       final drawer = AppDestination.values
           .where((d) => d.surfaces.contains(DestinationSurface.drawer))
           .toSet();
@@ -28,7 +29,6 @@ void main() {
       expect(profile, isNotEmpty);
 
       for (final both in <AppDestination>[
-        AppDestination.backup,
         AppDestination.pluginMarket,
         AppDestination.settings,
         AppDestination.about,
@@ -38,24 +38,29 @@ void main() {
       }
     });
 
-    test('已接入的入口就是这几个', () {
-      final ready = AppDestination.values.where((d) => d.ready).toSet();
-      expect(ready, <AppDestination>{
-        AppDestination.todayTasks,
-        AppDestination.recycleBin,
-        AppDestination.tagManager,
-        AppDestination.fieldManager,
-        AppDestination.homeMode,
-        AppDestination.pluginMarket,
-        // 关于 = 版本信息 + 手动检查更新。少了它，"跳过了某个版本"就再没有
-        // 反悔的入口 —— 自动提示被跳过之后，用户只能等新版本。
-        AppDestination.about,
-      });
+    test('数据备份不在入口清单里：它只在 设置→数据', () {
+      // 侧边栏塞满了入口之后，"低频操作"和"导航"混在一起。备份是典型低频，
+      // 加回侧边栏就等于又把设置页的分组逻辑推倒一次。
+      final labels = AppDestination.values.map((d) => d.label).toSet();
+      expect(labels, isNot(contains('数据备份')));
+    });
+
+    test('没有任何未接入的入口（发版前必须为零）', () {
+      // 这条是"别让灰色壳子发出去"的守卫。加新入口时如果先放进 _pending，
+      // 它会立刻变红 —— 那不是坏事，是提醒你"这个入口现在还不能点"。
+      final pending = AppDestination.values.where((d) => !d.ready).toList();
+      expect(
+        pending,
+        isEmpty,
+        reason: '这些入口还是灰的：${pending.map((d) => d.label).join('、')}',
+      );
     });
   });
 
   group('DestinationTile', () {
-    testWidgets('未接入的入口带「未接入」标记，已接入的不带', (tester) async {
+    // 注：`未接入` 的渲染分支现在走不到（_pending 为空）。等下次加新入口、
+    // 先把它放进 _pending 时，这里再补渲染断言 —— 现在为它写测试等于测死代码。
+    testWidgets('已接入的入口不带「未接入」标记', (tester) async {
       await tester.pumpWidget(
         MaterialApp(
           home: Scaffold(
@@ -77,23 +82,23 @@ void main() {
 
       expect(find.text('插件市场'), findsOneWidget);
       expect(find.text('设置'), findsOneWidget);
-      expect(find.text('未接入'), findsOneWidget, reason: '只有"设置"该带标记');
+      expect(find.text('未接入'), findsNothing);
     });
 
-    testWidgets('点击仍然会回调，由调用方决定怎么提示', (tester) async {
+    testWidgets('点击会回调，由调用方决定去哪儿', (tester) async {
       var tapped = 0;
       await tester.pumpWidget(
         MaterialApp(
           home: Scaffold(
             body: DestinationTile(
-              destination: AppDestination.backup,
+              destination: AppDestination.settings,
               onTap: () => tapped++,
             ),
           ),
         ),
       );
 
-      await tester.tap(find.text('数据备份'));
+      await tester.tap(find.text('设置'));
       expect(tapped, 1);
     });
   });

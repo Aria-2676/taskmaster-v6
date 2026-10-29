@@ -54,6 +54,66 @@ class RemoteText {
     }
   }
 
+  /// 并发拉所有源，**挑"最新"的那份**。
+  ///
+  /// [freshnessOf] 从响应体里读时间戳（读不出来就返回 epoch，视为最旧）。
+  ///
+  /// 为什么不能"第一个成功就用"：CDN 会缓存分支解析出来的那个提交（实测
+  /// jsDelivr 的 gcore 节点会持续发旧文件，purge 也刷不掉），而"最快响应的
+  /// 那个"完全可能是"最旧的那个"。更新清单和插件索引都栽过这个坑。
+  static Future<String> fetchNewest(
+    List<Uri> candidates, {
+    Uri? contentsApi,
+    required DateTime Function(String body) freshnessOf,
+    Duration timeout = defaultTimeout,
+    Duration grace = const Duration(milliseconds: 600),
+    RemoteTextFetcher? fetch,
+    void Function(Uri uri, Object error)? onFailure,
+  }) async {
+    final doFetch = fetch ??
+        (Uri uri, {required bool viaContentsApi, required Duration timeout}) =>
+            RemoteText.fetch(uri, viaContentsApi: viaContentsApi, timeout: timeout);
+
+    final sources = <(Uri, bool)>[
+      for (final candidate in candidates) (candidate, false),
+      if (contentsApi != null) (contentsApi, true),
+    ];
+    if (sources.isEmpty) throw const RemoteTextException('没有可用的地址');
+
+    final arrived = <String>[];
+    final firstOk = Completer<void>();
+    final allDone = Completer<void>();
+    var left = sources.length;
+
+    for (final (uri, viaApi) in sources) {
+      unawaited(() async {
+        try {
+          final body = await doFetch(uri, viaContentsApi: viaApi, timeout: timeout);
+          arrived.add(body);
+          if (!firstOk.isCompleted) firstOk.complete();
+        } catch (error) {
+          onFailure?.call(uri, error);
+        } finally {
+          left--;
+          if (left == 0 && !allDone.isCompleted) allDone.complete();
+        }
+      }());
+    }
+
+    // 等到"至少一个成功"或"全部结束"，再多等一小会儿收齐其它源 ——
+    // 否则拿到的只是"响应最快的"，不等于"最新的"。
+    await Future.any<void>(<Future<void>>[firstOk.future, allDone.future]);
+    await Future.any<void>(<Future<void>>[
+      allDone.future,
+      Future<void>.delayed(grace),
+    ]);
+
+    if (arrived.isEmpty) {
+      throw const RemoteTextException('所有源都失败了');
+    }
+    return arrived.reduce((a, b) => freshnessOf(b).isAfter(freshnessOf(a)) ? b : a);
+  }
+
   /// 依次尝试 [candidates]，全挂再用 [contentsApi] 兜底。
   ///
   /// **单个源失败只记一笔并继续**：某个 CDN 节点抽风不该让整个功能不可用。
@@ -93,3 +153,10 @@ class RemoteTextException implements Exception {
   @override
   String toString() => 'RemoteTextException: $message';
 }
+
+/// 拉一份文本。抽成 typedef 是为了让"并发取最新"这段能单测（不真联网）。
+typedef RemoteTextFetcher = Future<String> Function(
+  Uri uri, {
+  required bool viaContentsApi,
+  required Duration timeout,
+});

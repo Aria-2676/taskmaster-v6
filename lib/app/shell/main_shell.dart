@@ -10,6 +10,7 @@ import '../../core/plugin/plugin_store.dart';
 import '../pages/field_manager_page.dart';
 import '../pages/home_mode_page.dart';
 import '../pages/plugin_market_page.dart';
+import '../pages/settings_page.dart';
 import '../pages/plugin_page.dart';
 import '../pages/tag_manager_page.dart';
 import '../pages/task_editor_page.dart';
@@ -36,6 +37,7 @@ class MainShell extends StatefulWidget {
     this.pluginLauncher,
     this.recyclePageBuilder,
     this.aboutPageBuilder,
+    this.backupPageBuilder,
     this.fieldStore,
     this.homeStore,
     this.currencyStore,
@@ -57,6 +59,10 @@ class MainShell extends StatefulWidget {
   /// 关于页同时承担"手动检查更新"的职责：自动检查被跳过、被关掉之后，
   /// 用户需要一个能自己按一下的地方，否则就彻底没有反悔的路径。
   final WidgetBuilder? aboutPageBuilder;
+
+  /// 备份与还原页。为 null 时设置页**不显示「数据」组** ——
+  /// 不放灰的占位项，点不动的入口只会让人以为 App 坏了。
+  final WidgetBuilder? backupPageBuilder;
 
   /// 字段偏好（编辑页画哪些字段）
   final FieldStore? fieldStore;
@@ -517,6 +523,26 @@ class _MainShellState extends State<MainShell> {
           return;
         }
         navigator.push(MaterialPageRoute<void>(builder: about));
+      case AppDestination.settings:
+        final store = _store;
+        navigator.push(
+          MaterialPageRoute<void>(
+            builder: (_) => SettingsPage(
+              store: store,
+              calendarStyle: _calendarStyle,
+              onCalendarStyleChanged: (style) =>
+                  setState(() => _calendarStyle = style),
+              onRetentionDaysChanged: _setRetentionDays,
+              onOpenDestination: _openDestination,
+              pluginSummary: _pluginSummary,
+              onOpenBackup: widget.backupPageBuilder == null
+                  ? null
+                  : () => navigator.push(
+                        MaterialPageRoute<void>(builder: widget.backupPageBuilder!),
+                      ),
+            ),
+          ),
+        );
       case AppDestination.pluginMarket:
         final market = widget.marketStore;
         if (market == null) {
@@ -528,8 +554,6 @@ class _MainShellState extends State<MainShell> {
         navigator.push(
           MaterialPageRoute<void>(builder: (_) => PluginMarketPage(store: market)),
         );
-      default:
-        break;
     }
   }
 
@@ -771,6 +795,18 @@ class _MainShellState extends State<MainShell> {
     return '当前货币：${_pluginName(id)} · ${currency.balance}';
   }
 
+  /// 「我的」页第二行：装了几个、启用几个。
+  ///
+  /// 停用中的插件也算"装了"—— 用户对"我装过什么"和"现在生效的有几个"
+  /// 是两件事，分开写才不至于让他以为插件丢了。
+  String get _pluginSummary {
+    final market = widget.marketStore;
+    if (market == null) return '插件未接入';
+    final installed = market.installed.length;
+    if (installed == 0) return '还没装插件 · 去插件市场看看';
+    return '已装 $installed 个插件 · 启用 ${market.active.length} 个';
+  }
+
   /// 当前模式是否允许用 `+` 建任务。插件模式下不允许（见 [build] 里的注释）。
   bool get _modeAllowsAdd {
     final home = widget.homeStore;
@@ -825,18 +861,10 @@ class _MainShellState extends State<MainShell> {
         // 首页可以被插件整页替换，但**外壳还是这一层**：
         // 顶栏、底栏、添加按钮都在外面，插件崩了用户总能切回「我的」。
         _homeView(),
+        // 开关全搬去设置页了，这里只剩身份与入口
         ProfileStubPage(
           currencyLabel: _currencyLabel,
-          calendarStyle: _calendarStyle,
-          onCalendarStyleChanged: (s) => setState(() => _calendarStyle = s),
-          editorForm: _store.editorForm,
-          onEditorFormChanged: _store.setEditorForm,
-          confirmBeforeDelete: _store.confirmBeforeDelete,
-          onConfirmBeforeDeleteChanged: _store.setConfirmBeforeDelete,
-          recycleBinEnabled: _store.recycleBinEnabled,
-          onRecycleBinChanged: _store.setRecycleBinEnabled,
-          retentionDays: _store.retentionDays,
-          onRetentionDaysChanged: _setRetentionDays,
+          pluginSummary: _pluginSummary,
           onOpenDestination: _openDestination,
         ),
       ],

@@ -18,7 +18,6 @@ enum AppDestination {
   tagManager('tags', '标签管理', Icons.sell_outlined),
   fieldManager('fields', '字段管理', Icons.tune),
   homeMode('home', '首页模式', Icons.dashboard_outlined),
-  backup('backup', '数据备份', Icons.backup_outlined),
   pluginMarket('market', '插件市场', Icons.extension_outlined),
   settings('settings', '设置', Icons.settings_outlined),
   about('about', '关于', Icons.info_outline);
@@ -44,19 +43,15 @@ enum AppDestination {
           },
       };
 
-  bool get ready => switch (this) {
-        todayTasks ||
-        pluginMarket ||
-        recycleBin ||
-        tagManager ||
-        fieldManager ||
-        homeMode ||
-        // 关于 = 版本信息 + 检查更新。V6 没有设置页里的"检查更新"入口，
-        // 不给它一个手动入口的话，用户点过「跳过此版本」就再也没有反悔的办法。
-        about =>
-          true,
-        _ => false,
-      };
+  /// 还没接入的入口。
+  ///
+  /// 现在**一个都没有**（设置页接完就清零了）。这个机制留着：以后加新入口时
+  /// 先把它放进这个集合，侧边栏会灰显 + 标「未接入」，比"点了没反应"诚实。
+  /// 用集合而不是 switch，是因为"全部 ready" 之后 switch 的 default 分支
+  /// 会变成不可达代码。
+  static const Set<AppDestination> _pending = <AppDestination>{};
+
+  bool get ready => !_pending.contains(this);
 
   /// 侧边栏里靠底部的两个
   bool get isFooter => this == settings || this == about;

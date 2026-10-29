@@ -60,6 +60,12 @@ def pack(plugin_dir: str, manifest: dict) -> dict:
         for relative, absolute in files:
             with open(absolute, "rb") as handle:
                 data = handle.read()
+            # **行尾必须归一化**。仓库开了 core.autocrlf，工作区里的 html/json
+            # 是 CRLF，而入库的 blob 是 LF —— 同一份源码在不同检出状态下打出来的
+            # zip 字节不一样，sha 就跟着变。表现是"我什么都没改，包却变了"，
+            # 而版本号没 bump 时，线上索引的 sha 会和线上文件对不上。
+            if relative.endswith((".html", ".json", ".css", ".js", ".txt", ".md")):
+                data = data.replace(b"\r\n", b"\n")
             info = zipfile.ZipInfo(relative, date_time=FIXED_TIME)
             info.compress_type = zipfile.ZIP_DEFLATED
             info.external_attr = 0o644 << 16

@@ -101,6 +101,14 @@ void main() {
     await tester.pumpAndSettle();
   }
 
+  /// 开关从「我的」搬到设置页了：先切到「我的」，再点进「设置」。
+  Future<void> openSettings(WidgetTester tester) async {
+    await tester.tap(find.text('我的'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('设置'));
+    await tester.pumpAndSettle();
+  }
+
   Future<void> pumpApp(WidgetTester tester) async {
     usePhoneViewport(tester);
     await tester.pumpWidget(V6PreviewApp(store: store));
@@ -234,8 +242,7 @@ void main() {
     );
     await settle(tester);
 
-    await tester.tap(find.text('我的'));
-    await tester.pumpAndSettle();
+    await openSettings(tester);
     await tester.tap(find.text('1 天'));
     await settle(tester);
 
@@ -268,8 +275,7 @@ void main() {
     );
     await settle(tester);
 
-    await tester.tap(find.text('我的'));
-    await tester.pumpAndSettle();
+    await openSettings(tester);
     await tester.tap(find.text('1 天'));
     await settle(tester);
     await tester.tap(find.widgetWithText(TextButton, '删除'));
@@ -280,13 +286,29 @@ void main() {
     expect(find.textContaining('已按新的保留时长清理 1 条'), findsOneWidget);
   });
 
+  testWidgets('设置页拨开关后界面要立刻更新（不监听 store 就纹丝不动）', (tester) async {
+    await pumpApp(tester);
+    await store.setRecycleBinEnabled(false);
+    await settle(tester);
+    await openSettings(tester);
+
+    expect(find.text('保留时长'), findsNothing, reason: '回收站关着时不该出现保留时长');
+
+    await tester.tap(find.widgetWithText(SwitchListTile, '删除后先进回收站'));
+    await settle(tester);
+
+    expect(store.recycleBinEnabled, isTrue);
+    // 这条是在真机上踩出来的：设置页当初是 StatelessWidget 且没监听 store，
+    // 拨了开关数据变了、界面不动，用户以为没点上。
+    expect(find.text('保留时长'), findsOneWidget, reason: '拨开后要立刻出现保留时长');
+  });
+
   testWidgets('改短但没有过期条目：不弹框，直接生效', (tester) async {
     await pumpApp(tester);
     await store.setRecycleBinEnabled(true);
     await settle(tester);
 
-    await tester.tap(find.text('我的'));
-    await tester.pumpAndSettle();
+    await openSettings(tester);
     await tester.tap(find.text('3 天'));
     await settle(tester);
 
@@ -444,8 +466,7 @@ void main() {
     await store.setConfirmBeforeDelete(false);
     await settle(tester);
 
-    await tester.tap(find.text('我的'));
-    await tester.pumpAndSettle();
+    await openSettings(tester);
 
     expect(find.text('删除前确认'), findsOneWidget);
 
@@ -585,9 +606,12 @@ void main() {
 
     final before = horizontalLists();
 
-    await tester.tap(find.text('我的'));
-    await tester.pumpAndSettle();
+    await openSettings(tester);
     await tester.tap(find.text('固定一周'));
+    await tester.pumpAndSettle();
+    // 不用 tester.pageBack()：它按 tooltip 'Back' 找按钮，中文包里是「返回」，
+    // 找不到就报 "One back button expected on screen"。直接点 BackButton 类型。
+    await tester.tap(find.byType(BackButton));
     await tester.pumpAndSettle();
     await tester.tap(find.text('首页'));
     await tester.pumpAndSettle();

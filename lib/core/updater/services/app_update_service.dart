@@ -1,5 +1,7 @@
 import 'dart:convert';
 
+import 'package:flutter/foundation.dart' show visibleForTesting;
+
 import '../../config/cdn_bases.dart';
 import '../../services/remote_text.dart';
 import '../../utils/app_logger.dart';
@@ -61,41 +63,47 @@ class AppUpdateService {
   /// 兼容旧调用点（默认渠道）。
   static List<Uri> defaultCandidates() => candidatesFor(defaultManifestPath);
 
-  /// 按候选顺序依次尝试拉取更新清单。
+  /// 拉更新清单：并发取多份，**挑 `updatedAt` 最新的那份**。
   ///
-  /// 顺序：jsDelivr 各节点（gcore → testingcf → cdn）→ raw 源站 →
-  /// GitHub Contents API（近实时，限速兜底）。单个候选失败只记日志并继续，
-  /// 这样某个节点抽风不会让功能整体不可用；全部失败才抛 [AppUpdateException]。
+  /// 不能"第一个成功就用"——CDN 会缓存分支解析出来的旧提交（gcore 实测会
+  /// 持续发旧文件），而最快响应的那个恰恰可能是旧的，表现就是"明明发了新版，
+  /// 用户那边一直提示已是最新"。
   Future<AppUpdateManifest> fetchManifest() async {
-    Object? lastError;
-    for (final uri in _candidateProvider()) {
-      try {
-        final body = await _httpGetString(uri, viaContentsApi: false);
-        return AppUpdateManifest.fromJson(jsonDecode(body));
-      } catch (error, stack) {
-        lastError = error;
-        AppLogger.warn('AppUpdateService', '获取更新清单失败: $uri', error, stack);
-      }
-    }
-
-    // 最后一路：GitHub Contents API（JSON 信封里装 base64 内容）。
     try {
-      final body = await _httpGetString(
-        _contentsApiUrl,
-        viaContentsApi: true,
+      final body = await RemoteText.fetchNewest(
+        _candidateProvider(),
+        contentsApi: _contentsApiUrl,
+        timeout: timeout,
+        freshnessOf: manifestFreshness,
+        onFailure: (uri, error) => AppLogger.warn(
+          'AppUpdateService',
+          '获取更新清单失败: $uri',
+          error,
+          null,
+        ),
       );
       return AppUpdateManifest.fromJson(jsonDecode(body));
-    } catch (error, stack) {
-      lastError = error;
-      AppLogger.warn(
-        'AppUpdateService',
-        '获取更新清单失败（Contents API）: $_contentsApiUrl',
-        error,
-        stack,
-      );
+    } on RemoteTextException catch (error) {
+      throw AppUpdateException('无法获取更新清单（${error.message}）');
     }
+  }
 
-    throw AppUpdateException('无法获取更新清单（$lastError）');
+  /// 清单里的生成时间。读不出来按"最旧"处理（老清单没有这个字段）。
+  ///
+  /// 暴露出来是为了能单测：这行 parse 错了不会崩，只会让"取最新"退化成
+  /// "随便取一个"，属于最难查的那类。
+  @visibleForTesting
+  static DateTime manifestFreshness(String body) {
+    try {
+      final decoded = jsonDecode(body);
+      if (decoded is Map && decoded['updatedAt'] is String) {
+        return DateTime.tryParse(decoded['updatedAt'] as String) ??
+            DateTime.fromMillisecondsSinceEpoch(0, isUtc: true);
+      }
+    } catch (_) {
+      // 坏 JSON 交给解析阶段报错
+    }
+    return DateTime.fromMillisecondsSinceEpoch(0, isUtc: true);
   }
 
   /// 拉取失败时返回 null。
@@ -138,17 +146,4 @@ class AppUpdateService {
   ///
   /// 所有请求都带 `Cache-Control: no-cache`：中间透明缓存（运营商/企业网关）
   /// 不得缓存清单，尽量缩短「发布 → 客户端发现」的延迟。
-  Future<String> _httpGetString(Uri uri, {required bool viaContentsApi}) async {
-    // 具体怎么拉、Contents API 的信封怎么解，统一在 RemoteText 里 —
-    // 插件索引也用它，那段 base64 剥换行的逻辑不能有两份。
-    try {
-      return await RemoteText.fetch(
-        uri,
-        viaContentsApi: viaContentsApi,
-        timeout: timeout,
-      );
-    } on RemoteTextException catch (error) {
-      throw AppUpdateException(error.message);
-    }
-  }
 }

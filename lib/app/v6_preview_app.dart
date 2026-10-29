@@ -7,6 +7,7 @@ import 'package:flutter/services.dart' show rootBundle;
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:provider/provider.dart';
+import 'package:sqflite/sqflite.dart' show Database;
 
 import '../core/data/v6_database.dart';
 import '../core/extension/extension_hook.dart';
@@ -14,13 +15,16 @@ import '../core/extension/extension_slot.dart';
 import '../core/plugin/event_journal.dart';
 import '../core/plugin/plugin_installer.dart';
 import '../core/plugin/plugin_store.dart';
+import '../core/backup/backup_service.dart';
 import '../core/config/cdn_bases.dart';
 import '../core/services/file_downloader.dart';
 import '../core/updater/services/app_update_service.dart';
+import 'data/backup_repository.dart';
 import 'data/plugin_index_loader.dart';
 import '../core/plugin/plugin_manifest.dart';
 import '../core/plugin/plugin_storage.dart';
 import '../core/updater/providers/app_update_provider.dart';
+import 'pages/backup_page.dart';
 import '../core/updater/pages/app_update_page.dart';
 import '../core/updater/update_channel.dart';
 import '../core/updater/widgets/app_update_dialog.dart';
@@ -130,9 +134,13 @@ class _V6PreviewAppState extends State<V6PreviewApp> {
     super.dispose();
   }
 
+  /// 备份页要用库；db 是启动时开的，这里留一份引用（不为它单独开连接）
+  Database? _db;
+
   Future<void> _openDatabase() async {
     try {
       final db = await V6Database.open();
+      _db = db;
       final repo = TaskRepository(db);
       if (widget.autoSeed) {
         await DemoSeed.runIfEmpty(repo);
@@ -232,6 +240,20 @@ class _V6PreviewAppState extends State<V6PreviewApp> {
   /// 回收站页面。`MainShell` 没有仓储层，由应用层在这里组装。
   ///
   /// `marketStore` 为 null 时（测试注入 store）返回 null —— 入口会提示"未接入"。
+  /// 备份页里显示插件名。和主壳同一判据：索引里有就用，没有就显示 id
+  /// —— 备份里可能有已卸载的插件，索引里已经没有它的名字了。
+  String _backupPluginName(String id) => _market?.index.findById(id)?.name ?? id;
+
+  WidgetBuilder? _backupPageBuilder() {
+    final db = _db;
+    if (db == null) return null;
+    return (_) => BackupPage(
+          service: BackupService(db),
+          repository: BackupRepository(),
+          nameOf: _backupPluginName,
+        );
+  }
+
   WidgetBuilder? _recyclePageBuilder(TaskStore store) {
     final market = _market;
     if (market == null) return null;
@@ -459,6 +481,7 @@ class _V6PreviewAppState extends State<V6PreviewApp> {
       marketStore: _market,
       pluginLauncher: _launchPlugin,
       recyclePageBuilder: _recyclePageBuilder(store),
+      backupPageBuilder: _backupPageBuilder(),
       // 没有更新器时不给入口，避免点进去 context.read 找不到 Provider
       aboutPageBuilder: _update == null
           ? null

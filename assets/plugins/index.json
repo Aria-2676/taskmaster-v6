@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "publishedAt": "2026-10-28T10:15:35Z",
+  "publishedAt": "2026-10-28T10:36:20Z",
   "plugins": [
     {
       "id": "demo_help",
@@ -15,8 +15,8 @@
       ],
       "package": {
         "path": "assets/plugins/demo_help_v1.4.0.zip",
-        "sha256": "57e7bea881be1ab2528da6dc88a9cddf02f1fddfffb9db1b94e01cba6a38cbdc",
-        "sizeBytes": 4071
+        "sha256": "67d8207f89371459fb2f74fcc1dc939c30ec4912b08e3b21ee2fdd9c91a70c65",
+        "sizeBytes": 4186
       }
     },
     {
@@ -33,8 +33,8 @@
       ],
       "package": {
         "path": "plugins/packages/energy_currency_v1.0.0.zip",
-        "sha256": "ffb1dd8a641991b9e9b7238b23224730c7eda86f3a13dd216d9f78a4bceb17b0",
-        "sizeBytes": 4367
+        "sha256": "01dd5115a13204255d430dea75b81d3267d7c8b2052d825bd5c8eaa87d008a21",
+        "sizeBytes": 4470
       }
     }
   ]

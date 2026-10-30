@@ -10,6 +10,8 @@ import '../../core/plugin/plugin_store.dart';
 import '../pages/field_manager_page.dart';
 import '../pages/home_mode_page.dart';
 import '../pages/plugin_market_page.dart';
+import '../../core/config/legacy_v5_link.dart';
+import '../../core/updater/services/app_update_launcher.dart';
 import '../pages/settings_page.dart';
 import '../pages/plugin_page.dart';
 import '../pages/tag_manager_page.dart';
@@ -535,6 +537,8 @@ class _MainShellState extends State<MainShell> {
               onRetentionDaysChanged: _setRetentionDays,
               onOpenDestination: _openDestination,
               pluginSummary: _pluginSummary,
+              onDownloadLegacy: () => AppUpdateLauncher()
+                  .openDownloadPage(Uri.parse(LegacyV5Link.apkUrl)),
               onOpenBackup: widget.backupPageBuilder == null
                   ? null
                   : () => navigator.push(

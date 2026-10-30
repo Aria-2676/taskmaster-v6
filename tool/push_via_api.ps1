@@ -200,7 +200,10 @@ if ($remoteSha -and $remoteSha -eq $headSha) {
         # 本地未必有这个对象：走 API 建出来的 commit 是远端独有的，而 git 协议
         # 在部分网络下被封、fetch 不了。直接 update-ref 会让 git 以
         # "nonexistent object" 失败，把整条发布流程打断（远端其实已经好了）。
-        & git -C $repoRoot cat-file -e "$sha^{commit}" 2>$null
+        # 用 rev-parse --verify --quiet：对象不存在时**不往 stderr 写**。
+        # 之前用 cat-file -e，失败时 git 打一行 "Not a valid object name"，
+        # 而 $ErrorActionPreference='Stop' 会把这行 stderr 当致命错误，把发布流程打断。
+        & git -C $repoRoot rev-parse --verify --quiet "$sha^{commit}" 2>$null | Out-Null
         if ($LASTEXITCODE -eq 0) {
             & git -C $repoRoot update-ref "refs/tags/$Tag" $sha
         } else {
@@ -327,7 +330,10 @@ if (-not [string]::IsNullOrWhiteSpace($Tag)) {
         # 本地未必有这个对象：走 API 建出来的 commit 是远端独有的，而 git 协议
         # 在部分网络下被封、fetch 不了。直接 update-ref 会让 git 以
         # "nonexistent object" 失败，把整条发布流程打断（远端其实已经好了）。
-        & git -C $repoRoot cat-file -e "$sha^{commit}" 2>$null
+        # 用 rev-parse --verify --quiet：对象不存在时**不往 stderr 写**。
+        # 之前用 cat-file -e，失败时 git 打一行 "Not a valid object name"，
+        # 而 $ErrorActionPreference='Stop' 会把这行 stderr 当致命错误，把发布流程打断。
+        & git -C $repoRoot rev-parse --verify --quiet "$sha^{commit}" 2>$null | Out-Null
         if ($LASTEXITCODE -eq 0) {
             & git -C $repoRoot update-ref "refs/tags/$Tag" $sha
         } else {

@@ -23,6 +23,7 @@ class SettingsPage extends StatelessWidget {
     required this.onOpenDestination,
     this.pluginSummary,
     this.onOpenBackup,
+    this.onDownloadLegacy,
   });
 
   final TaskStore store;
@@ -42,6 +43,10 @@ class SettingsPage extends StatelessWidget {
 
   /// 备份与还原。为 null 时整组不显示（见 [backupPageBuilder] 的注释）
   final VoidCallback? onOpenBackup;
+
+  /// 下载旧版（V5）。两个 App 包名不同、能共存，所以这条是"留个回去的门"，
+  /// 不是"降级"。为 null 时整行不显示。
+  final VoidCallback? onDownloadLegacy;
 
   @override
   Widget build(BuildContext context) {
@@ -166,6 +171,13 @@ class SettingsPage extends StatelessWidget {
 
           _SectionLabel('关于'),
           _Card(children: <Widget>[
+            if (onDownloadLegacy != null)
+              _LinkRow(
+                icon: Icons.history,
+                title: '下载旧版（V5）',
+                subtitle: '想回旧版随时可以，两个 App 能共存',
+                onTap: onDownloadLegacy!,
+              ),
             _LinkRow(
               icon: Icons.info_outline,
               title: '版本与更新',

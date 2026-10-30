@@ -286,6 +286,20 @@ void main() {
     expect(find.textContaining('已按新的保留时长清理 1 条'), findsOneWidget);
   });
 
+  testWidgets('设置页留着回 V5 的门：下载旧版', (tester) async {
+    await pumpApp(tester);
+    await openSettings(tester);
+
+    // 这一行在设置页最下面，先滚到底再断言（800 高的测试视口里它不在首屏）
+    await tester.scrollUntilVisible(find.text('下载旧版（V5）'), 240,
+        scrollable: find.byType(Scrollable).last);
+    await settle(tester);
+
+    expect(find.text('下载旧版（V5）'), findsOneWidget);
+    // 说清"两个能装在一起"，别让人以为是降级覆盖
+    expect(find.textContaining('两个 App 能共存'), findsOneWidget);
+  });
+
   testWidgets('设置页拨开关后界面要立刻更新（不监听 store 就纹丝不动）', (tester) async {
     await pumpApp(tester);
     await store.setRecycleBinEnabled(false);

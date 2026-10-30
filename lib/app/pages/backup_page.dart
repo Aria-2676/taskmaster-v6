@@ -6,6 +6,8 @@ import 'package:share_plus/share_plus.dart';
 
 import '../../core/backup/backup_service.dart';
 import '../data/backup_repository.dart';
+import '../data/download_exporter.dart';
+import 'restore_report_page.dart';
 
 /// 备份与还原。
 ///
@@ -20,6 +22,7 @@ class BackupPage extends StatefulWidget {
     required this.repository,
     this.appVersion,
     required this.nameOf,
+    this.exporter = const DownloadExporter(),
   });
 
   final BackupService service;
@@ -27,6 +30,9 @@ class BackupPage extends StatefulWidget {
 
   /// 写进 manifest 的 App 版本。测试直接给；生产里传 null，首次备份时去问系统。
   final String? appVersion;
+
+  /// 存到系统「下载」目录。抽出来是为了能在测试里替换掉平台通道。
+  final DownloadExporter exporter;
 
   /// 插件 id → 显示名。取不到就显示 id，别显示空白。
   final String Function(String pluginId) nameOf;
@@ -252,39 +258,8 @@ class _BackupPageState extends State<BackupPage> {
   }
 
   Future<void> _showReport(RestoreReport report) {
-    return showDialog<void>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('恢复完成', style: TextStyle(fontSize: 16)),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: <Widget>[
-            Text(report.summary.isEmpty ? '没有写入任何数据' : report.summary,
-                style: const TextStyle(fontSize: 13)),
-            if (report.skippedPlugins.isNotEmpty) ...<Widget>[
-              const SizedBox(height: 10),
-              Text('跳过：${report.skippedPlugins.join('、')}',
-                  style: TextStyle(
-                      fontSize: 12,
-                      color: Theme.of(ctx).colorScheme.error)),
-            ],
-            if (report.droppedColumns.isNotEmpty) ...<Widget>[
-              const SizedBox(height: 10),
-              Text(
-                '有 ${report.droppedColumns.length} 个字段在当前版本里不存在，已忽略：'
-                '${report.droppedColumns.take(3).join('、')}'
-                '${report.droppedColumns.length > 3 ? ' 等' : ''}',
-                style: TextStyle(
-                    fontSize: 12, color: Theme.of(ctx).colorScheme.onSurfaceVariant),
-              ),
-            ],
-          ],
-        ),
-        actions: <Widget>[
-          TextButton(onPressed: () => Navigator.of(ctx).pop(), child: const Text('知道了')),
-        ],
-      ),
+    return Navigator.of(context).push(
+      MaterialPageRoute<void>(builder: (_) => RestoreReportPage(report: report)),
     );
   }
 
@@ -300,6 +275,59 @@ class _BackupPageState extends State<BackupPage> {
       ));
     } catch (error) {
       if (mounted) _toast('分享失败：$error');
+    }
+  }
+
+  /// 超过保留上限时，把最早的那些删掉。
+  ///
+  /// 只删到上限为止（`over` 就是多出来的那几份），**不自动执行** ——
+  /// 备份是用户的退路，删之前必须他自己点一次，并且知道删的是哪几份。
+  Future<void> _trimOldest(List<BackupFile> over) async {
+    final oldest = over.last;
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('删除较早的备份？', style: TextStyle(fontSize: 16)),
+        content: Text(
+          '将删除 ${over.length} 份，最早的一份是 ${oldest.timeLabel}。\n'
+          '删掉之后找不回来 —— 想留着就先点那一行的「分享」存到别处。',
+          style: const TextStyle(fontSize: 13),
+        ),
+        actions: <Widget>[
+          TextButton(onPressed: () => Navigator.of(ctx).pop(false), child: const Text('取消')),
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            style: TextButton.styleFrom(foregroundColor: Theme.of(ctx).colorScheme.error),
+            child: const Text('删除'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true || !mounted) return;
+
+    setState(() => _busy = true);
+    try {
+      for (final file in over) {
+        await widget.repository.delete(file);
+      }
+      await _reload();
+      if (mounted) _toast('已删除 ${over.length} 份较早的备份');
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  /// 存一份到系统的「下载/任务管家」。
+  ///
+  /// 和「分享」是两条路：分享是把文件交给别的 App（微信、网盘），
+  /// 这个是留在自己手机上、插上电脑就能拷走。用户明确要过后者。
+  Future<void> _saveToDownloads(BackupFile file) async {
+    try {
+      final saved = await widget.exporter.saveToDownloads(path: file.path, name: file.name);
+      if (mounted) _toast('已存到 $saved');
+    } catch (error) {
+      // 原生给的原文直接露出来（"打不开写入流""建不了目录"都在这句里）
+      if (mounted) _toast('存不进去：$error');
     }
   }
 
@@ -371,6 +399,14 @@ class _BackupPageState extends State<BackupPage> {
                       '建议删掉较早的 —— 或者分享出去存到别处。',
                       style: TextStyle(fontSize: 12.5, color: scheme.onSurfaceVariant, height: 1.4),
                     ),
+                    Align(
+                      alignment: Alignment.centerRight,
+                      child: TextButton(
+                        onPressed: _busy ? null : () => _trimOldest(over),
+                        child: Text('删掉最早的 ${over.length} 份',
+                            style: const TextStyle(fontSize: 13)),
+                      ),
+                    ),
                   ]),
                 _Card(children: <Widget>[
                   Text(
@@ -402,6 +438,7 @@ class _BackupPageState extends State<BackupPage> {
                       busy: _busy,
                       onRestore: () => _restore(file),
                       onShare: () => _share(file),
+                      onSaveToDownloads: () => _saveToDownloads(file),
                       onDelete: () => _delete(file),
                     ),
                     const SizedBox(height: 10),
@@ -418,6 +455,7 @@ class _BackupTile extends StatelessWidget {
     required this.busy,
     required this.onRestore,
     required this.onShare,
+    required this.onSaveToDownloads,
     required this.onDelete,
   });
 
@@ -425,6 +463,7 @@ class _BackupTile extends StatelessWidget {
   final bool busy;
   final VoidCallback onRestore;
   final VoidCallback onShare;
+  final VoidCallback onSaveToDownloads;
   final VoidCallback onDelete;
 
   @override
@@ -454,10 +493,15 @@ class _BackupTile extends StatelessWidget {
             enabled: !busy,
             onSelected: (value) {
               if (value == 'share') onShare();
+              if (value == 'download') onSaveToDownloads();
               if (value == 'delete') onDelete();
             },
             itemBuilder: (_) => const <PopupMenuEntry<String>>[
               PopupMenuItem<String>(value: 'share', child: Text('分享 / 存到别处', style: TextStyle(fontSize: 13))),
+              PopupMenuItem<String>(
+                value: 'download',
+                child: Text('存到「下载」', style: TextStyle(fontSize: 13)),
+              ),
               PopupMenuItem<String>(value: 'delete', child: Text('删除', style: TextStyle(fontSize: 13))),
             ],
           ),

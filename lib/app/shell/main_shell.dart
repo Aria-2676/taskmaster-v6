@@ -11,6 +11,7 @@ import '../pages/field_manager_page.dart';
 import '../pages/home_mode_page.dart';
 import '../pages/plugin_market_page.dart';
 import '../../core/config/legacy_v5_link.dart';
+import '../../core/updater/providers/app_update_provider.dart';
 import '../../core/updater/services/app_update_launcher.dart';
 import '../pages/settings_page.dart';
 import '../pages/plugin_page.dart';
@@ -461,17 +462,21 @@ class _MainShellState extends State<MainShell> {
   ///   - 同一条管道意味着有进度、有镜像回退（ghfast / gh-proxy）、有摘要校验
   ///   - 走浏览器的话国内经常打不开，用户只会觉得"链接坏了"
   ///
-  /// 包名不同，所以系统把 5.5.27 当**另一个 App** 装，不会覆盖 V6。
+  /// 包名不同，所以系统把 5.5.28 当**另一个 App** 装，不会覆盖 V6。
   /// 自动路径失败时才退回到"让用户自己挑通道"。
   Future<void> _downloadLegacy() async {
-    final sizeMb = (LegacyV5Link.sizeBytes / 1024 / 1024).toStringAsFixed(0);
+    // **先问机型再决定下哪个包**：arm64 是 23MB，通用整包 62MB，差将近 3 倍。
+    // loadAbi 失败返回 null，那就回落整包 —— 宁可多花流量，不能装不上。
+    final abi = await AppUpdateProvider.loadAbi();
+    if (!mounted) return;
+    final sizeMb = LegacyV5Link.sizeLabelFor(abi);
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
         title: Text('下载任务管家 ${LegacyV5Link.version}？',
             style: const TextStyle(fontSize: 16)),
         content: Text(
-          '约 $sizeMb MB。\n'
+          '$sizeMb。\n'
           '它和你正在用的这个版本是两个 App，不会覆盖；装完桌面上会多一个图标。',
           style: const TextStyle(fontSize: 13, height: 1.5),
         ),
@@ -516,7 +521,7 @@ class _MainShellState extends State<MainShell> {
 
     try {
       final result = await AppUpdateLauncher().apply(
-        LegacyV5Link.target,
+        LegacyV5Link.targetFor(abi),
         onProgress: (value) => progress.value = value,
       );
       closeDialog();
@@ -528,7 +533,7 @@ class _MainShellState extends State<MainShell> {
       closeDialog();
       if (!mounted) return;
       _toast('自动下载失败：$error');
-      await _pickLegacyChannel(manualOnly: true);
+      await _pickLegacyChannel(manualOnly: true, abi: abi);
     } finally {
       progress.dispose();
     }
@@ -541,7 +546,7 @@ class _MainShellState extends State<MainShell> {
   }
 
   /// 自动路径失败后的手动通道（也让用户能绕过公共代理自己想办法）
-  Future<void> _pickLegacyChannel({bool manualOnly = false}) async {
+  Future<void> _pickLegacyChannel({bool manualOnly = false, String? abi}) async {
     await showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
@@ -563,7 +568,7 @@ class _MainShellState extends State<MainShell> {
                       height: 1.4,
                       color: Theme.of(sheetContext).colorScheme.onSurfaceVariant)),
             ),
-            for (final channel in LegacyV5Link.channels)
+            for (final channel in LegacyV5Link.channelsFor(abi))
               ListTile(
                 dense: true,
                 title: Text(channel.label, style: const TextStyle(fontSize: 14)),

@@ -157,6 +157,9 @@ if ($hasParent) {
     $baseTree = $EMPTY_TREE
     Log '本次是根提交（没有父提交）→ 按初始提交处理'
 }
+# 差异基准（也决定 base_tree）。默认是本地父提交，-Force 时可能改成远端那个提交。
+$diffBase = $parentSha
+
 $localTree = (& git -C $repoRoot log -1 --format=%T $headSha).Trim()
 
 # message 必须逐字节一致：从 commit 对象里切，不要用 `git log --format=%B`（会多带换行）。
@@ -218,13 +221,23 @@ if ($remoteSha -and $hasParent -and $remoteSha -ne $parentSha) {
         throw "远端 $Branch（$remoteSha）不是本地 HEAD 的父提交（$parentSha）。" +
               '本工具只做快进推送；需要先对齐远端，或用 -Force 明确覆盖。'
     }
-    Warn "警告：-Force 已跳过非快进校验（远端 $remoteSha ≠ 本地父提交 $parentSha）"
+    # **base_tree 必须用远端那个提交**：本地父提交的 tree 可能从没推到过远端
+    # （本地攒了几个未推提交时必然如此），GitHub 不认识它，建 tree 直接 422
+    # "base_tree is not a valid tree oid"。差异范围也要跟着改成「远端..HEAD」，
+    # 否则中间那几个提交的改动会整个丢掉。
+    & git -C $repoRoot rev-parse --verify --quiet "$remoteSha^{commit}" 2>$null | Out-Null
+    if ($LASTEXITCODE -ne 0) {
+        throw "本地没有远端那个提交 $remoteSha，算不出差异；先 fetch 或先用普通推送对齐。"
+    }
+    $diffBase = $remoteSha
+    $baseTree = (& git -C $repoRoot log -1 --format=%T $remoteSha).Trim()
+    Warn "警告：-Force 已跳过非快进校验，差异基准改为远端 $($remoteSha.Substring(0, 7))（本地：$($parentSha.Substring(0, 7))）"
 }
 
 # ── 3. 逐个上传本次改动文件（其余文件复用 base_tree，不必重传）──────────────
 if ($hasParent) {
     $rawChanged = & git -C $repoRoot -c core.quotepath=false diff-tree `
-        -r --no-commit-id --name-status $parentSha $headSha
+        -r --no-commit-id --name-status $diffBase $headSha
 } else {
     # 根提交没有父提交可以 diff，改成列出整棵树；补成 diff-tree 的
     # 「状态<TAB>路径」格式，下面的循环就不用为它分叉。
@@ -287,7 +300,11 @@ if ($tree.sha -ne $localTree) {
 $identityJson = ',"author":{"name":' + (ToJsonStr $authorName) + ',"email":' + (ToJsonStr $authorEmail) +
 ',"date":' + (ToJsonStr $authorDate) + '},"committer":{"name":' + (ToJsonStr $committerName) +
 ',"email":' + (ToJsonStr $committerEmail) + ',"date":' + (ToJsonStr $committerDate) + '}'
-$parentsJson = if ($hasParent) { '[' + (ToJsonStr $parentSha) + ']' } else { '[]' }
+# 父提交必须是**远端认识的那个**。本地攒了多个未推提交时，parentSha 只在本地存在，
+# 拿它建 commit 会被 GitHub 拒（422 "Parent SHA does not exist"）。
+# 这种情况用 $diffBase（远端头）当父，等于把本地这几个提交压成一个推上去 ——
+# 中间那些提交本地还留着，只是远端历史更整洁。
+$parentsJson = if ($hasParent) { '[' + (ToJsonStr $diffBase) + ']' } else { '[]' }
 $commitJson = '{"message":' + (ToJsonStr $message) + ',"tree":' + (ToJsonStr $tree.sha) +
     ',"parents":' + $parentsJson + $identityJson + '}'
 $newCommit = Invoke-GitHubApi -Method POST -Path 'git/commits' -Json $commitJson

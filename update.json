@@ -1,22 +1,61 @@
 {
-  "_comment": [
-    "V6 的更新清单 —— 本仓库唯一一份。V5 的清单在另一个仓库（Aria-2676/note_study），两边互不相干。",
-    "发新版本时只改这里：latest.version 与 downloads（url / sha256 / sizeBytes）。",
-    "downloads 为空 = 当前没有可下载产物。客户端会判定为「无更新」，不会报错 —— 这是刚发完版、包还没传时的安全状态。",
-    "发版顺序铁律：先传 APK 到 GitHub Release → 拿到 sha256 与 sizeBytes → 再改这里。反了会让用户点更新拿到死链。",
-    "APK 必须走 GitHub Releases：jsDelivr 对单文件有 20MB 上限，本包 21~62MB 必然超限（实测 403）。",
-    "minSupported 决定强制更新：低于它的客户端只能升级、不能跳过。留空表示不强制。"
-  ],
-  "schemaVersion": 1,
-  "updatedAt": "2026-10-27T00:00:00Z",
-  "minSupported": "6.0.0",
-  "latest": {
-    "version": "6.0.0",
-    "notes": [
-      "全新的 6.x 主包：字段可配置、编辑层、可换首页、插件体系。",
-      "注意：V5 的任务与积分不会带过来，V6 从空白开始。",
-      "积分、商城、番茄钟、统计等改为插件提供，会陆续上线。"
-    ],
-    "downloads": {}
-  }
+    "_comment":  [
+                     "V6 的更新清单 —— 本仓库唯一一份。V5 的清单在另一个仓库（Aria-2676/note_study），两边互不相干。",
+                     "发新版本时只改这里：latest.version 与 downloads（url / sha256 / sizeBytes）。",
+                     "downloads 为空 = 当前没有可下载产物。客户端会判定为「无更新」，不会报错 —— 这是刚发完版、包还没传时的安全状态。",
+                     "发版顺序铁律：先传 APK 到 GitHub Release → 拿到 sha256 与 sizeBytes → 再改这里。反了会让用户点更新拿到死链。",
+                     "APK 必须走 GitHub Releases：jsDelivr 对单文件有 20MB 上限，本包 21~62MB 必然超限（实测 403）。",
+                     "minSupported 决定强制更新：低于它的客户端只能升级、不能跳过。留空表示不强制。"
+                 ],
+    "schemaVersion":  1,
+    "updatedAt":  "2026-10-30T05:07:47Z",
+    "minSupported":  "6.0.0",
+    "latest":  {
+                   "version":  "6.0.0",
+                   "notes":  [
+                                 "全新的 6.x 主包：字段可配置、编辑页、首页可换成插件整页",
+                                 "新增设置面板：外观 / 任务 / 插件 / 关于",
+                                 "新增备份与还原：任务、标签、设置与每个插件的数据可单独选；可分享，也可存到手机「下载」目录",
+                                 "插件市场已上线（内置「使用说明」「能量」）",
+                                 "注意：V5 的任务与积分不会带过来，V6 从空白开始"
+                             ],
+                   "downloads":  {
+                                     "android-arm64-v8a":  {
+                                                               "url":  "https://github.com/Aria-2676/taskmaster-v6/releases/download/v6.0.0/app-arm64-v8a-release.apk",
+                                                               "mirrors":  [
+                                                                               "https://ghfast.top/https://github.com/Aria-2676/taskmaster-v6/releases/download/v6.0.0/app-arm64-v8a-release.apk",
+                                                                               "https://gh-proxy.com/https://github.com/Aria-2676/taskmaster-v6/releases/download/v6.0.0/app-arm64-v8a-release.apk"
+                                                                           ],
+                                                               "sha256":  "f77cb0fc6219008ea0974e4eec95b24c20fbbcb6b1412682f2395d11400e2f46",
+                                                               "sizeBytes":  22824997
+                                                           },
+                                     "android-armeabi-v7a":  {
+                                                                 "url":  "https://github.com/Aria-2676/taskmaster-v6/releases/download/v6.0.0/app-armeabi-v7a-release.apk",
+                                                                 "mirrors":  [
+                                                                                 "https://ghfast.top/https://github.com/Aria-2676/taskmaster-v6/releases/download/v6.0.0/app-armeabi-v7a-release.apk",
+                                                                                 "https://gh-proxy.com/https://github.com/Aria-2676/taskmaster-v6/releases/download/v6.0.0/app-armeabi-v7a-release.apk"
+                                                                             ],
+                                                                 "sha256":  "4300737af419a33ffe57ebf00b4519c4d47b99932255efae66997abd8e60c965",
+                                                                 "sizeBytes":  20626929
+                                                             },
+                                     "android-x86_64":  {
+                                                            "url":  "https://github.com/Aria-2676/taskmaster-v6/releases/download/v6.0.0/app-x86_64-release.apk",
+                                                            "mirrors":  [
+                                                                            "https://ghfast.top/https://github.com/Aria-2676/taskmaster-v6/releases/download/v6.0.0/app-x86_64-release.apk",
+                                                                            "https://gh-proxy.com/https://github.com/Aria-2676/taskmaster-v6/releases/download/v6.0.0/app-x86_64-release.apk"
+                                                                        ],
+                                                            "sha256":  "9a605bd66a656a7251da740b6655250083d49e438ce02efd208ba2686b41ada6",
+                                                            "sizeBytes":  24308765
+                                                        },
+                                     "android":  {
+                                                     "url":  "https://github.com/Aria-2676/taskmaster-v6/releases/download/v6.0.0/app-release.apk",
+                                                     "mirrors":  [
+                                                                     "https://ghfast.top/https://github.com/Aria-2676/taskmaster-v6/releases/download/v6.0.0/app-release.apk",
+                                                                     "https://gh-proxy.com/https://github.com/Aria-2676/taskmaster-v6/releases/download/v6.0.0/app-release.apk"
+                                                                 ],
+                                                     "sha256":  "4ae816bf2e80f91dd4316c6a6d0558d1dd659ea83b9861d1e7b4e3c67498f144",
+                                                     "sizeBytes":  62107275
+                                                 }
+                                 }
+               }
 }

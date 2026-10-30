@@ -461,7 +461,7 @@ class _MainShellState extends State<MainShell> {
   ///   - 同一条管道意味着有进度、有镜像回退（ghfast / gh-proxy）、有摘要校验
   ///   - 走浏览器的话国内经常打不开，用户只会觉得"链接坏了"
   ///
-  /// 包名不同，所以系统把 5.5.26 当**另一个 App** 装，不会覆盖 V6。
+  /// 包名不同，所以系统把 5.5.27 当**另一个 App** 装，不会覆盖 V6。
   /// 自动路径失败时才退回到"让用户自己挑通道"。
   Future<void> _downloadLegacy() async {
     final sizeMb = (LegacyV5Link.sizeBytes / 1024 / 1024).toStringAsFixed(0);

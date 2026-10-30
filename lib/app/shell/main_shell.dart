@@ -455,6 +455,134 @@ class _MainShellState extends State<MainShell> {
   ///
   /// **不在这里关抽屉** —— 那样从「我的」页点入口会把主路由 pop 掉。
   /// 关抽屉由侧边栏自己做。
+  /// 下载旧版（V5）：走更新器同一条管道 —— 下载、校验 sha256、交给系统安装器。
+  ///
+  /// 不自己写下载逻辑，也不直接跳浏览器：
+  ///   - 同一条管道意味着有进度、有镜像回退（ghfast / gh-proxy）、有摘要校验
+  ///   - 走浏览器的话国内经常打不开，用户只会觉得"链接坏了"
+  ///
+  /// 包名不同，所以系统把 5.5.26 当**另一个 App** 装，不会覆盖 V6。
+  /// 自动路径失败时才退回到"让用户自己挑通道"。
+  Future<void> _downloadLegacy() async {
+    final sizeMb = (LegacyV5Link.sizeBytes / 1024 / 1024).toStringAsFixed(0);
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text('下载任务管家 ${LegacyV5Link.version}？',
+            style: const TextStyle(fontSize: 16)),
+        content: Text(
+          '约 $sizeMb MB。\n'
+          '它和你正在用的这个版本是两个 App，不会覆盖；装完桌面上会多一个图标。',
+          style: const TextStyle(fontSize: 13, height: 1.5),
+        ),
+        actions: <Widget>[
+          TextButton(onPressed: () => Navigator.of(ctx).pop(false), child: const Text('取消')),
+          TextButton(onPressed: () => Navigator.of(ctx).pop(true), child: const Text('下载并安装')),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    final progress = ValueNotifier<double>(0);
+    var dialogClosed = false;
+
+    void closeDialog() {
+      if (dialogClosed || !mounted) return;
+      dialogClosed = true;
+      Navigator.of(context).pop();
+    }
+
+    // 进度框：不 await，下载在下面跑；结束时由 closeDialog 收掉
+    unawaited(showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => AlertDialog(
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            const Text('正在下载旧版…', style: TextStyle(fontSize: 14)),
+            const SizedBox(height: 14),
+            ValueListenableBuilder<double>(
+              valueListenable: progress,
+              builder: (_, value, _) => LinearProgressIndicator(value: value <= 0 ? null : value),
+            ),
+            const SizedBox(height: 10),
+            Text('下载完会拉起系统安装器', style: TextStyle(fontSize: 11.5, color: Theme.of(context).colorScheme.onSurfaceVariant)),
+          ],
+        ),
+      ),
+    ));
+
+    try {
+      final result = await AppUpdateLauncher().apply(
+        LegacyV5Link.target,
+        onProgress: (value) => progress.value = value,
+      );
+      closeDialog();
+      if (!mounted) return;
+      _toast(result == AppUpdateLaunchResult.installStarted
+          ? '下载完成，按系统提示安装即可'
+          : '已打开下载页，装好后桌面上会多一个图标');
+    } catch (error) {
+      closeDialog();
+      if (!mounted) return;
+      _toast('自动下载失败：$error');
+      await _pickLegacyChannel(manualOnly: true);
+    } finally {
+      progress.dispose();
+    }
+  }
+
+  void _toast(String text) {
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(content: Text(text), duration: const Duration(seconds: 4)));
+  }
+
+  /// 自动路径失败后的手动通道（也让用户能绕过公共代理自己想办法）
+  Future<void> _pickLegacyChannel({bool manualOnly = false}) async {
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      builder: (sheetContext) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            Padding(
+              padding: const EdgeInsets.fromLTRB(18, 16, 18, 4),
+              child: Text(manualOnly ? '换个方式下载 ${LegacyV5Link.version}' : '下载任务管家 ${LegacyV5Link.version}',
+                  style: const TextStyle(fontSize: 15)),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(18, 0, 18, 10),
+              child: Text(LegacyV5Link.stableHint,
+                  style: TextStyle(
+                      fontSize: 11.5,
+                      height: 1.4,
+                      color: Theme.of(sheetContext).colorScheme.onSurfaceVariant)),
+            ),
+            for (final channel in LegacyV5Link.channels)
+              ListTile(
+                dense: true,
+                title: Text(channel.label, style: const TextStyle(fontSize: 14)),
+                subtitle: channel.note == null
+                    ? null
+                    : Text(channel.note!, style: const TextStyle(fontSize: 11.5)),
+                trailing: const Icon(Icons.open_in_new, size: 16),
+                onTap: () {
+                  Navigator.of(sheetContext).pop();
+                  AppUpdateLauncher().openDownloadPage(Uri.parse(channel.url));
+                },
+              ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+  }
+
   void _openDestination(AppDestination destination) {
     final navigator = Navigator.of(context);
     final messenger = ScaffoldMessenger.of(context);
@@ -537,8 +665,7 @@ class _MainShellState extends State<MainShell> {
               onRetentionDaysChanged: _setRetentionDays,
               onOpenDestination: _openDestination,
               pluginSummary: _pluginSummary,
-              onDownloadLegacy: () => AppUpdateLauncher()
-                  .openDownloadPage(Uri.parse(LegacyV5Link.apkUrl)),
+              onDownloadLegacy: _downloadLegacy,
               onOpenBackup: widget.backupPageBuilder == null
                   ? null
                   : () => navigator.push(

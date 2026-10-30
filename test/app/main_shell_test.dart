@@ -300,6 +300,25 @@ void main() {
     expect(find.textContaining('两个 App 能共存'), findsOneWidget);
   });
 
+  testWidgets('点「下载旧版」先问一句，说清不会覆盖当前版本', (tester) async {
+    await pumpApp(tester);
+    await openSettings(tester);
+    await tester.scrollUntilVisible(find.text('下载旧版（V5）'), 240,
+        scrollable: find.byType(Scrollable).last);
+    await settle(tester);
+
+    await tester.tap(find.text('下载旧版（V5）'));
+    await settle(tester);
+
+    expect(find.textContaining('下载任务管家 5.5.26'), findsOneWidget);
+    // 用户最怕的是"装完把现在这个顶掉"，这句必须在
+    expect(find.textContaining('不会覆盖'), findsOneWidget);
+
+    await tester.tap(find.text('取消'));
+    await settle(tester);
+    expect(find.textContaining('下载任务管家 5.5.26'), findsNothing);
+  });
+
   testWidgets('设置页拨开关后界面要立刻更新（不监听 store 就纹丝不动）', (tester) async {
     await pumpApp(tester);
     await store.setRecycleBinEnabled(false);

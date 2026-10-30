@@ -196,7 +196,16 @@ if ($remoteSha -and $remoteSha -eq $headSha) {
             Invoke-GitHubApi -Method PATCH -Path "git/refs/tags/$Tag" -Json $updateTagJson | Out-Null
             Log "已更新 tag $Tag -> $headSha"
         }
-        & git -C $repoRoot update-ref "refs/tags/$Tag" $headSha
+        $sha = $headSha
+        # 本地未必有这个对象：走 API 建出来的 commit 是远端独有的，而 git 协议
+        # 在部分网络下被封、fetch 不了。直接 update-ref 会让 git 以
+        # "nonexistent object" 失败，把整条发布流程打断（远端其实已经好了）。
+        & git -C $repoRoot cat-file -e "$sha^{commit}" 2>$null
+        if ($LASTEXITCODE -eq 0) {
+            & git -C $repoRoot update-ref "refs/tags/$Tag" $sha
+        } else {
+            Log "本地还没有 $($sha.Substring(0, 7))，跳过本地 tag 更新（远端已就绪）"
+        }
     }
     exit 0
 }
@@ -314,7 +323,16 @@ if (-not [string]::IsNullOrWhiteSpace($Tag)) {
         Invoke-GitHubApi -Method PATCH -Path "git/refs/tags/$Tag" -Json $updateTagJson | Out-Null
         Log "已更新 tag $Tag -> $($newCommit.sha)"
     }
-    & git -C $repoRoot update-ref "refs/tags/$Tag" $newCommit.sha
+    $sha = $newCommit.sha
+        # 本地未必有这个对象：走 API 建出来的 commit 是远端独有的，而 git 协议
+        # 在部分网络下被封、fetch 不了。直接 update-ref 会让 git 以
+        # "nonexistent object" 失败，把整条发布流程打断（远端其实已经好了）。
+        & git -C $repoRoot cat-file -e "$sha^{commit}" 2>$null
+        if ($LASTEXITCODE -eq 0) {
+            & git -C $repoRoot update-ref "refs/tags/$Tag" $sha
+        } else {
+            Log "本地还没有 $($sha.Substring(0, 7))，跳过本地 tag 更新（远端已就绪）"
+        }
 }
 
 # ── 6. 本地对齐：用同样内容在本地重建该提交，使本地分支与远端同号 ───────────

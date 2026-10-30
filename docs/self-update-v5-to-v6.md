@@ -27,12 +27,19 @@
 
 | 条件 | 状态 | 说明 |
 |---|---|---|
-| 包名相同 | ✅ `com.noteapp.taskmaster` | 覆盖安装，不会并存两个 App |
+| 包名 | **故意改成不同** `com.noteapp.taskmaster.v6` | 2026-10-30 定案：V5 用户装了 V6 之后 **V5 原样保留**，桌面上是"多了一个 App"，不是覆盖升级。代价是包名不同就**不能**原地升级，好处是用户随时能退回 V5、不存在"升上去回不来" |
 | 签名相同 | ✅ 有 `android/key.properties`，keystore 在仓库外 | 必须用**同一把钥匙**构建，否则 `INSTALL_FAILED_UPDATE_INCOMPATIBLE` |
 | 安装权限 | ✅ 已声明 + FileProvider 已配 | Android 8+ 首次会要求用户允许"安装未知应用" |
-| versionCode 递增 | ⚠️ **需要改** | 见下 |
+| versionCode | ✅ V6 = 6000 | 包名不同时它不再影响升级，但留着有助区分构建 |
 
-### versionCode 是唯一可能卡住安装的点
+### 包名不同之后，这条路径变成"装一个新 App"
+
+- 系统**不会**弹"是否更新应用"，而是当成全新安装
+- V5 的库（`v5_tasks.db`）、备份、偏好都留在原处，V6 一概不读（它用 `v6_tasks.db`）
+- 卸掉 V6 不影响 V5；卸掉 V5 也不影响 V6
+- 更新说明里必须写死"装了之后 V5 还在"，否则用户会以为被替换了
+
+### 早期版本的 versionCode 说明（包名相同时才相关）
 
 `pubspec.yaml` 现在是 `version: 5.5.26+0`，也就是 **versionCode = 0**。
 Android 只认整数版本号，新包必须严格大于旧包才能覆盖。

@@ -195,7 +195,7 @@ function Invoke-GitRetry {
     }
 }
 
-Log "=== V5 发布工具 v$Version ==="
+Log "=== 任务管家 发布工具 v$Version ==="
 
 # 步骤 0：校验 APK
 Log '步骤 0：校验 APK 文件'

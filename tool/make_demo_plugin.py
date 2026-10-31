@@ -1,4 +1,4 @@
-"""把 assets/plugins_src/<id>/ 打包成 assets/plugins/<id>_v<version>.zip，
+"""把 plugins/src/<id>/ 打包成 assets/plugins/<id>_v<version>.zip，
 并重新生成 assets/plugins/index.json。
 
 为什么要有这个脚本：索引里的 sha256 必须与 zip 的字节完全一致，
@@ -17,7 +17,10 @@ import os
 import zipfile
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-SRC_ROOT = os.path.join(ROOT, "assets", "plugins_src")
+# 源码放 plugins/src/，**不放 assets/**：assets 底下每个字节都会被打进 APK，
+# 而插件源码只是打包原料，不该进包。这个目录名以前叫 assets/plugins_src，
+# 名字里带 assets 容易让人以为它会被打进去。
+SRC_ROOT = os.path.join(ROOT, "plugins", "src")
 
 # 包放哪儿 = 它怎么分发。这不是排版问题，是功能问题：
 #   assets/plugins/        → 打进 APK，随包的离线兜底（断网也能装）

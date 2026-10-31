@@ -8,7 +8,7 @@
 // 编辑页、字段管理页、默认值解析全部由表驱动，不再各写一遍。
 //
 // **字段归主包，插件不贡献字段**：插件只提供整页（已画好的页面），
-// 它拿不到也不该改字段定义。见 docs/editor-extension-plan.md。
+// 它拿不到也不该改字段定义。见 docs/archive/design/editor-extension-plan.md。
 
 /// 字段的输入形态。决定编辑页怎么画，也决定「默认值能不能改」。
 enum TaskFieldType {

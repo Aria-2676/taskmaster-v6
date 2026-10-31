@@ -1,7 +1,7 @@
-# Generates the Android release keystore with an agent-generated password.
+﻿# Generates the Android release keystore with an agent-generated password.
 #
 # Usage (in YOUR OWN PowerShell window):
-#   powershell -ExecutionPolicy Bypass -File D:\Dev\V5\tool\setup_android_keystore_auto.ps1
+#   powershell -ExecutionPolicy Bypass -File tool\setup_android_keystore_auto.ps1
 #
 # DIFFERENCE from setup_android_keystore.ps1:
 #   This variant GENERATES the password itself instead of prompting.

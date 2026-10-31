@@ -29,12 +29,38 @@ class HomeModeStore extends ChangeNotifier {
   bool _autoDowngraded = false;
   bool _loaded = false;
 
+  /// 顶栏快捷切换里被关掉的模式（见 [setQuickHidden]）
+  final Set<String> _quickHidden = <String>{};
+
   HomeMode get mode => _mode;
   int get failures => _failures;
   bool get loaded => _loaded;
 
   /// 本次启动是否因为失败次数过多而被迫切回了内置
   bool get autoDowngraded => _autoDowngraded;
+
+  /// 这个模式在顶栏的「快捷切换」里是不是被用户收起来了。
+  bool isQuickHidden(HomeMode mode) => _quickHidden.contains(mode.encode());
+
+  /// 被收起来的模式（只读视图，给纯函数 [quickOptions] 用）。
+  Set<String> get hiddenQuickKeys => Set<String>.unmodifiable(_quickHidden);
+
+  /// 收起来 / 放回快捷切换。
+  ///
+  /// 两种模式**不允许**被收起来，理由都不是"怕列表空"：
+  /// - 内置：插件把首页搞崩时，这是唯一的退路。列表里必须有它。
+  /// - 当前模式：弹层就是靠高亮当前项让用户知道"我现在在哪儿"，
+  ///   把它藏掉，点开就是一堆没选中任何一项的选项，看着像坏了。
+  ///
+  /// 所以用户在设置页把当前模式关掉是无效的（界面也把开关禁掉了）。
+  Future<void> setQuickHidden(HomeMode mode, bool hidden) async {
+    if (hidden && (mode.isBuiltin || mode == _mode)) return;
+    final key = mode.encode();
+    final changed = hidden ? _quickHidden.add(key) : _quickHidden.remove(key);
+    if (!changed) return;
+    notifyListeners();
+    await _settings.set(SettingsKeys.homeQuickHidden, _quickHidden.join(','));
+  }
 
   Future<void> load() async {
     final previousClean =
@@ -45,6 +71,15 @@ class HomeModeStore extends ChangeNotifier {
     _mode = HomeMode.parse(await _settings.get(SettingsKeys.homeMode));
     _failures = 0;
     _autoDowngraded = false;
+
+    _quickHidden
+      ..clear()
+      ..addAll(
+        (await _settings.get(SettingsKeys.homeQuickHidden) ?? '')
+            .split(',')
+            .map((e) => e.trim())
+            .where((e) => e.isNotEmpty),
+      );
 
     final id = _mode.pluginId;
     if (id != null) {
@@ -108,8 +143,18 @@ class HomeModeStore extends ChangeNotifier {
 
   /// 插件被卸载了。当选首页的那个没了，必须回到内置，
   /// 不然下次启动会对着一个不存在的插件重试两次才降级。
+  ///
+  /// 顺手把它在快捷切换里的"已收起"记录清掉：这个包都没了，
+  /// 留着一条 `plugin:<id>` 只会在用户重装同名插件时莫名其妙地不出现。
   Future<void> onPluginUninstalled(String pluginId) async {
-    if (_mode.pluginId != pluginId) return;
+    final wasHidden = _quickHidden.remove(HomeMode.plugin(pluginId).encode());
+    if (wasHidden) {
+      await _settings.set(SettingsKeys.homeQuickHidden, _quickHidden.join(','));
+    }
+    if (_mode.pluginId != pluginId) {
+      if (wasHidden) notifyListeners();
+      return;
+    }
     await setMode(const HomeMode.builtin());
   }
 

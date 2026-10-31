@@ -370,7 +370,7 @@ window.host.call('event.pending').then(function (list) {
 
 ### 上架一个新插件（**不需要发版**）
 
-1. 把包放进 `assets/plugins_src/<id>/`，写 `plugin.json`（含 `contract` 与权限声明）
+1. 把包放进 `plugins/src/<id>/`，写 `plugin.json`（含 `contract` 与权限声明）
 2. 决定它随包还是只走仓库：要只走仓库就把 id 加进 `tool/make_demo_plugin.py`
    的 `REPO_ONLY`（默认随包 —— 首次要联网才能装的门槛更高）
 3. `python tool/make_demo_plugin.py` —— 打包 + 重算 `index.json` 的 sha/size，

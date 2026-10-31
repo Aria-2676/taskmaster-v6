@@ -48,14 +48,33 @@ V6 读到 5                →  以为自己也应用过，静默跳过 build 5 
 
 ## 4. 发 V6 新版本
 
-1. `pubspec.yaml`：`6.x.y+<递增的 build>`（versionCode 只能涨）
-2. `tool/build_apk.ps1`（split ABI），记下每个包的 `sha256` 与 `sizeBytes`
-3. 产物传 GitHub Release —— **APK 必须走 Releases**：jsDelivr 单文件上限 20MB，
-   包是 21~62MB，走 jsDelivr 必 403
-4. **最后**改 `update.json`：`latest.version` + `downloads`（`url` / `sha256` / `sizeBytes`）
-5. 刷 jsDelivr 缓存（清单在 `@main` 上，不刷会读到旧缓存）
+**前提**：先改 `pubspec.yaml` 的 `6.x.y+<递增 build>`（versionCode 只能涨）并提交代码。
 
-顺序不能反：先改清单后传包，用户点下去就是死链，而且不会点第二次。
+然后一条命令：
+
+```powershell
+$notes = @('这次改了什么1', '这次改了什么2')
+& .\tool\publish_release.ps1 -Version 6.0.4 `
+  -AltBase 'https://gitee.com/yaozhenqian/taskmaster-release/releases/download' `
+  -Notes $notes
+```
+
+它按固定顺序做完整条链，**不需要手工改 `update.json`**：
+
+1. 校验四个包在位，现算 `sha256` / `sizeBytes`，核对 `versionName`
+2. 建 tag → 走 API 推送分支与 tag（本网络 `git push` 会被限速）
+3. 建/取 GitHub Release，上传四个包，回读 size + digest 双核对
+4. 重写 `update.json`（`version` / `url` / `sha256` / `sizeBytes` / `mirrors`）
+5. 提交并推送清单
+6. 刷 jsDelivr 缓存
+
+**不需要先跑 `build_apk.ps1`**：那个脚本只产包 + 出摘要、不发布，用于"想单独看看包"。
+发版这一条内部自己会构建。
+
+**脚本不管的一步**：Gitee 那边要手动传四个包 —— `-AltBase` 只是把地址写进清单，
+不会帮你传文件。漏了这步国内用户第一顺位会 404，然后退到 GitHub 代理。
+
+**顺序不能反**：先改清单后传包，用户点下去就是死链，而且不会点第二次。
 `downloads` 留空是安全的中间态——客户端判定为"无更新"，不报错。
 
 ## 5. 发 6.0.0（唯一一次跨仓库联动）

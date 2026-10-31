@@ -11,7 +11,7 @@
 
 两边是**独立的两条线**：代码零交叉引用，更新清单各一份，Release 各一套。
 V5 装过的用户会在更新弹窗里看到 6.0.0（一次可选升级，可以「跳过此版本」），
-升级后任务列表是空的 —— **V5 的数据不迁移**，理由见 `docs/self-update-v5-to-v6.md`。
+升级后任务列表是空的 —— **V5 的数据不迁移**，理由见 `docs/archive/design/self-update-v5-to-v6.md`。
 
 > 本仓库曾经放过一次 React Native 换栈的存档。换栈已否决（见 `docs/platform-decision.md`），
 > 那份代码对 Flutter 零复用，已清空。

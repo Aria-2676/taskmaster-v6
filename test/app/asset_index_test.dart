@@ -78,9 +78,9 @@ void main() {
     for (final entry in index.plugins) {
       // 权限必须在下载**之前**就能告知用户，所以索引里带了一份；
       // 但权威来源是包内的 plugin.json —— 两者不一致时用户会看到假话。
-      // plugins_src 不打进包（只有打包脚本用），所以这里读磁盘而不是 asset
+      // 插件源码不打进包（只有打包脚本用），所以这里读磁盘而不是 asset
       final manifest = jsonDecode(
-        File('assets/plugins_src/${entry.id}/plugin.json').readAsStringSync(),
+        File('plugins/src/${entry.id}/plugin.json').readAsStringSync(),
       ) as Map<String, Object?>;
       final declared = (manifest['permissions'] as List?)?.cast<String>() ?? const <String>[];
 

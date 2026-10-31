@@ -27,6 +27,14 @@ class SettingsKeys {
   /// 首页形态：`builtin` 或 `plugin:<id>`
   static const String homeMode = 'ui.home_mode';
 
+  /// 顶栏「快捷切换」里**被用户关掉**的模式，逗号分隔的 `HomeMode.encode()`。
+  ///
+  /// 存"隐藏了什么"而不是"显示了什么"，是因为插件是流动的：
+  /// 存显示集合的话，新装的插件默认不在里面，用户装完会找不到入口，
+  /// 得先去设置里勾一下才能切。存隐藏集合，新插件天然可见。
+  /// 空 / 没有这个键 = 全部显示。
+  static const String homeQuickHidden = 'ui.home_quick_hidden';
+
   /// 上一次会话是否正常渲染过首页。
   ///
   /// 启动时写 `0`，首页真的呈现出来才写 `1`。下次启动读到 `0` = 上次没走完，

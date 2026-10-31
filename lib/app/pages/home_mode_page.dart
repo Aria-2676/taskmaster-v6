@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../core/home/home_mode.dart';
 import '../../core/plugin/plugin_store.dart';
 import '../state/home_mode_store.dart';
 import '../widgets/mode_switcher.dart';
@@ -11,6 +12,9 @@ import '../widgets/mode_switcher.dart';
 ///
 /// 可选清单和顶栏的快捷切换器**共用 [buildModeOptions]**：
 /// 两处各写一份的结果是"这里能选、那里选不了"，而且迟早出现名字对不上。
+///
+/// 这一页同时是**快捷项的管理处**：每行右侧的开关决定它要不要出现在
+/// 顶栏那个弹层里。插件一多，把用不到的收起来，弹层才不会越拉越长。
 class HomeModePage extends StatelessWidget {
   const HomeModePage({
     super.key,
@@ -57,11 +61,17 @@ class HomeModePage extends StatelessWidget {
                 )
               else if (!current.isBuiltin && store.failures > 0)
                 _warning(context, '这个首页上次加载失败 ${store.failures} 次，再失败一次就会自动切回内置。'),
+              _sectionHeader(
+                context,
+                '可选首页',
+                hint: plugins.isEmpty ? null : '右侧开关 = 是否进快捷切换',
+              ),
               for (final option in options)
                 ModeTile(
                   option: option,
                   selected: current == option.mode,
                   onTap: () => store.setMode(option.mode),
+                  trailing: _quickSwitch(context, option, current),
                 ),
               if (plugins.isEmpty)
                 Padding(
@@ -71,9 +81,57 @@ class HomeModePage extends StatelessWidget {
                     style: TextStyle(fontSize: 12, color: scheme.outline),
                   ),
                 ),
+              if (plugins.isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 10, 16, 8),
+                  child: Text(
+                    '内置模式和当前模式始终进快捷切换：前者是插件出问题时的退路，'
+                    '后者让你点开列表就知道自己现在在哪儿。',
+                    style: TextStyle(fontSize: 11, height: 1.45, color: scheme.outline),
+                  ),
+                ),
             ],
           );
         },
+      ),
+    );
+  }
+
+  /// 每行右侧的开关：这个模式要不要出现在顶栏的快捷切换里。
+  ///
+  /// 内置与当前模式的开关是**禁用的**（且恒为开），原因写在
+  /// [HomeModeStore.setQuickHidden]。这里用"禁用"而不是"隐藏"：
+  /// 少一行会让插件数量对不上，用户会以为漏了一个。
+  Widget _quickSwitch(BuildContext context, ModeOption option, HomeMode current) {
+    final locked = option.isBuiltin || option.mode == current;
+    final on = locked || !store.isQuickHidden(option.mode);
+    return Switch(
+      key: Key('mode-quick-${option.mode.encode()}'),
+      value: on,
+      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+      onChanged: locked ? null : (value) => store.setQuickHidden(option.mode, !value),
+    );
+  }
+
+  Widget _sectionHeader(BuildContext context, String title, {String? hint}) {
+    final scheme = Theme.of(context).colorScheme;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 2),
+      child: Row(
+        children: <Widget>[
+          Text(
+            title,
+            style: TextStyle(
+              fontSize: 11.5,
+              fontWeight: FontWeight.w600,
+              color: scheme.onSurfaceVariant,
+            ),
+          ),
+          if (hint != null) ...<Widget>[
+            const Spacer(),
+            Text(hint, style: TextStyle(fontSize: 10.5, color: scheme.outline)),
+          ],
+        ],
       ),
     );
   }

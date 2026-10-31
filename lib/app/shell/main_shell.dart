@@ -950,15 +950,26 @@ class _MainShellState extends State<MainShell> {
     );
   }
 
-  /// 「我的」页顶部那行货币文案。
+  /// 「我的」页顶部那张货币卡片的数据。
   ///
-  /// 没装货币插件时保持"未安装"，装了之后显示名字与余额 ——
-  /// 用户得能看出顶栏那个数字是谁给的。
-  String get _currencyLabel {
+  /// 没有货币插件时返回 null —— 那一块**整个不画**。以前这里回的是
+  /// "当前货币：未安装"，等于每加一个可选能力，「我的」页就多一行
+  /// "你没有这个"，看久了那一页全是缺失提示。
+  ///
+  /// 判据和 `_badge` 必须一致（插件停用即失效），否则会出现
+  /// "顶栏没数字、我的页却挂着一个"的分裂。
+  CurrencySummary? get _currency {
     final currency = widget.currencyStore;
-    if (currency == null || !currency.installed) return '当前货币：未安装';
+    if (currency == null || !currency.installed) return null;
     final id = currency.providerId!;
-    return '当前货币：${_pluginName(id)} · ${currency.balance}';
+    final market = widget.marketStore;
+    if (market != null && !market.active.any((p) => p.pluginId == id)) {
+      return null;
+    }
+    return CurrencySummary(
+      providerName: _pluginName(id),
+      balance: currency.balance,
+    );
   }
 
   /// 「我的」页第二行：装了几个、启用几个。
@@ -1029,7 +1040,7 @@ class _MainShellState extends State<MainShell> {
         _homeView(),
         // 开关全搬去设置页了，这里只剩身份与入口
         ProfileStubPage(
-          currencyLabel: _currencyLabel,
+          currency: _currency,
           pluginSummary: _pluginSummary,
           onOpenDestination: _openDestination,
         ),

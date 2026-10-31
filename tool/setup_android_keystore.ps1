@@ -1,7 +1,7 @@
-# Generates the Android release keystore and writes android/key.properties.
+﻿# Generates the Android release keystore and writes android/key.properties.
 #
 # Usage (in YOUR OWN PowerShell window, not via an agent):
-#   powershell -ExecutionPolicy Bypass -File D:\Dev\V5\tool\setup_android_keystore.ps1
+#   powershell -ExecutionPolicy Bypass -File tool\setup_android_keystore.ps1
 #
 # The password is typed by YOU and never leaves this machine.
 # Keep both the .jks file and the password forever: lose them and you can never

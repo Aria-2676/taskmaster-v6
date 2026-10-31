@@ -1,4 +1,4 @@
-﻿# 任务管家（V5）release APK 构建脚本
+﻿# 任务管家 release APK 构建脚本（只构建 + 出摘要，不发布）
 #
 # 存在的理由：`flutter build apk --release` 有几个「必须记得加」的参数和
 # 「必须记得做」的收尾动作，手打很容易漏：
@@ -6,6 +6,11 @@
 #   1. --split-per-abi         fat APK 约 62MB，分 ABI 后每个仅 21~25MB。
 #                              自更新是用户流量，没必要让他们下 3 倍体积。
 #   2. sha256 + sizeBytes      写 update.json 必需，手工算容易抄错。
+#
+# 与 publish_release.ps1 的分工：
+#   本脚本只产包 + 出 release-manifest.txt，不动 update.json、也不发布。
+#   要发版直接用 tool\publish_release.ps1（它内部会构建、传资产、写清单、刷缓存）。
+#   这里只用于先看看包多大、摘要多少，或排障时单独重跑构建。
 #
 # 用法：
 #   powershell -ExecutionPolicy Bypass -File tool\build_apk.ps1

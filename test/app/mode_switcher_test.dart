@@ -10,6 +10,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'package:v5_app/app/data/settings_repository.dart';
 import 'package:v5_app/app/data/task_repository.dart';
+import 'package:v5_app/app/pages/home_mode_page.dart';
 import 'package:v5_app/app/shell/main_shell.dart';
 import 'package:v5_app/app/state/home_mode_store.dart';
 import 'package:v5_app/app/state/task_store.dart';
@@ -147,7 +148,7 @@ void main() {
       await tester.tap(find.byIcon(Icons.unfold_more));
       await tester.pumpAndSettle();
 
-      expect(find.text('当前模式'), findsOneWidget);
+      expect(find.text('快捷切换'), findsOneWidget);
       expect(find.text('任务模式'), findsOneWidget);
 
       await tester.tap(find.text('任务模式'));
@@ -194,6 +195,164 @@ void main() {
 
       expect(find.text('关于页未接入（没有更新器）'), findsOneWidget);
       expect(tester.takeException(), isNull);
+    });
+  });
+
+  // 弹层里到底列哪几个。痛点很具体：插件一多，十几个模式全铺进去，
+  // 常用的那几个要被滚出来才看得见 —— 快捷入口一旦需要滚动就不快捷了。
+  group('快捷切换的取舍', () {
+    List<ModeOption> optionsOf(List<String> ids) => buildModeOptions(
+          plugins: <InstalledPlugin>[for (final id in ids) fakeInstalled(id)],
+          nameOf: (id) => id,
+        );
+
+    test('默认全显示：新装插件不用先去设置里勾选', () {
+      final list = quickOptions(
+        optionsOf(<String>['a', 'b']),
+        hidden: const <String>{},
+        current: const HomeMode.builtin(),
+      );
+      expect(list.length, 3);
+    });
+
+    test('收起的不出现，内置永远在', () {
+      final list = quickOptions(
+        optionsOf(<String>['a', 'b']),
+        hidden: <String>{HomeMode.plugin('b').encode()},
+        current: const HomeMode.builtin(),
+      );
+      expect(list.map((o) => o.pluginId), <String?>[null, 'a']);
+    });
+
+    test('当前模式被收起也要出现（旧数据兜底）', () {
+      final list = quickOptions(
+        optionsOf(<String>['a', 'b']),
+        hidden: <String>{HomeMode.plugin('a').encode()},
+        current: const HomeMode.plugin('a'),
+      );
+      expect(list.map((o) => o.pluginId), contains('a'));
+    });
+
+    test('内置被收起也要出现（插件崩了只能靠它回去）', () {
+      final list = quickOptions(
+        optionsOf(<String>['a']),
+        hidden: <String>{const HomeMode.builtin().encode()},
+        current: const HomeMode.plugin('a'),
+      );
+      expect(list.first.isBuiltin, isTrue);
+    });
+  });
+
+  group('快捷项管理', () {
+    late Database db;
+    late SettingsRepository settings;
+    late HomeModeStore store;
+
+    setUp(() async {
+      db = await V6Database.open(
+        path: inMemoryDatabasePath,
+        pluginSchema: PluginSchemaRegistry(),
+      );
+      addTearDown(db.close);
+      settings = SettingsRepository(db);
+      store = HomeModeStore(settings);
+      await store.load();
+    });
+
+    test('收起后落库，重建 store 仍然收起', () async {
+      await store.setQuickHidden(const HomeMode.plugin('journal'), true);
+      expect(store.isQuickHidden(const HomeMode.plugin('journal')), isTrue);
+
+      final again = HomeModeStore(settings);
+      await again.load();
+      expect(again.isQuickHidden(const HomeMode.plugin('journal')), isTrue);
+    });
+
+    test('内置收不起来', () async {
+      await store.setQuickHidden(const HomeMode.builtin(), true);
+      expect(store.isQuickHidden(const HomeMode.builtin()), isFalse);
+    });
+
+    test('当前模式收不起来', () async {
+      await store.setMode(const HomeMode.plugin('journal'));
+      await store.setQuickHidden(const HomeMode.plugin('journal'), true);
+      expect(
+        store.isQuickHidden(const HomeMode.plugin('journal')),
+        isFalse,
+        reason: '当前模式必须在列表里，否则点开看不出自己在哪儿',
+      );
+    });
+
+    test('卸载插件会清掉它的收起记录', () async {
+      await store.setQuickHidden(const HomeMode.plugin('journal'), true);
+      await store.onPluginUninstalled('journal');
+      expect(store.isQuickHidden(const HomeMode.plugin('journal')), isFalse);
+
+      final again = HomeModeStore(settings);
+      await again.load();
+      expect(
+        again.isQuickHidden(const HomeMode.plugin('journal')),
+        isFalse,
+        reason: '重装同名插件时它应该重新出现，不该继承上一次的收起状态',
+      );
+    });
+  });
+
+  group('首页模式页的快捷开关', () {
+    late Database db;
+    late HomeModeStore store;
+
+    setUp(() async {
+      db = await V6Database.open(
+        path: inMemoryDatabasePath,
+        pluginSchema: PluginSchemaRegistry(),
+      );
+      addTearDown(db.close);
+      store = HomeModeStore(SettingsRepository(db));
+      await store.load();
+    });
+
+    Future<void> pumpPage(WidgetTester tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: HomeModePage(
+            store: store,
+            plugins: <InstalledPlugin>[
+              fakeInstalled('journal'),
+              fakeInstalled('stats'),
+            ],
+            nameOf: (id) => id == 'journal' ? '日记' : '统计',
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+    }
+
+    testWidgets('内置那行开关禁用且恒开，插件那行能关掉', (tester) async {
+      await pumpPage(tester);
+
+      final builtin =
+          tester.widget<Switch>(find.byKey(const Key('mode-quick-builtin')));
+      expect(builtin.value, isTrue);
+      expect(builtin.onChanged, isNull, reason: '内置是插件崩了之后的退路');
+
+      await tester.tap(find.byKey(const Key('mode-quick-plugin:journal')));
+      await tester.pumpAndSettle();
+
+      expect(store.isQuickHidden(const HomeMode.plugin('journal')), isTrue);
+      final journal = tester
+          .widget<Switch>(find.byKey(const Key('mode-quick-plugin:journal')));
+      expect(journal.value, isFalse);
+    });
+
+    testWidgets('当前模式那行开关也禁用', (tester) async {
+      await store.setMode(const HomeMode.plugin('journal'));
+      await pumpPage(tester);
+
+      final current = tester
+          .widget<Switch>(find.byKey(const Key('mode-quick-plugin:journal')));
+      expect(current.value, isTrue);
+      expect(current.onChanged, isNull);
     });
   });
 }

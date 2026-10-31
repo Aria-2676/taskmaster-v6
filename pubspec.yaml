@@ -49,7 +49,6 @@ dev_dependencies:
   flutter_lints: ^6.0.0
   mockito: ^5.4.4
   build_runner: ^2.4.8
-  flutter_launcher_icons: ^0.13.1
   # 让真实 SQL 聚合能在宿主测试进程里跑（sqflite 的 ffi 实现）
   sqflite_common_ffi: ^2.4.3
 
@@ -57,12 +56,9 @@ flutter:
   uses-material-design: true
 
   assets:
-    - assets/icon/
     - assets/plugins/
 
-flutter_launcher_icons:
-  android: true
-  ios: false
-  image_path: "assets/icon/app_icon.png"
-  adaptive_icon_background: "#FFFFFF"
-  adaptive_icon_foreground: "assets/icon/app_icon.png"
+# 图标：不用 flutter_launcher_icons。
+# 那套工具生成的前景不做安全区缩进、也不做笔画加粗，和现有的 10 张图对不上；
+# 更糟的是它的 image_path 曾经指向一张旧图，谁跑一次生成命令图标就静默退回旧版。
+# 现在唯一入口是 tool/make_app_icon.py（源图 tool/icon_src/app_icon.png）。

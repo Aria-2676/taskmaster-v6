@@ -1,7 +1,7 @@
-# Packs the Android signing material into a single backup archive.
+﻿# Packs the Android signing material into a single backup archive.
 #
 # Usage:
-#   powershell -ExecutionPolicy Bypass -File D:\Dev\V5\tool\backup_android_keystore.ps1
+#   powershell -ExecutionPolicy Bypass -File tool\backup_android_keystore.ps1
 #
 # Why: losing the keystore OR its password makes it impossible to ever update
 # an already-installed build again -- users would have to uninstall and

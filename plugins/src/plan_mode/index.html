@@ -218,7 +218,7 @@
       if (!tasks.length) {
         var empty = document.createElement('div');
         empty.className = 'empty';
-        empty.textContent = '这天是空的';
+        empty.textContent = index === 0 ? '今天还没有安排' : '这天还没有安排';
         section.appendChild(empty);
       }
 

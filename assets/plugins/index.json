@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "publishedAt": "2026-10-31T06:07:36Z",
+  "publishedAt": "2026-10-31T06:32:40Z",
   "plugins": [
     {
       "id": "demo_help",
@@ -40,7 +40,7 @@
     {
       "id": "plan_mode",
       "name": "周计划",
-      "version": "1.0.0",
+      "version": "1.1.0",
       "contract": 1,
       "description": "把未来七天铺开，一件事挪到哪天就是哪天。",
       "icon": "calendar_view_week",
@@ -54,9 +54,9 @@
         "order": 10
       },
       "package": {
-        "path": "plugins/packages/plan_mode_v1.0.0.zip",
-        "sha256": "807d1fdcf0f6f01fc007fe220b15d520e0eb90e4f44348eba4de16881572d442",
-        "sizeBytes": 4716
+        "path": "plugins/packages/plan_mode_v1.1.0.zip",
+        "sha256": "0e7c661b51a58e0f4f43ebc92828b9fb0885be60fb0289a983a32e978a35a987",
+        "sizeBytes": 4724
       }
     }
   ]

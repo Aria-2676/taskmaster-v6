@@ -920,7 +920,7 @@ class _MainShellState extends State<MainShell> {
       mainAxisSize: MainAxisSize.min,
       children: <Widget>[
         Text(
-          _pluginName(home.mode.pluginId!),
+          _modeTitle(home.mode.pluginId!),
           key: const Key('v6-header-mode'),
           style: style,
         ),
@@ -928,6 +928,12 @@ class _MainShellState extends State<MainShell> {
       ],
     );
   }
+
+  /// 顶栏标题用的名字：**模式名优先**（manifest 的 `home.label`），
+  /// 没声明才退回插件名。插件叫「周计划」，模式叫「计划模式」——
+  /// 顶栏得塞得下后者，而不是把插件的全名挤进去。
+  String _modeTitle(String pluginId) =>
+      _pluginHomeSpec(pluginId)?.label ?? _pluginName(pluginId);
 
   Widget _modeCaret() {
     return InkResponse(

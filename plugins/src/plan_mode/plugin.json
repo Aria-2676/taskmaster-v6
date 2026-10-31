@@ -1,7 +1,7 @@
 {
   "id": "plan_mode",
   "name": "周计划",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "contract": 1,
   "entry": "index.html",
   "description": "把未来七天铺开，一件事挪到哪天就是哪天。",
@@ -11,5 +11,8 @@
     "hint": "未来七天铺开，点任务改期",
     "order": 10
   },
-  "permissions": ["task:read", "task:write"]
+  "permissions": [
+    "task:read",
+    "task:write"
+  ]
 }

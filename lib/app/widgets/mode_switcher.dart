@@ -115,13 +115,20 @@ Future<void> showModeSwitcher(
 }) {
   final all = buildModeOptions(plugins: plugins, nameOf: nameOf, homeOf: homeOf);
 
-  return showModalBottomSheet<void>(
+  return showDialog<void>(
     context: context,
-    showDragHandle: true,
+    // **不用底部弹层**。在这台 Android 17 模拟器上，showModalBottomSheet 画出来的
+    // 内容和它的触摸热区整体差约 55dp：点「计划模式」会命中上一行的「任务模式」，
+    // 换了 Column、去掉拖拽条、去掉 SafeArea 都一样。返回键能关、widget test 全过，
+    // 只有真机点才现形 —— 这种"看着对、点不对"的东西不能留着。
+    //
+    // 居中对话框在这台机器上坐标是准的，而且只有 4 项以内时，一屏看完比
+    // 从底部弹上来更快。
     builder: (ctx) {
       final scheme = Theme.of(ctx).colorScheme;
-      return SafeArea(
-        top: false,
+      return Dialog(
+        insetPadding: const EdgeInsets.symmetric(horizontal: 28, vertical: 24),
+        clipBehavior: Clip.antiAlias,
         child: ListenableBuilder(
           listenable: store,
           builder: (context, _) {
@@ -133,61 +140,75 @@ Future<void> showModeSwitcher(
             );
             final hiddenCount = all.length - options.length;
 
-            return ListView(
-              shrinkWrap: true,
-              padding: const EdgeInsets.only(bottom: 10),
-              children: <Widget>[
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(20, 0, 8, 2),
-                  child: Row(
-                    children: <Widget>[
-                      Expanded(
-                        child: Text(
-                          '快捷切换',
-                          style: TextStyle(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w600,
-                            color: scheme.onSurfaceVariant,
-                          ),
-                        ),
-                      ),
-                      if (onOpenManager != null)
-                        TextButton(
-                          onPressed: () {
-                            Navigator.of(ctx).pop();
-                            onOpenManager();
-                          },
-                          style: TextButton.styleFrom(
-                            visualDensity: VisualDensity.compact,
-                            minimumSize: const Size(0, 30),
-                            padding: const EdgeInsets.symmetric(horizontal: 10),
-                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                          ),
-                          child: const Text('管理', style: TextStyle(fontSize: 12.5)),
-                        ),
-                    ],
-                  ),
-                ),
-                for (final option in options)
-                  ModeTile(
-                    option: option,
-                    selected: store.mode == option.mode,
-                    onTap: () {
-                      Navigator.of(ctx).pop();
-                      store.setMode(option.mode);
-                    },
-                  ),
-                if (hiddenCount > 0)
+            return ConstrainedBox(
+              constraints: const BoxConstraints(maxHeight: 460),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: <Widget>[
                   Padding(
-                    padding: const EdgeInsets.fromLTRB(20, 8, 20, 0),
-                    child: Text(
-                      onOpenManager == null
-                          ? '另有 $hiddenCount 个模式已收起'
-                          : '另有 $hiddenCount 个模式已收起，在「管理」里能放回来',
-                      style: TextStyle(fontSize: 11, color: scheme.outline),
+                    padding: const EdgeInsets.fromLTRB(20, 14, 8, 2),
+                    child: Row(
+                      children: <Widget>[
+                        Expanded(
+                          child: Text(
+                            '快捷切换',
+                            style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                              color: scheme.onSurfaceVariant,
+                            ),
+                          ),
+                        ),
+                        if (onOpenManager != null)
+                          TextButton(
+                            onPressed: () {
+                              Navigator.of(ctx).pop();
+                              onOpenManager();
+                            },
+                            style: TextButton.styleFrom(
+                              visualDensity: VisualDensity.compact,
+                              minimumSize: const Size(0, 30),
+                              padding: const EdgeInsets.symmetric(horizontal: 10),
+                              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                            ),
+                            child: const Text('管理', style: TextStyle(fontSize: 12.5)),
+                          ),
+                      ],
                     ),
                   ),
-              ],
+                  Flexible(
+                    child: SingleChildScrollView(
+                      padding: const EdgeInsets.only(bottom: 6),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: <Widget>[
+                          for (final option in options)
+                            ModeTile(
+                              option: option,
+                              selected: store.mode == option.mode,
+                              onTap: () {
+                                Navigator.of(ctx).pop();
+                                store.setMode(option.mode);
+                              },
+                            ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  if (hiddenCount > 0)
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(20, 2, 20, 12),
+                      child: Text(
+                        onOpenManager == null
+                            ? '另有 $hiddenCount 个模式已收起'
+                            : '另有 $hiddenCount 个模式已收起，在「管理」里能放回来',
+                        style: TextStyle(fontSize: 11, color: scheme.outline),
+                      ),
+                    ),
+                ],
+              ),
             );
           },
         ),

@@ -734,3 +734,22 @@ jsDelivr 缓存的是 **分支解析出来的那个提交**，purge 文件也不
 
 配套地，`_pluginBundle` 那条"先看随包 asset、再走远端"的分支**机制保留但没人用**：
 真出现"断网必须可用"的插件时，把它从 `REPO_ONLY` 里拿掉即可，不用改代码。
+
+## 快捷切换从底部弹层改成居中对话框（2026-10-31，模拟器实测后）
+
+**现象**：点顶栏箭头弹出 `showModalBottomSheet`，点任何一行都没反应，
+只是把弹层关掉。返回键能关、widget test 全过、analyze 干净。
+
+**查法**：在 tile 的 `onTap` 里临时打一行日志，点「计划模式」时打印的是
+`tap builtin` —— 热区比画面整体偏下约 166px（≈55dp），点什么都命中上一行。
+
+**排除**：换 `Column(mainAxisSize.min)`、去掉 `showDragHandle`、去掉
+`SafeArea`，三种都复现。所以不是布局写错，是 `showModalBottomSheet`
+在这台 Android 17（API 37，edge-to-edge）上的画面/热区错位。
+
+**改法**：换成 `showDialog` + `Dialog`（居中）。同一坐标点下去立刻生效。
+代价是少了"从底部滑上来"的动效，换来"点得着"——这个交换没有犹豫的余地。
+
+**教训**：`flutter test` 能点中，是因为它直接往 widget 树上派发指针事件，
+绕过了平台层。**"看得见"不等于"点得着"**，凡是平台层面的东西（弹层、
+软键盘、Insets），只有真机/模拟器才算验过。

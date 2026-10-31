@@ -88,6 +88,22 @@
   .task.done .title { color: var(--done); text-decoration: line-through; }
   .empty { color: var(--muted); font-size: 11.5px; padding: 2px 4px 8px; }
 
+  /* 「这天加一条」。每条虚线比正式任务浅一档：它是入口，不是任务本身。 */
+  .add {
+    display: block; width: 100%; text-align: left;
+    padding: 7px 10px; margin: 0 0 2px;
+    border: 1px dashed var(--line); border-radius: 10px;
+    background: transparent; color: var(--muted);
+    font: inherit; font-size: 12.5px;
+  }
+  .add:active { background: var(--chip); color: var(--accent); }
+  .input {
+    width: 100%; padding: 11px 12px; margin: 0 0 10px;
+    border: 1px solid var(--line); border-radius: 10px;
+    background: transparent; color: var(--fg); font: inherit; font-size: 15px;
+  }
+  .input:focus { outline: none; border-color: var(--accent); }
+
   /* 底部动作层 */
   .mask {
     position: fixed; inset: 0; background: rgba(0,0,0,.32);
@@ -148,6 +164,16 @@
     <button class="btn primary" id="closeSheet">取消</button>
   </div>
 </div>
+<div class="mask" id="addMask"></div>
+<div class="sheet" id="addSheet">
+  <h2>加一条</h2>
+  <p class="sub" id="addSub">今天</p>
+  <input id="addInput" class="input" placeholder="要做什么？" maxlength="60" enterkeyhint="done">
+  <div class="row">
+    <button class="btn" id="addCancel">取消</button>
+    <button class="btn primary" id="addOk">添加</button>
+  </div>
+</div>
 <div class="toast" id="toast"></div>
 
 <script>
@@ -156,8 +182,13 @@
   // 为什么是"点开再选一天"而不是拖拽：WebView 里的长按拖动会和页面滚动
   // 打架，而且手指一抖就落到错误日期上 —— 改错日期比多点一步麻烦得多。
   //
-  // 只用两个宿主能力：task.list / task.update（改日期）+ task.setDone。
+  // 只用三个宿主能力：task.list / task.update（改日期）/ task.setDone，
+  // 加上 task.create（在这天新增）。
   // 不写自己的表：这个插件没有"自己的数据"，全部事实都在主包的任务里。
+  //
+  // 为什么不靠主包的 `+`：主包在插件模式下不画 `+`（它不知道插件里"新建"
+  // 是什么意思）。而计划模式下"新建"的语义很明确 —— **加到这一天**，
+  // 所以按钮长在每一天的末尾，日期不用再选一次。
 
   var DAYS = 7;
   var state = { days: [], tasks: [], picked: null };
@@ -252,6 +283,12 @@
         section.appendChild(row);
       });
 
+      var addBtn = document.createElement('button');
+      addBtn.className = 'add';
+      addBtn.textContent = index === 0 ? '＋ 今天加一条' : '＋ 这天加一条';
+      addBtn.addEventListener('click', function () { openAdd(day, index); });
+      section.appendChild(addBtn);
+
       host.appendChild(section);
     });
 
@@ -279,6 +316,63 @@
         '读取失败：' + (error.message || error.code);
     });
   }
+
+  // ---- 新增：加到某一天 ----
+
+  var adding = { dayKey: null };
+
+  function openAdd(day, index) {
+    adding.dayKey = day.key;
+    document.getElementById('addSub').textContent =
+      labelOf(day.date, index) + ' · ' + (day.date.getMonth() + 1) + '月' + day.date.getDate() + '日';
+    var input = document.getElementById('addInput');
+    input.value = '';
+    document.getElementById('addMask').classList.add('on');
+    document.getElementById('addSheet').classList.add('on');
+    // 等弹出动画起来再抢焦点，否则键盘会把还没定位好的输入框顶飞
+    setTimeout(function () { input.focus(); }, 120);
+  }
+
+  function closeAdd() {
+    document.getElementById('addMask').classList.remove('on');
+    document.getElementById('addSheet').classList.remove('on');
+    document.getElementById('addInput').blur();
+  }
+
+  function submitAdd() {
+    var input = document.getElementById('addInput');
+    var title = (input.value || '').trim();
+    if (!title) { input.focus(); return; }
+
+    var dayKey = adding.dayKey;
+    closeAdd();
+    window.host.call('task.create', { title: title, date: dayKey })
+      .then(function (result) {
+        // 自己先插进本地列表，不重新整页拉：一次网络往返都不需要，
+        // 而且用户看到的"刚加的那条"就在眼前，不用等列表刷新。
+        state.tasks.push({
+          id: result.id,
+          title: title,
+          dueDate: dayKey,
+          isDone: false,
+          priority: 'white',
+          estimatedMinutes: 0,
+          tags: [],
+        });
+        render();
+        toast('加好了');
+      })
+      .catch(function (error) {
+        toast('添加失败：' + (error.message || error.code));
+      });
+  }
+
+  document.getElementById('addOk').addEventListener('click', submitAdd);
+  document.getElementById('addCancel').addEventListener('click', closeAdd);
+  document.getElementById('addMask').addEventListener('click', closeAdd);
+  document.getElementById('addInput').addEventListener('keydown', function (event) {
+    if (event.key === 'Enter') submitAdd();
+  });
 
   // ---- 底部动作层 ----
 

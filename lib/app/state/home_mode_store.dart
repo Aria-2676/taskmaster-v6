@@ -29,8 +29,17 @@ class HomeModeStore extends ChangeNotifier {
   bool _autoDowngraded = false;
   bool _loaded = false;
 
-  /// 顶栏快捷切换里被关掉的模式（见 [setQuickHidden]）
-  final Set<String> _quickHidden = <String>{};
+  /// 用户对快捷切换的**显式选择**（存 `HomeMode.encode()`）。
+  ///
+  /// 默认值来自插件自己（manifest 的 `home`：声明了=显示，没声明=收起），
+  /// 这里只记偏离默认的那部分：
+  /// - [_quickOn]：默认收起、用户手动打开了
+  /// - [_quickOff]：默认显示、用户手动收起了
+  ///
+  /// 为什么要分两个集合而不是存"最终可见集合"：插件会升级，默认值会变。
+  /// 存最终集合的话，一条陈年记录会把插件的新默认值永远压住。
+  final Set<String> _quickOn = <String>{};
+  final Set<String> _quickOff = <String>{};
 
   HomeMode get mode => _mode;
   int get failures => _failures;
@@ -39,27 +48,50 @@ class HomeModeStore extends ChangeNotifier {
   /// 本次启动是否因为失败次数过多而被迫切回了内置
   bool get autoDowngraded => _autoDowngraded;
 
-  /// 这个模式在顶栏的「快捷切换」里是不是被用户收起来了。
-  bool isQuickHidden(HomeMode mode) => _quickHidden.contains(mode.encode());
-
-  /// 被收起来的模式（只读视图，给纯函数 [quickOptions] 用）。
-  Set<String> get hiddenQuickKeys => Set<String>.unmodifiable(_quickHidden);
-
-  /// 收起来 / 放回快捷切换。
+  /// 这个模式在顶栏的「快捷切换」里显示吗。
   ///
-  /// 两种模式**不允许**被收起来，理由都不是"怕列表空"：
-  /// - 内置：插件把首页搞崩时，这是唯一的退路。列表里必须有它。
+  /// 内置恒为真：插件把首页搞崩时，它是唯一的退路。
+  bool isQuickVisible(HomeMode mode, {required bool defaultOn}) {
+    if (mode.isBuiltin) return true;
+    final key = mode.encode();
+    if (_quickOff.contains(key)) return false;
+    if (_quickOn.contains(key)) return true;
+    return defaultOn;
+  }
+
+  /// 改快捷切换的显示状态。
+  ///
+  /// 两种模式**不允许**被收起，理由都不是"怕列表空"：
+  /// - 内置：插件把首页搞崩时，这是唯一的退路；
   /// - 当前模式：弹层就是靠高亮当前项让用户知道"我现在在哪儿"，
   ///   把它藏掉，点开就是一堆没选中任何一项的选项，看着像坏了。
   ///
-  /// 所以用户在设置页把当前模式关掉是无效的（界面也把开关禁掉了）。
-  Future<void> setQuickHidden(HomeMode mode, bool hidden) async {
-    if (hidden && (mode.isBuiltin || mode == _mode)) return;
+  /// 改回默认值时**把记录删掉**，而不是记一条"和默认一样"：
+  /// 插件以后改了默认值，这条不该再压着它。
+  Future<void> setQuickVisible(
+    HomeMode mode,
+    bool visible, {
+    required bool defaultOn,
+  }) async {
+    if (mode.isBuiltin || mode == _mode) return;
+
     final key = mode.encode();
-    final changed = hidden ? _quickHidden.add(key) : _quickHidden.remove(key);
-    if (!changed) return;
+    _quickOn.remove(key);
+    _quickOff.remove(key);
+    if (visible != defaultOn) {
+      (visible ? _quickOn : _quickOff).add(key);
+    }
+
     notifyListeners();
-    await _settings.set(SettingsKeys.homeQuickHidden, _quickHidden.join(','));
+    await _persistQuick();
+  }
+
+  Future<void> _persistQuick() async {
+    final entries = <String>[
+      for (final key in _quickOn) '+$key',
+      for (final key in _quickOff) '-$key',
+    ]..sort();
+    await _settings.set(SettingsKeys.homeQuickOverrides, entries.join(','));
   }
 
   Future<void> load() async {
@@ -72,14 +104,28 @@ class HomeModeStore extends ChangeNotifier {
     _failures = 0;
     _autoDowngraded = false;
 
-    _quickHidden
-      ..clear()
-      ..addAll(
-        (await _settings.get(SettingsKeys.homeQuickHidden) ?? '')
-            .split(',')
-            .map((e) => e.trim())
-            .where((e) => e.isNotEmpty),
+    _quickOn.clear();
+    _quickOff.clear();
+    final raw = await _settings.get(SettingsKeys.homeQuickOverrides);
+    if (raw == null) {
+      // 6.0.4 及更早只记"收起了什么"。迁移成显式的"关掉"，
+      // 否则老用户升级后，自己关掉过的插件会全部重新冒出来。
+      final legacy = await _settings.get(SettingsKeys.homeQuickHidden) ?? '';
+      _quickOff.addAll(
+        legacy.split(',').map((e) => e.trim()).where((e) => e.isNotEmpty),
       );
+    } else {
+      for (final token in raw.split(',')) {
+        final item = token.trim();
+        if (item.length < 2) continue;
+        final key = item.substring(1);
+        if (item[0] == '+') {
+          _quickOn.add(key);
+        } else if (item[0] == '-') {
+          _quickOff.add(key);
+        }
+      }
+    }
 
     final id = _mode.pluginId;
     if (id != null) {
@@ -144,15 +190,15 @@ class HomeModeStore extends ChangeNotifier {
   /// 插件被卸载了。当选首页的那个没了，必须回到内置，
   /// 不然下次启动会对着一个不存在的插件重试两次才降级。
   ///
-  /// 顺手把它在快捷切换里的"已收起"记录清掉：这个包都没了，
-  /// 留着一条 `plugin:<id>` 只会在用户重装同名插件时莫名其妙地不出现。
+  /// 顺手把它在快捷切换里的记录清掉：这个包都没了，留着一条只会在
+  /// 用户重装同名插件时，让新插件的默认值莫名其妙地失效。
   Future<void> onPluginUninstalled(String pluginId) async {
-    final wasHidden = _quickHidden.remove(HomeMode.plugin(pluginId).encode());
-    if (wasHidden) {
-      await _settings.set(SettingsKeys.homeQuickHidden, _quickHidden.join(','));
-    }
+    final key = HomeMode.plugin(pluginId).encode();
+    final touched = _quickOn.remove(key) | _quickOff.remove(key);
+    if (touched) await _persistQuick();
+
     if (_mode.pluginId != pluginId) {
-      if (wasHidden) notifyListeners();
+      if (touched) notifyListeners();
       return;
     }
     await setMode(const HomeMode.builtin());

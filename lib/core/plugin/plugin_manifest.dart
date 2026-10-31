@@ -69,6 +69,68 @@ class PluginPackage {
   final int sizeBytes;
 }
 
+/// 插件声明的「可以当首页模式」。
+///
+/// 声明它只做两件事，**不是准入**：
+/// 1. 这个模式默认出现在顶栏的快捷切换里（没声明的是默认收起，用户可自己打开）；
+/// 2. 给模式一个短名字和一句说明 —— 顶栏要塞得下，插件名往往太长
+///    （插件叫「周计划」，模式叫「计划模式」）。
+///
+/// 为什么不拿它当准入：能当首页本身没什么危险，插件整页换的只是内容区，
+/// 底栏、侧边栏、`+` 都不动，随时能切回内置。拦掉反而让用户少了一种玩法。
+class PluginHomeSpec {
+  const PluginHomeSpec({this.label, this.hint, this.order = 100});
+
+  /// 只写 `"home": true` 时的形态：默认开启，名字沿用插件名
+  static const PluginHomeSpec bare = PluginHomeSpec();
+
+  /// 顶栏标题与快捷切换里显示的名字
+  final String? label;
+
+  /// 一句人话，替代自动生成的「插件整页 · v1.0.0」
+  final String? hint;
+
+  /// 列表顺序（小的在前）。同值按安装顺序。
+  final int order;
+
+  /// 解析失败一律当"没声明"：认不出来的字段不该让插件装不上。
+  static PluginHomeSpec? tryParse(Object? raw) {
+    if (raw == null || raw == false) return null;
+    if (raw == true) return bare;
+    if (raw is! Map) return null;
+
+    String? text(Object? value) {
+      if (value is! String) return null;
+      final trimmed = value.trim();
+      return trimmed.isEmpty ? null : trimmed;
+    }
+
+    return PluginHomeSpec(
+      label: text(raw['label']),
+      hint: text(raw['hint']),
+      order: raw['order'] is int ? raw['order']! as int : 100,
+    );
+  }
+
+  Map<String, Object?> toJson() => <String, Object?>{
+        if (label != null) 'label': label,
+        if (hint != null) 'hint': hint,
+        'order': order,
+      };
+
+  /// 按值比较：索引里那份是从 `plugin.json` 复制的，两边必须逐字段相同
+  /// （`asset_index_test` 就是靠它守住"索引和包内别对不上"）。
+  @override
+  bool operator ==(Object other) =>
+      other is PluginHomeSpec &&
+      other.label == label &&
+      other.hint == hint &&
+      other.order == order;
+
+  @override
+  int get hashCode => Object.hash(label, hint, order);
+}
+
 /// `plugin.json` —— 包内清单。
 ///
 /// 校验刻意严格：`id` 会进入目录名和插件表前缀，`entry` 会拼进 WebView 的
@@ -85,6 +147,7 @@ class PluginManifest {
     this.slots = const <SlotId>{},
     this.hooks = const <HookId>{},
     this.permissions = const <String>{},
+    this.home,
     this.storage = const PluginStorageSpec(version: 1, tables: <PluginTableDecl>[]),
   });
 
@@ -127,6 +190,7 @@ class PluginManifest {
       slots: _parseSlots(json['slots']),
       hooks: _parseHooks(json['hooks']),
       permissions: _parsePermissions(json['permissions']),
+      home: PluginHomeSpec.tryParse(json['home']),
       storage: PluginStorageSpec.fromJson(json['storage']),
     );
   }
@@ -160,6 +224,9 @@ class PluginManifest {
 
   /// 数据权限。**不声明就拿不到数据** —— 默认空集，最小权限。
   final Set<String> permissions;
+
+  /// 可当首页模式的声明。null = 没声明：仍可当首页，但默认不在快捷切换里。
+  final PluginHomeSpec? home;
 
   /// 插件自己的表声明。空 = 不存自己的数据（只读写主包任务的那种插件）。
   ///

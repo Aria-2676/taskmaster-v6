@@ -252,4 +252,44 @@ void main() {
       expect(await store.find('pomodoro'), isNull);
     });
   });
+
+  // 「能不能当首页」已经不是准入了：所有插件都能当，声明只决定
+  // **默认开不开**和**显示什么名字**（见 docs/decisions.md 2026-10-31）。
+  group('home 声明', () {
+    Map<String, Object?> withHome(Object? home) =>
+        <String, Object?>{..._manifestJson(), 'home': home};
+
+    test('不写 / null / false 都算没声明', () {
+      expect(PluginManifest.parse(_manifestJson()).home, isNull);
+      expect(PluginManifest.parse(withHome(null)).home, isNull);
+      expect(PluginManifest.parse(withHome(false)).home, isNull);
+    });
+
+    test('"home": true 走最省事的形态：有声明、名字沿用插件名', () {
+      final spec = PluginManifest.parse(withHome(true)).home;
+      expect(spec, isNotNull);
+      expect(spec!.label, isNull);
+      expect(spec.order, 100);
+    });
+
+    test('对象形式带 label / hint / order', () {
+      final spec = PluginManifest.parse(withHome(<String, Object?>{
+        'label': '计划模式',
+        'hint': '未来七天铺开',
+        'order': 10,
+      })).home!;
+      expect(spec.label, '计划模式');
+      expect(spec.hint, '未来七天铺开');
+      expect(spec.order, 10);
+    });
+
+    test('认不出来的写法当没声明，别让插件装不上', () {
+      expect(PluginManifest.parse(withHome('yes')).home, isNull);
+      expect(
+        PluginManifest.parse(withHome(<String, Object?>{'order': 'x'})).home!.order,
+        100,
+        reason: 'order 不是整数就退回默认，不是报错',
+      );
+    });
+  });
 }

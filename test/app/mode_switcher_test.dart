@@ -19,6 +19,7 @@ import 'package:v5_app/core/data/v6_database.dart';
 import 'package:v5_app/core/data/v6_plugin_tables.dart';
 import 'package:v5_app/core/extension/extension_slot.dart';
 import 'package:v5_app/core/home/home_mode.dart';
+import 'package:v5_app/core/plugin/plugin_manifest.dart';
 import 'package:v5_app/core/plugin/plugin_store.dart';
 
 InstalledPlugin fakeInstalled(String id, {String version = '1.2.0'}) {
@@ -198,27 +199,27 @@ void main() {
     });
   });
 
-  // 弹层里到底列哪几个。痛点很具体：插件一多，十几个模式全铺进去，
-  // 常用的那几个要被滚出来才看得见 —— 快捷入口一旦需要滚动就不快捷了。
+  // 弹层里到底列哪几个。默认值来自插件自己的声明（manifest 的 `home`）：
+  // 声明了 = 默认开（它是"模式插件"），没声明 = 默认关（仍可当首页，用户自己开）。
   group('快捷切换的取舍', () {
     List<ModeOption> optionsOf(List<String> ids) => buildModeOptions(
           plugins: <InstalledPlugin>[for (final id in ids) fakeInstalled(id)],
           nameOf: (id) => id,
         );
 
-    test('默认全显示：新装插件不用先去设置里勾选', () {
+    test('全开时一个不落', () {
       final list = quickOptions(
         optionsOf(<String>['a', 'b']),
-        hidden: const <String>{},
+        visibleOf: (_) => true,
         current: const HomeMode.builtin(),
       );
       expect(list.length, 3);
     });
 
-    test('收起的不出现，内置永远在', () {
+    test('用户收起的不出现，内置永远在', () {
       final list = quickOptions(
         optionsOf(<String>['a', 'b']),
-        hidden: <String>{HomeMode.plugin('b').encode()},
+        visibleOf: (o) => o.pluginId != 'b',
         current: const HomeMode.builtin(),
       );
       expect(list.map((o) => o.pluginId), <String?>[null, 'a']);
@@ -227,7 +228,7 @@ void main() {
     test('当前模式被收起也要出现（旧数据兜底）', () {
       final list = quickOptions(
         optionsOf(<String>['a', 'b']),
-        hidden: <String>{HomeMode.plugin('a').encode()},
+        visibleOf: (o) => o.pluginId != 'a',
         current: const HomeMode.plugin('a'),
       );
       expect(list.map((o) => o.pluginId), contains('a'));
@@ -236,10 +237,66 @@ void main() {
     test('内置被收起也要出现（插件崩了只能靠它回去）', () {
       final list = quickOptions(
         optionsOf(<String>['a']),
-        hidden: <String>{const HomeMode.builtin().encode()},
+        visibleOf: (_) => false,
         current: const HomeMode.plugin('a'),
       );
       expect(list.first.isBuiltin, isTrue);
+    });
+  });
+
+  // 声明只决定两件事：默认开不开、显示什么名字。
+  group('模式声明', () {
+    List<ModeOption> optionsOf(
+      List<String> ids, {
+      Set<String> declared = const <String>{},
+      PluginHomeSpec? Function(String)? homeOf,
+    }) {
+      return buildModeOptions(
+        plugins: <InstalledPlugin>[for (final id in ids) fakeInstalled(id)],
+        nameOf: (id) => '插件$id',
+        homeOf: homeOf ??
+            (id) => declared.contains(id)
+                ? PluginHomeSpec(label: '模式$id', hint: '一句话')
+                : null,
+      );
+    }
+
+    test('声明了 home：用 label 当名字、hint 当副标题、默认进快捷切换', () {
+      final option = optionsOf(<String>['plan'], declared: <String>{'plan'})[1];
+      expect(option.name, '模式plan');
+      expect(option.subtitle, '一句话');
+      expect(option.defaultQuick, isTrue);
+    });
+
+    test('没声明：名字退回插件名，默认不进快捷切换', () {
+      final option = optionsOf(<String>['journal'])[1];
+      expect(option.name, '插件journal');
+      expect(option.subtitle, contains('插件整页'));
+      expect(option.defaultQuick, isFalse);
+    });
+
+    test('声明了的排在前面，按 order 升序；没声明的保持安装顺序', () {
+      final list = optionsOf(
+        <String>['journal', 'late', 'early', 'demo'],
+        homeOf: (id) => switch (id) {
+          'late' => const PluginHomeSpec(label: '晚', order: 30),
+          'early' => const PluginHomeSpec(label: '早', order: 10),
+          _ => null,
+        },
+      );
+      expect(
+        list.map((o) => o.pluginId),
+        <String?>[null, 'early', 'late', 'journal', 'demo'],
+      );
+    });
+
+    test('"home": true 这种最省事的写法也认（默认 100）', () {
+      final list = optionsOf(
+        <String>['plan'],
+        homeOf: (_) => PluginHomeSpec.bare,
+      );
+      expect(list[1].defaultQuick, isTrue);
+      expect(list[1].order, 100);
     });
   });
 
@@ -247,6 +304,7 @@ void main() {
     late Database db;
     late SettingsRepository settings;
     late HomeModeStore store;
+    final plan = const HomeMode.plugin('plan');
 
     setUp(() async {
       db = await V6Database.open(
@@ -259,42 +317,71 @@ void main() {
       await store.load();
     });
 
-    test('收起后落库，重建 store 仍然收起', () async {
-      await store.setQuickHidden(const HomeMode.plugin('journal'), true);
-      expect(store.isQuickHidden(const HomeMode.plugin('journal')), isTrue);
+    test('没动过手就跟随默认值', () {
+      expect(store.isQuickVisible(plan, defaultOn: true), isTrue);
+      expect(store.isQuickVisible(plan, defaultOn: false), isFalse);
+    });
+
+    test('收起一个默认开启的：落库，重建仍收起', () async {
+      await store.setQuickVisible(plan, false, defaultOn: true);
+      expect(store.isQuickVisible(plan, defaultOn: true), isFalse);
 
       final again = HomeModeStore(settings);
       await again.load();
-      expect(again.isQuickHidden(const HomeMode.plugin('journal')), isTrue);
+      expect(again.isQuickVisible(plan, defaultOn: true), isFalse);
     });
 
-    test('内置收不起来', () async {
-      await store.setQuickHidden(const HomeMode.builtin(), true);
-      expect(store.isQuickHidden(const HomeMode.builtin()), isFalse);
+    test('打开一个默认关闭的：落库，重建仍打开', () async {
+      await store.setQuickVisible(plan, true, defaultOn: false);
+
+      final again = HomeModeStore(settings);
+      await again.load();
+      expect(again.isQuickVisible(plan, defaultOn: false), isTrue);
     });
 
-    test('当前模式收不起来', () async {
-      await store.setMode(const HomeMode.plugin('journal'));
-      await store.setQuickHidden(const HomeMode.plugin('journal'), true);
+    test('改回默认值会把记录删掉（插件以后改默认值才跟得上）', () async {
+      await store.setQuickVisible(plan, false, defaultOn: true);
+      await store.setQuickVisible(plan, true, defaultOn: true);
+
+      expect(await settings.get(SettingsKeys.homeQuickOverrides), isEmpty);
+
+      final again = HomeModeStore(settings);
+      await again.load();
+      expect(again.isQuickVisible(plan, defaultOn: false), isFalse,
+          reason: '记录删干净了，就该完全听默认值');
+    });
+
+    test('内置与当前模式改不动', () async {
+      await store.setQuickVisible(const HomeMode.builtin(), false, defaultOn: true);
+      expect(store.isQuickVisible(const HomeMode.builtin(), defaultOn: true), isTrue);
+
+      await store.setMode(plan);
+      await store.setQuickVisible(plan, false, defaultOn: true);
       expect(
-        store.isQuickHidden(const HomeMode.plugin('journal')),
-        isFalse,
+        store.isQuickVisible(plan, defaultOn: true),
+        isTrue,
         reason: '当前模式必须在列表里，否则点开看不出自己在哪儿',
       );
     });
 
-    test('卸载插件会清掉它的收起记录', () async {
-      await store.setQuickHidden(const HomeMode.plugin('journal'), true);
-      await store.onPluginUninstalled('journal');
-      expect(store.isQuickHidden(const HomeMode.plugin('journal')), isFalse);
+    test('卸载插件清掉记录', () async {
+      await store.setQuickVisible(plan, false, defaultOn: true);
+      await store.onPluginUninstalled('plan');
 
       final again = HomeModeStore(settings);
       await again.load();
-      expect(
-        again.isQuickHidden(const HomeMode.plugin('journal')),
-        isFalse,
-        reason: '重装同名插件时它应该重新出现，不该继承上一次的收起状态',
-      );
+      expect(again.isQuickVisible(plan, defaultOn: true), isTrue,
+          reason: '重装同名插件时该按新默认来，不该继承旧记录');
+    });
+
+    test('从 6.0.4 的「收起集合」迁移：以前关掉的仍关着', () async {
+      await settings.set(SettingsKeys.homeQuickHidden, 'plugin:journal,plugin:plan');
+
+      final migrated = HomeModeStore(settings);
+      await migrated.load();
+
+      expect(migrated.isQuickVisible(HomeMode.plugin('plan'), defaultOn: true), isFalse);
+      expect(migrated.isQuickVisible(HomeMode.plugin('journal'), defaultOn: false), isFalse);
     });
   });
 
@@ -318,34 +405,55 @@ void main() {
           home: HomeModePage(
             store: store,
             plugins: <InstalledPlugin>[
+              fakeInstalled('plan'),
               fakeInstalled('journal'),
-              fakeInstalled('stats'),
             ],
-            nameOf: (id) => id == 'journal' ? '日记' : '统计',
+            nameOf: (id) => id == 'plan' ? '周计划' : '记账',
+            homeOf: (id) => id == 'plan'
+                ? const PluginHomeSpec(label: '计划模式', hint: '未来七天铺开')
+                : null,
           ),
         ),
       );
       await tester.pumpAndSettle();
     }
 
-    testWidgets('内置那行开关禁用且恒开，插件那行能关掉', (tester) async {
+    testWidgets('声明了 home 的默认开，没声明的默认关', (tester) async {
+      await pumpPage(tester);
+
+      final plan =
+          tester.widget<Switch>(find.byKey(const Key('mode-quick-plugin:plan')));
+      final journal = tester
+          .widget<Switch>(find.byKey(const Key('mode-quick-plugin:journal')));
+
+      expect(plan.value, isTrue, reason: '模式插件默认进快捷切换');
+      expect(journal.value, isFalse, reason: '页面插件默认收起，但用户可以打开');
+      expect(find.text('计划模式'), findsOneWidget);
+      expect(find.text('未来七天铺开'), findsOneWidget);
+    });
+
+    testWidgets('内置那行开关禁用且恒开', (tester) async {
       await pumpPage(tester);
 
       final builtin =
           tester.widget<Switch>(find.byKey(const Key('mode-quick-builtin')));
       expect(builtin.value, isTrue);
       expect(builtin.onChanged, isNull, reason: '内置是插件崩了之后的退路');
-
-      await tester.tap(find.byKey(const Key('mode-quick-plugin:journal')));
-      await tester.pumpAndSettle();
-
-      expect(store.isQuickHidden(const HomeMode.plugin('journal')), isTrue);
-      final journal = tester
-          .widget<Switch>(find.byKey(const Key('mode-quick-plugin:journal')));
-      expect(journal.value, isFalse);
     });
 
-    testWidgets('当前模式那行开关也禁用', (tester) async {
+    testWidgets('关掉模式插件那一行会落状态', (tester) async {
+      await pumpPage(tester);
+
+      await tester.tap(find.byKey(const Key('mode-quick-plugin:plan')));
+      await tester.pumpAndSettle();
+
+      expect(
+        store.isQuickVisible(const HomeMode.plugin('plan'), defaultOn: true),
+        isFalse,
+      );
+    });
+
+    testWidgets('当前模式那行开关禁用', (tester) async {
       await store.setMode(const HomeMode.plugin('journal'));
       await pumpPage(tester);
 

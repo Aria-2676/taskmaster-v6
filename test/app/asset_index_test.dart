@@ -89,6 +89,21 @@ void main() {
     }
   });
 
+  test('索引里的 home 声明与包内 plugin.json 一致', () async {
+    // 索引里那份由打包脚本从 plugin.json 复制。对不上的后果不是"难看"：
+    // 顶栏的快捷切换读的是索引 —— 模式名和默认开不开都会错。
+    final index = await loadIndex();
+    for (final entry in index.plugins) {
+      final manifest = jsonDecode(
+        File('plugins/src/${entry.id}/plugin.json').readAsStringSync(),
+      ) as Map<String, Object?>;
+      final declared = PluginHomeSpec.tryParse(manifest['home']);
+
+      expect(entry.home, declared,
+          reason: '${entry.id}: 索引与 plugin.json 的 home 不一致');
+    }
+  });
+
   test('内置插件页不写死自身版本，一律从 system.info 取', () async {
     // 守卫的是一个真发生过的 bug：`energy_currency` 页面里写着
     // `契约 1 · v1.0.0`，升级到 1.1.0 之后页面还挂着旧版本号。
@@ -104,8 +119,16 @@ void main() {
 
       expect(html.contains('v${entry.version}'), isFalse,
           reason: '${entry.id}: 页面里把版本 v${entry.version} 写死了，升级后不会跟着变');
-      expect(html.contains('system.info'), isTrue,
-          reason: '${entry.id}: 页面没有通过 system.info 读版本；升级后显示的会是旧版本号');
+
+      // 只有**确实显示版本**的页面才必须走 system.info。
+      // 原来是无条件要求，结果计划模式这种压根不显示版本的页面也被判失败 ——
+      // 守卫要拦的是"写死版本号"，不是"每个页面都得报版本"。
+      final showsVersion =
+          RegExp(r'[vV]\d+\.\d+\.\d+').hasMatch(html);
+      if (showsVersion) {
+        expect(html.contains('system.info'), isTrue,
+            reason: '${entry.id}: 页面显示了版本却没有通过 system.info 读，升级后会是旧号');
+      }
     }
   });
 }

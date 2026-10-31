@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../core/home/home_mode.dart';
+import '../../core/plugin/plugin_manifest.dart';
 import '../../core/plugin/plugin_store.dart';
 import '../state/home_mode_store.dart';
 import '../widgets/mode_switcher.dart';
@@ -21,11 +22,15 @@ class HomeModePage extends StatelessWidget {
     required this.store,
     required this.plugins,
     required this.nameOf,
+    this.homeOf,
   });
 
   final HomeModeStore store;
   final List<InstalledPlugin> plugins;
   final String Function(String pluginId) nameOf;
+
+  /// 插件声明的 `home`（有 = 模式插件，默认进快捷切换）
+  final PluginHomeSpec? Function(String pluginId)? homeOf;
 
   @override
   Widget build(BuildContext context) {
@@ -40,7 +45,7 @@ class HomeModePage extends StatelessWidget {
         builder: (context, _) {
           final current = store.mode;
           final options =
-              buildModeOptions(plugins: plugins, nameOf: nameOf);
+              buildModeOptions(plugins: plugins, nameOf: nameOf, homeOf: homeOf);
 
           return ListView(
             padding: const EdgeInsets.fromLTRB(0, 8, 0, 24),
@@ -85,6 +90,8 @@ class HomeModePage extends StatelessWidget {
                 Padding(
                   padding: const EdgeInsets.fromLTRB(16, 10, 16, 8),
                   child: Text(
+                    '右侧开关控制这个模式进不进顶栏的快捷切换。专做首页的插件默认打开，'
+                    '其它插件（例如记账、使用说明）默认关闭 —— 想用就自己打开。\n'
                     '内置模式和当前模式始终进快捷切换：前者是插件出问题时的退路，'
                     '后者让你点开列表就知道自己现在在哪儿。',
                     style: TextStyle(fontSize: 11, height: 1.45, color: scheme.outline),
@@ -99,17 +106,26 @@ class HomeModePage extends StatelessWidget {
 
   /// 每行右侧的开关：这个模式要不要出现在顶栏的快捷切换里。
   ///
+  /// 默认值来自插件声明（`home`），所以开关的初始状态不是"全开"：
+  /// 模式插件默认开，其它页面插件默认关 —— 用户想要就自己打开。
   /// 内置与当前模式的开关是**禁用的**（且恒为开），原因写在
-  /// [HomeModeStore.setQuickHidden]。这里用"禁用"而不是"隐藏"：
+  /// [HomeModeStore.setQuickVisible]。这里用"禁用"而不是"隐藏"：
   /// 少一行会让插件数量对不上，用户会以为漏了一个。
   Widget _quickSwitch(BuildContext context, ModeOption option, HomeMode current) {
     final locked = option.isBuiltin || option.mode == current;
-    final on = locked || !store.isQuickHidden(option.mode);
+    final on = locked ||
+        store.isQuickVisible(option.mode, defaultOn: option.defaultQuick);
     return Switch(
       key: Key('mode-quick-${option.mode.encode()}'),
       value: on,
       materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-      onChanged: locked ? null : (value) => store.setQuickHidden(option.mode, !value),
+      onChanged: locked
+          ? null
+          : (value) => store.setQuickVisible(
+                option.mode,
+                value,
+                defaultOn: option.defaultQuick,
+              ),
     );
   }
 

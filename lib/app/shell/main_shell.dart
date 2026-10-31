@@ -6,6 +6,7 @@ import '../../core/extension/extension_slot.dart';
 import '../models/calendar_strip_style.dart';
 import '../models/task.dart';
 import '../pages/v6_home_page.dart';
+import '../../core/plugin/plugin_manifest.dart';
 import '../../core/plugin/plugin_store.dart';
 import '../pages/field_manager_page.dart';
 import '../pages/home_mode_page.dart';
@@ -263,6 +264,10 @@ class _MainShellState extends State<MainShell> {
 
   String _pluginName(String id) =>
       widget.marketStore?.index.findById(id)?.name ?? id;
+
+  /// 插件声明的首页模式（null = 不是模式插件：仍可当首页，但默认收起）
+  PluginHomeSpec? _pluginHomeSpec(String id) =>
+      widget.marketStore?.index.findById(id)?.home;
 
   /// 插件首页。null = 用内置首页。
   Widget? _pluginHome() {
@@ -664,6 +669,7 @@ class _MainShellState extends State<MainShell> {
               store: home,
               plugins: widget.marketStore?.active ?? const <InstalledPlugin>[],
               nameOf: _pluginName,
+              homeOf: _pluginHomeSpec,
             ),
           ),
         );
@@ -946,6 +952,7 @@ class _MainShellState extends State<MainShell> {
       store: home,
       plugins: widget.marketStore?.active ?? const <InstalledPlugin>[],
       nameOf: _pluginName,
+      homeOf: _pluginHomeSpec,
       onOpenManager: () => _openDestination(AppDestination.homeMode),
     );
   }

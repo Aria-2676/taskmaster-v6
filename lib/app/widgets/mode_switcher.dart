@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../core/home/home_mode.dart';
+import '../../core/plugin/plugin_manifest.dart';
 import '../../core/plugin/plugin_store.dart';
 import '../state/home_mode_store.dart';
 
@@ -13,11 +14,23 @@ class ModeOption {
     required this.pluginId,
     required this.name,
     required this.subtitle,
+    this.defaultQuick = false,
+    this.order = 100,
   });
 
   final String? pluginId;
   final String name;
   final String subtitle;
+
+  /// 默认出现在顶栏的快捷切换里。
+  ///
+  /// true = 插件在 manifest 里声明了 `home`（它是个"模式插件"）。
+  /// **false 不等于不能当首页**，只是默认收起来，用户可以在「首页模式」里打开——
+  /// 这样既能塞进一批主体模式，又不会把记账、使用说明这类页面一股脑铺到顶栏。
+  final bool defaultQuick;
+
+  /// 模式插件的排序（小的在前）。没声明的一律 100，排在声明过的后面。
+  final int order;
 
   bool get isBuiltin => pluginId == null;
 
@@ -27,25 +40,44 @@ class ModeOption {
 
 /// 可选模式清单：内置 + 所有已装插件。
 ///
-/// **不区分"这个插件是不是模式插件"** —— 插件没有类别声明，主包判断不了。
-/// 一律列出来，由用户决定拿哪个当首页；装了个使用说明插件也能选，
-/// 后果只是首页变成一页说明，随时能切回来。
+/// **不区分"这个插件是不是模式插件"** —— 谁都能当首页，插件整页换的只是
+/// 内容区，底栏、侧边栏、`+` 都不动，随时能切回内置，没有拦的必要。
+/// 真正的区别在默认值：声明了 `home` 的默认出现在快捷切换里，其余默认收起。
+///
+/// 排序：内置 → 声明了 home 的（按 order）→ 其余（按安装顺序）。
+/// 不排的话模式列表会按安装时间漂移，装一个插件位置就变一次。
 List<ModeOption> buildModeOptions({
   required List<InstalledPlugin> plugins,
   required String Function(String pluginId) nameOf,
+  PluginHomeSpec? Function(String pluginId)? homeOf,
 }) {
+  final declared = <ModeOption>[];
+  final rest = <ModeOption>[];
+
+  for (final plugin in plugins) {
+    final home = homeOf?.call(plugin.pluginId);
+    final option = ModeOption(
+      pluginId: plugin.pluginId,
+      // 模式名优先用 home.label：顶栏要塞得下，「周计划」这种插件名太长
+      name: home?.label ?? nameOf(plugin.pluginId),
+      subtitle: home?.hint ?? '插件整页 · v${plugin.version}',
+      defaultQuick: home != null,
+      order: home?.order ?? 100,
+    );
+    (home != null ? declared : rest).add(option);
+  }
+
+  declared.sort((a, b) => a.order.compareTo(b.order));
+
   return <ModeOption>[
     const ModeOption(
       pluginId: null,
       name: '任务模式',
       subtitle: '按天排列的任务 + 日历条',
+      defaultQuick: true,
     ),
-    for (final plugin in plugins)
-      ModeOption(
-        pluginId: plugin.pluginId,
-        name: nameOf(plugin.pluginId),
-        subtitle: '插件整页 · v${plugin.version}',
-      ),
+    ...declared,
+    ...rest,
   ];
 }
 
@@ -55,19 +87,14 @@ List<ModeOption> buildModeOptions({
 /// 1. 内置永远在 —— 插件把首页搞崩时，这是唯一的退路；
 /// 2. 当前模式永远在 —— 弹层靠高亮当前项告诉用户"我现在在哪儿"，
 ///    把它藏起来，点开就成了一堆谁都没选中的选项；
-/// 3. 其余听用户的 —— [hidden] 里被收起来的不出现。
-///
-/// 第 2 条在 [HomeModeStore.setQuickHidden] 里已经拦过一道，这里再兜一次：
-/// 历史数据里可能留着"当前模式被收起"的记录，那时不该让用户对着一个
-/// 没有选中项的列表发懵。
+/// 3. 其余看用户的选择，没选过就看默认值（声明了 `home` 的默认开）。
 List<ModeOption> quickOptions(
   List<ModeOption> all, {
-  required Set<String> hidden,
+  required bool Function(ModeOption) visibleOf,
   required HomeMode current,
 }) {
   return all
-      .where((o) =>
-          o.isBuiltin || o.mode == current || !hidden.contains(o.mode.encode()))
+      .where((o) => o.isBuiltin || o.mode == current || visibleOf(o))
       .toList(growable: false);
 }
 
@@ -83,9 +110,10 @@ Future<void> showModeSwitcher(
   required HomeModeStore store,
   required List<InstalledPlugin> plugins,
   required String Function(String pluginId) nameOf,
+  PluginHomeSpec? Function(String pluginId)? homeOf,
   VoidCallback? onOpenManager,
 }) {
-  final all = buildModeOptions(plugins: plugins, nameOf: nameOf);
+  final all = buildModeOptions(plugins: plugins, nameOf: nameOf, homeOf: homeOf);
 
   return showModalBottomSheet<void>(
     context: context,
@@ -99,7 +127,8 @@ Future<void> showModeSwitcher(
           builder: (context, _) {
             final options = quickOptions(
               all,
-              hidden: store.hiddenQuickKeys,
+              visibleOf: (o) =>
+                  store.isQuickVisible(o.mode, defaultOn: o.defaultQuick),
               current: store.mode,
             );
             final hiddenCount = all.length - options.length;

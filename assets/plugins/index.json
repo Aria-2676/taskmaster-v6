@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "publishedAt": "2026-10-28T10:36:20Z",
+  "publishedAt": "2026-10-31T06:07:36Z",
   "plugins": [
     {
       "id": "demo_help",
@@ -14,9 +14,9 @@
         "task:write"
       ],
       "package": {
-        "path": "assets/plugins/demo_help_v1.4.0.zip",
-        "sha256": "67d8207f89371459fb2f74fcc1dc939c30ec4912b08e3b21ee2fdd9c91a70c65",
-        "sizeBytes": 4186
+        "path": "plugins/packages/demo_help_v1.4.0.zip",
+        "sha256": "ec437362b967259f383896190995fb1dfae3b10921f4beae7a6f1c0933aed2bf",
+        "sizeBytes": 4054
       }
     },
     {
@@ -35,6 +35,28 @@
         "path": "plugins/packages/energy_currency_v1.0.0.zip",
         "sha256": "01dd5115a13204255d430dea75b81d3267d7c8b2052d825bd5c8eaa87d008a21",
         "sizeBytes": 4470
+      }
+    },
+    {
+      "id": "plan_mode",
+      "name": "周计划",
+      "version": "1.0.0",
+      "contract": 1,
+      "description": "把未来七天铺开，一件事挪到哪天就是哪天。",
+      "icon": "calendar_view_week",
+      "permissions": [
+        "task:read",
+        "task:write"
+      ],
+      "home": {
+        "label": "计划模式",
+        "hint": "未来七天铺开，点任务改期",
+        "order": 10
+      },
+      "package": {
+        "path": "plugins/packages/plan_mode_v1.0.0.zip",
+        "sha256": "807d1fdcf0f6f01fc007fe220b15d520e0eb90e4f44348eba4de16881572d442",
+        "sizeBytes": 4716
       }
     }
   ]

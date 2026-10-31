@@ -1,0 +1,369 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>计划模式</title>
+<style>
+  :root {
+    --bg: #ffffff;
+    --fg: #1b1b1f;
+    --muted: #5f5e6a;
+    --line: #e6e1ee;
+    --accent: #6750a4;
+    --chip: #eeedfe;
+    --done: #8e8b96;
+    --p-red: #d64545;
+    --p-orange: #e0891f;
+    --p-yellow: #d9b400;
+    --p-blue: #4a7fd4;
+    --p-white: #b9b5c2;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #141218;
+      --fg: #e6e1e9;
+      --muted: #a8a4b3;
+      --line: #2b2830;
+      --accent: #cfbdfe;
+      --chip: #26215c;
+      --done: #77737f;
+      --p-red: #ff8a8a;
+      --p-orange: #ffb862;
+      --p-yellow: #e8cf5a;
+      --p-blue: #8ab4ff;
+      --p-white: #56525e;
+    }
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { height: 100%; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--fg);
+    font: 14px/1.5 -apple-system, "Segoe UI", "Noto Sans SC", system-ui, sans-serif;
+    -webkit-text-size-adjust: 100%;
+  }
+  .wrap { padding: 10px 12px 28px; }
+
+  .head {
+    display: flex; align-items: baseline; gap: 8px;
+    padding: 2px 2px 10px;
+  }
+  .head h1 { font-size: 15px; font-weight: 600; margin: 0; }
+  .head .sum { color: var(--muted); font-size: 11.5px; margin-left: auto; }
+
+  .day { margin-bottom: 14px; }
+  .day-head {
+    display: flex; align-items: center; gap: 7px;
+    padding: 3px 2px 6px;
+    position: sticky; top: 0; background: var(--bg); z-index: 1;
+  }
+  .day-name { font-size: 12.5px; font-weight: 600; }
+  .day-date { font-size: 11px; color: var(--muted); }
+  .day-count {
+    margin-left: auto; font-size: 10.5px; color: var(--muted);
+    border: 1px solid var(--line); border-radius: 999px;
+    padding: 0 6px; line-height: 16px;
+  }
+  .day.today .day-name { color: var(--accent); }
+
+  .task {
+    display: flex; align-items: flex-start; gap: 9px;
+    padding: 9px 10px; margin-bottom: 6px;
+    border: 1px solid var(--line); border-radius: 10px;
+    background: transparent;
+  }
+  .task:active { background: var(--chip); }
+  .dot {
+    width: 6px; height: 6px; border-radius: 50%; flex: none; margin-top: 7px;
+    background: var(--p-white);
+  }
+  .p-red .dot { background: var(--p-red); }
+  .p-orange .dot { background: var(--p-orange); }
+  .p-yellow .dot { background: var(--p-yellow); }
+  .p-blue .dot { background: var(--p-blue); }
+  .title { font-size: 13.5px; line-height: 1.45; word-break: break-word; }
+  .meta { font-size: 11px; color: var(--muted); margin-top: 2px; }
+  .task.done .title { color: var(--done); text-decoration: line-through; }
+  .empty { color: var(--muted); font-size: 11.5px; padding: 2px 4px 8px; }
+
+  /* 底部动作层 */
+  .mask {
+    position: fixed; inset: 0; background: rgba(0,0,0,.32);
+    display: none; z-index: 10;
+  }
+  .mask.on { display: block; }
+  .sheet {
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 11;
+    background: var(--bg); border-radius: 16px 16px 0 0;
+    padding: 14px 16px calc(16px + env(safe-area-inset-bottom));
+    transform: translateY(100%); transition: transform .18s ease-out;
+    max-height: 76vh; overflow: auto;
+  }
+  .sheet.on { transform: translateY(0); }
+  .sheet h2 { font-size: 13.5px; margin: 0 0 2px; font-weight: 600; }
+  .sheet .sub { color: var(--muted); font-size: 11.5px; margin: 0 0 10px; }
+  .grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 7px; }
+  .pick {
+    border: 1px solid var(--line); border-radius: 9px;
+    padding: 7px 0; text-align: center; font-size: 11.5px;
+    background: transparent; color: var(--fg); font-family: inherit;
+  }
+  .pick small { display: block; color: var(--muted); font-size: 10px; }
+  .pick:active { background: var(--chip); }
+  .pick.cur { border-color: var(--accent); color: var(--accent); }
+  .sheet .row { display: flex; gap: 8px; margin-top: 10px; }
+  .btn {
+    flex: 1; padding: 9px 0; border-radius: 9px; font: inherit; font-size: 12.5px;
+    border: 1px solid var(--line); background: transparent; color: var(--fg);
+  }
+  .btn.primary { border-color: var(--accent); color: var(--accent); }
+  .btn:active { background: var(--chip); }
+  .toast {
+    position: fixed; left: 50%; bottom: 84px; transform: translateX(-50%);
+    background: rgba(0,0,0,.8); color: #fff; font-size: 12px;
+    padding: 7px 12px; border-radius: 999px; opacity: 0;
+    transition: opacity .18s; pointer-events: none; z-index: 12;
+  }
+  .toast.on { opacity: 1; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="head">
+    <h1>计划</h1>
+    <span class="sum" id="sum">读取中…</span>
+  </div>
+  <div id="days"></div>
+</div>
+
+<div class="mask" id="mask"></div>
+<div class="sheet" id="sheet">
+  <h2 id="sheetTitle">任务</h2>
+  <p class="sub" id="sheetSub">选一天，就挪到那天</p>
+  <div class="grid" id="picks"></div>
+  <div class="row">
+    <button class="btn" id="toggleDone">标记完成</button>
+    <button class="btn primary" id="closeSheet">取消</button>
+  </div>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+  // 计划模式：把未来七天铺开，点一条任务就能挪到别的哪天。
+  //
+  // 为什么是"点开再选一天"而不是拖拽：WebView 里的长按拖动会和页面滚动
+  // 打架，而且手指一抖就落到错误日期上 —— 改错日期比多点一步麻烦得多。
+  //
+  // 只用两个宿主能力：task.list / task.update（改日期）+ task.setDone。
+  // 不写自己的表：这个插件没有"自己的数据"，全部事实都在主包的任务里。
+
+  var DAYS = 7;
+  var state = { days: [], tasks: [], picked: null };
+
+  function pad(n) { return (n < 10 ? '0' : '') + n; }
+  function key(date) {
+    return date.getFullYear() + '-' + pad(date.getMonth() + 1) + '-' + pad(date.getDate());
+  }
+  function startOfToday() {
+    var now = new Date();
+    return new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  }
+  function addDays(base, n) {
+    var d = new Date(base.getTime());
+    d.setDate(d.getDate() + n);
+    return d;
+  }
+
+  var WEEK = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
+
+  function labelOf(date, index) {
+    if (index === 0) return '今天';
+    if (index === 1) return '明天';
+    return WEEK[date.getDay()];
+  }
+
+  function toast(text) {
+    var el = document.getElementById('toast');
+    el.textContent = text;
+    el.classList.add('on');
+    clearTimeout(toast._t);
+    toast._t = setTimeout(function () { el.classList.remove('on'); }, 1400);
+  }
+
+  function render() {
+    var host = document.getElementById('days');
+    host.innerHTML = '';
+
+    var total = 0;
+    var done = 0;
+
+    state.days.forEach(function (day, index) {
+      var tasks = state.tasks.filter(function (t) { return t.dueDate === day.key; });
+      total += tasks.length;
+      done += tasks.filter(function (t) { return t.isDone; }).length;
+
+      var section = document.createElement('section');
+      section.className = 'day' + (index === 0 ? ' today' : '');
+
+      var head = document.createElement('div');
+      head.className = 'day-head';
+      head.innerHTML =
+        '<span class="day-name">' + labelOf(day.date, index) + '</span>' +
+        '<span class="day-date">' + (day.date.getMonth() + 1) + '月' + day.date.getDate() + '日</span>' +
+        '<span class="day-count">' + tasks.length + '</span>';
+      section.appendChild(head);
+
+      if (!tasks.length) {
+        var empty = document.createElement('div');
+        empty.className = 'empty';
+        empty.textContent = '这天是空的';
+        section.appendChild(empty);
+      }
+
+      tasks.forEach(function (task) {
+        var row = document.createElement('div');
+        row.className = 'task p-' + (task.priority || 'white') + (task.isDone ? ' done' : '');
+        row.dataset.id = String(task.id);
+
+        var dot = document.createElement('span');
+        dot.className = 'dot';
+        row.appendChild(dot);
+
+        var body = document.createElement('div');
+        var title = document.createElement('div');
+        title.className = 'title';
+        title.textContent = task.title;
+        body.appendChild(title);
+
+        var bits = [];
+        if (task.estimatedMinutes) bits.push(task.estimatedMinutes + ' 分钟');
+        if (task.tags && task.tags.length) bits.push(task.tags.join(' · '));
+        if (bits.length) {
+          var meta = document.createElement('div');
+          meta.className = 'meta';
+          meta.textContent = bits.join(' · ');
+          body.appendChild(meta);
+        }
+        row.appendChild(body);
+
+        row.addEventListener('click', function () { openSheet(task); });
+        section.appendChild(row);
+      });
+
+      host.appendChild(section);
+    });
+
+    document.getElementById('sum').textContent =
+      total ? done + '/' + total + ' 已完成' : '这七天还没有任务';
+  }
+
+  function load() {
+    var from = startOfToday();
+    state.days = [];
+    for (var i = 0; i < DAYS; i++) {
+      var d = addDays(from, i);
+      state.days.push({ date: d, key: key(d) });
+    }
+
+    return window.host.call('task.list', {
+      from: state.days[0].key,
+      to: state.days[DAYS - 1].key,
+      limit: 200,
+    }).then(function (list) {
+      state.tasks = list || [];
+      render();
+    }).catch(function (error) {
+      document.getElementById('sum').textContent =
+        '读取失败：' + (error.message || error.code);
+    });
+  }
+
+  // ---- 底部动作层 ----
+
+  function openSheet(task) {
+    state.picked = task;
+    document.getElementById('sheetTitle').textContent = task.title;
+    document.getElementById('sheetSub').textContent = task.isDone
+      ? '已完成 · 选一天可以挪过去'
+      : '选一天，就挪到那天';
+
+    var picks = document.getElementById('picks');
+    picks.innerHTML = '';
+    state.days.forEach(function (day, index) {
+      var btn = document.createElement('button');
+      btn.className = 'pick' + (day.key === task.dueDate ? ' cur' : '');
+      btn.innerHTML = labelOf(day.date, index) +
+        '<small>' + (day.date.getMonth() + 1) + '/' + day.date.getDate() + '</small>';
+      btn.addEventListener('click', function () {
+        if (day.key === task.dueDate) { closeSheet(); return; }
+        move(task, day.key, index);
+      });
+      picks.appendChild(btn);
+    });
+
+    var toggle = document.getElementById('toggleDone');
+    toggle.textContent = task.isDone ? '取消完成' : '标记完成';
+
+    document.getElementById('mask').classList.add('on');
+    document.getElementById('sheet').classList.add('on');
+  }
+
+  function closeSheet() {
+    state.picked = null;
+    document.getElementById('mask').classList.remove('on');
+    document.getElementById('sheet').classList.remove('on');
+  }
+
+  function move(task, dayKey, index) {
+    closeSheet();
+    window.host.call('task.update', { id: task.id, date: dayKey })
+      .then(function () {
+        task.dueDate = dayKey;
+        render();
+        toast('挪到' + labelOf(state.days[index].date, index));
+      })
+      .catch(function (error) {
+        toast('改期失败：' + (error.message || error.code));
+      });
+  }
+
+  document.getElementById('toggleDone').addEventListener('click', function () {
+    var task = state.picked;
+    if (!task) return;
+    closeSheet();
+    var next = !task.isDone;
+    window.host.call('task.setDone', { id: task.id, done: next })
+      .then(function () {
+        task.isDone = next;
+        render();
+        toast(next ? '完成了' : '已取消完成');
+      })
+      .catch(function (error) {
+        toast('操作失败：' + (error.message || error.code));
+      });
+  });
+
+  document.getElementById('closeSheet').addEventListener('click', closeSheet);
+  document.getElementById('mask').addEventListener('click', closeSheet);
+
+  // 切回这个页面时重新拉一次：别的页面可能刚改过任务。
+  document.addEventListener('visibilitychange', function () {
+    if (!document.hidden && window.host) load();
+  });
+
+  function whenHostReady(callback, tries) {
+    tries = tries || 0;
+    if (window.host) return callback();
+    if (tries > 100) {
+      document.getElementById('sum').textContent = '宿主通道没起来';
+      return;
+    }
+    setTimeout(function () { whenHostReady(callback, tries + 1); }, 30);
+  }
+
+  whenHostReady(load);
+</script>
+</body>
+</html>

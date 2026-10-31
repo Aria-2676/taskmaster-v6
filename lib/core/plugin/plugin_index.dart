@@ -18,6 +18,7 @@ class PluginIndexEntry {
     this.description,
     this.icon,
     this.permissions = const <String>{},
+    this.home,
   });
 
   factory PluginIndexEntry.fromJson(Map<String, Object?> json) {
@@ -52,6 +53,7 @@ class PluginIndexEntry {
       description: json['description'] is String ? json['description']! as String : null,
       icon: json['icon'] is String ? json['icon']! as String : null,
       permissions: _parsePermissions(json['permissions']),
+      home: PluginHomeSpec.tryParse(json['home']),
       package: PluginPackage.fromJson(Map<String, Object?>.from(pkg)),
     );
   }
@@ -74,6 +76,11 @@ class PluginIndexEntry {
 
   /// 安装前要展示给用户的权限（**展示用**；生效的是包内 manifest）
   final Set<String> permissions;
+
+  /// 可当首页模式的声明（同样从 `plugin.json` 复制，理由同 [permissions]）：
+  /// 顶栏的快捷切换拿的是**已装插件**的清单，而它的显示名来自索引 ——
+  /// 不带这一段，模式名就只能退回插件的长名字。
+  final PluginHomeSpec? home;
 
   final PluginPackage package;
 

@@ -44,7 +44,12 @@ BUNDLED_DIR = os.path.join(ROOT, "assets", "plugins")
 REPO_DIR = os.path.join(ROOT, "plugins", "packages")
 
 # 只从仓库分发的插件（不进 APK）。改这里等于改"谁会随包发出去"。
-REPO_ONLY = {"energy_currency"}
+#
+# **默认全部走仓库**（用户 2026-10-31 定的规矩：插件非必要不随包）。
+# 随包只该有一种理由：断网时**必须**可用，且没有它 App 就没法用。
+# 现在一个都不满足 —— 索引随包（`assets/plugins/index.json`），货架永远是满的，
+# 装的时候再联网下载。所以这里收的是"谁例外"，不是"谁走仓库"。
+REPO_ONLY = {"demo_help", "energy_currency", "plan_mode"}
 
 FIXED_TIME = (1980, 1, 1, 0, 0, 0)
 
@@ -152,6 +157,11 @@ def main() -> None:
                 # 而那时候包还没下载，读不到 plugin.json。
                 # 从 manifest 复制而不是手写，避免索引和包内声明对不上。
                 "permissions": manifest.get("permissions", []),
+                # 首页模式声明也复制一份：顶栏的「快捷切换」拿的是已装插件清单，
+                # 但显示名来自索引 —— 不带这段，插件叫「周计划」时模式名也只能
+                # 跟着叫「周计划」，塞不进顶栏。和 permissions 同一个理由：
+                # 打包脚本从 plugin.json 复制，不在索引里手写。
+                **({"home": manifest["home"]} if manifest.get("home") else {}),
                 "package": package,
             }
         )

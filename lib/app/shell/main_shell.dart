@@ -11,7 +11,9 @@ import '../pages/field_manager_page.dart';
 import '../pages/home_mode_page.dart';
 import '../pages/plugin_market_page.dart';
 import '../../core/config/legacy_v5_link.dart';
+import '../../core/updater/models/app_update_manifest.dart';
 import '../../core/updater/providers/app_update_provider.dart';
+import '../../core/updater/services/legacy_v5_service.dart';
 import '../../core/updater/services/app_update_launcher.dart';
 import '../pages/settings_page.dart';
 import '../pages/plugin_page.dart';
@@ -469,11 +471,21 @@ class _MainShellState extends State<MainShell> {
     // loadAbi 失败返回 null，那就回落整包 —— 宁可多花流量，不能装不上。
     final abi = await AppUpdateProvider.loadAbi();
     if (!mounted) return;
-    final sizeMb = LegacyV5Link.sizeLabelFor(abi);
+
+    // 顺带读一眼 5.x 的清单：拿"对方现在最新是哪一版"和那个包自己的 sha256。
+    // 读不到就用写死的 5.5.28 兜底 —— 入口不能因为一次网络失败就消失。
+    final manifest = await LegacyV5Service.fetch();
+    if (!mounted) return;
+    final target =
+        LegacyV5Service.targetFor(manifest, platform: 'android', abi: abi) ??
+            LegacyV5Link.targetFor(abi);
+    final version = manifest?.release?.version ?? LegacyV5Link.version;
+    final sizeMb = '约 ${(target.sizeBytes / 1024 / 1024).toStringAsFixed(0)} MB';
+
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: Text('下载任务管家 ${LegacyV5Link.version}？',
+        title: Text('下载任务管家 $version？',
             style: const TextStyle(fontSize: 16)),
         content: Text(
           '$sizeMb。\n'
@@ -521,7 +533,7 @@ class _MainShellState extends State<MainShell> {
 
     try {
       final result = await AppUpdateLauncher().apply(
-        LegacyV5Link.targetFor(abi),
+        target,
         onProgress: (value) => progress.value = value,
       );
       closeDialog();
@@ -533,7 +545,7 @@ class _MainShellState extends State<MainShell> {
       closeDialog();
       if (!mounted) return;
       _toast('自动下载失败：$error');
-      await _pickLegacyChannel(manualOnly: true, abi: abi);
+      await _pickLegacyChannel(manualOnly: true, abi: abi, target: target);
     } finally {
       progress.dispose();
     }
@@ -546,7 +558,25 @@ class _MainShellState extends State<MainShell> {
   }
 
   /// 自动路径失败后的手动通道（也让用户能绕过公共代理自己想办法）
-  Future<void> _pickLegacyChannel({bool manualOnly = false, String? abi}) async {
+  Future<void> _pickLegacyChannel({
+    bool manualOnly = false,
+    String? abi,
+    AppDownloadTarget? target,
+  }) async {
+    // 有清单就按清单里的实际地址排（否则会出现"自动路径下的是 5.5.29、
+    // 手动通道列的是 5.5.28"这种自相矛盾）。
+    final channels = target == null
+        ? LegacyV5Link.channelsFor(abi)
+        : <LegacyChannel>[
+            LegacyChannel(label: Uri.parse(target.url).host, url: target.url, note: '主地址'),
+            for (final mirror in target.mirrors)
+              LegacyChannel(label: Uri.parse(mirror).host, url: mirror),
+            const LegacyChannel(
+              label: '打不开就去 release 页自己挑',
+              url: LegacyV5Link.releasesUrl,
+              note: '分机型的包更小',
+            ),
+          ];
     await showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
@@ -568,7 +598,7 @@ class _MainShellState extends State<MainShell> {
                       height: 1.4,
                       color: Theme.of(sheetContext).colorScheme.onSurfaceVariant)),
             ),
-            for (final channel in LegacyV5Link.channelsFor(abi))
+            for (final channel in channels)
               ListTile(
                 dense: true,
                 title: Text(channel.label, style: const TextStyle(fontSize: 14)),

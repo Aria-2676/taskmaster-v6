@@ -1,5 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:v5_app/core/config/legacy_v5_link.dart';
+import 'package:v5_app/core/updater/models/app_update_manifest.dart';
+import 'package:v5_app/core/updater/services/legacy_v5_service.dart';
 
 void main() {
   group('LegacyV5Link 按机型选包', () {
@@ -54,6 +56,74 @@ void main() {
       for (final channel in apkChannels) {
         expect(channel.url, contains('app-armeabi-v7a-release.apk'));
       }
+    });
+  });
+
+  group('LegacyV5Service：优先用对方清单', () {
+    AppUpdateManifest manifestOf({
+      required String version,
+      required Map<String, Object?> downloads,
+    }) =>
+        AppUpdateManifest.fromJson(<String, Object?>{
+          'schemaVersion': 1,
+          'updatedAt': '2026-10-31T00:00:00Z',
+          'latest': <String, Object?>{'version': version, 'downloads': downloads},
+        });
+
+    test('清单里有更新版本时，用它而不是写死的兜底', () {
+      final manifest = manifestOf(
+        version: '9.9.9',
+        downloads: <String, Object?>{
+          'android-arm64-v8a': <String, Object?>{
+            'url': 'https://example.com/v9.9.9/app-arm64-v8a-release.apk',
+            'sha256': 'deadbeef',
+            'sizeBytes': 1000,
+          },
+        },
+      );
+
+      final target =
+          LegacyV5Service.targetFor(manifest, platform: 'android', abi: 'arm64-v8a');
+
+      expect(target, isNotNull);
+      expect(target!.url, contains('v9.9.9'));
+      expect(target.sha256, 'deadbeef');
+      expect(target.sizeBytes, 1000);
+      // 和写死的兜底不是一个东西 —— 这才说明"读清单"真的生效了
+      expect(target.url, isNot(LegacyV5Link.targetFor('arm64-v8a').url));
+    });
+
+    test('清单里没有当前机型的键时返回 null（让调用方去回落）', () {
+      final manifest = manifestOf(
+        version: '9.9.9',
+        downloads: <String, Object?>{
+          'android-arm64-v8a': <String, Object?>{
+            'url': 'https://example.com/a.apk',
+            'sha256': 'x',
+          },
+        },
+      );
+      expect(
+        LegacyV5Service.targetFor(manifest, platform: 'android', abi: 'x86_64'),
+        isNull,
+      );
+    });
+
+    test('清单读不到（null）时返回 null，不会抛', () {
+      expect(
+        LegacyV5Service.targetFor(null, platform: 'android', abi: 'arm64-v8a'),
+        isNull,
+      );
+    });
+
+    test('候选地址指向 note_study，不是 V6 自己的仓库', () {
+      final uris = LegacyV5Service.candidates();
+      expect(uris, isNotEmpty);
+      for (final uri in uris) {
+        expect(uri.toString(), contains('note_study'),
+            reason: '读错了仓库就会把 V6 自己的版本当成对方最新版：$uri');
+      }
+      expect(LegacyV5Service.contentsApi().toString(), contains('note_study'));
     });
   });
 }

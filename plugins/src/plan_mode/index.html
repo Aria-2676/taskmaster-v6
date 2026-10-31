@@ -75,14 +75,20 @@
     background: transparent;
   }
   .task:active { background: var(--chip); }
-  .dot {
-    width: 6px; height: 6px; border-radius: 50%; flex: none; margin-top: 7px;
-    background: var(--p-white);
+  /* 圆圈直接可点：勾完成不该先点开动作层再点一次。 */
+  .check {
+    width: 18px; height: 18px; flex: none; margin-top: 2px; padding: 0;
+    border: 1.5px solid var(--p-white); border-radius: 50%;
+    background: transparent; color: var(--accent);
+    font: inherit; font-size: 12px; line-height: 1;
+    display: flex; align-items: center; justify-content: center;
   }
-  .p-red .dot { background: var(--p-red); }
-  .p-orange .dot { background: var(--p-orange); }
-  .p-yellow .dot { background: var(--p-yellow); }
-  .p-blue .dot { background: var(--p-blue); }
+  .check:active { background: var(--chip); }
+  .p-red .check { border-color: var(--p-red); }
+  .p-orange .check { border-color: var(--p-orange); }
+  .p-yellow .check { border-color: var(--p-yellow); }
+  .p-blue .check { border-color: var(--p-blue); }
+  .task.done .check { border-color: var(--done); color: var(--done); }
   .title { font-size: 13.5px; line-height: 1.45; word-break: break-word; }
   .meta { font-size: 11px; color: var(--muted); margin-top: 2px; }
   .task.done .title { color: var(--done); text-decoration: line-through; }
@@ -272,9 +278,17 @@
         row.className = 'task p-' + (task.priority || 'white') + (task.isDone ? ' done' : '');
         row.dataset.id = String(task.id);
 
-        var dot = document.createElement('span');
-        dot.className = 'dot';
-        row.appendChild(dot);
+        var check = document.createElement('button');
+        check.type = 'button';
+        check.className = 'check';
+        check.setAttribute('aria-label', task.isDone ? '取消完成' : '标记完成');
+        check.textContent = task.isDone ? '✓' : '';
+        check.addEventListener('click', function (event) {
+          // 别冒泡到整行：点勾是"完成"，点别处才是"改期"
+          event.stopPropagation();
+          toggleDone(task);
+        });
+        row.appendChild(check);
 
         var body = document.createElement('div');
         var title = document.createElement('div');
@@ -431,10 +445,8 @@
       });
   }
 
-  document.getElementById('toggleDone').addEventListener('click', function () {
-    var task = state.picked;
-    if (!task) return;
-    closeSheet();
+  // 勾完成：列表里的圈和动作层里的按钮走同一条路，避免两处行为漂移
+  function toggleDone(task) {
     var next = !task.isDone;
     window.host.call('task.setDone', { id: task.id, done: next })
       .then(function () {
@@ -445,6 +457,13 @@
       .catch(function (error) {
         toast('操作失败：' + (error.message || error.code));
       });
+  }
+
+  document.getElementById('toggleDone').addEventListener('click', function () {
+    var task = state.picked;
+    if (!task) return;
+    closeSheet();
+    toggleDone(task);
   });
 
   document.getElementById('closeSheet').addEventListener('click', closeSheet);

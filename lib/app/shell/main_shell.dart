@@ -98,6 +98,9 @@ class _MainShellState extends State<MainShell> {
   // 就会重新加载一次，用户看到的是首页不停闪。
   PluginLaunchSpec? _homeSpec;
   String? _syncedHomeId;
+
+  /// 当前首页插件是哪个版本。升级后版本会变，靠它判断要不要重建 WebView。
+  String? _syncedHomeVersion;
   bool _homeDisabledForSession = false;
   Timer? _homeWatchdog;
 
@@ -186,12 +189,10 @@ class _MainShellState extends State<MainShell> {
     if (id == null || _homeDisabledForSession) {
       debugPrint('[home] 内置（id=$id disabled=$_homeDisabledForSession）');
       _syncedHomeId = null;
+      _syncedHomeVersion = null;
       if (_homeSpec != null && mounted) setState(() => _homeSpec = null);
       return;
     }
-
-    // 已经在跑同一个了，不要重建（WebView 重建 = 白屏 + 丢状态）
-    if (id == _syncedHomeId && _homeSpec != null) return;
 
     final launcher = widget.pluginLauncher;
     final market = widget.marketStore;
@@ -209,7 +210,18 @@ class _MainShellState extends State<MainShell> {
       // 装了又卸了：直接回内置，不用报错
       debugPrint('[home] 插件 $id 未出现在已装列表（${market.installed.length} 个）');
       _syncedHomeId = null;
+      _syncedHomeVersion = null;
       if (_homeSpec != null && mounted) setState(() => _homeSpec = null);
+      return;
+    }
+
+    // 已经在跑同一个了，不要重建（WebView 重建 = 白屏 + 丢状态）。
+    // **但版本变了必须重建**：插件升级后，旧 WebView 里还是旧页面，
+    // 用户看到的是"升级了但没变化"。这条是升级流程里最容易漏的 ——
+    // 首页常驻在内存里，不重建就永远看不到新内容。
+    if (id == _syncedHomeId &&
+        _homeSpec != null &&
+        plugin.version == _syncedHomeVersion) {
       return;
     }
 
@@ -218,6 +230,7 @@ class _MainShellState extends State<MainShell> {
       if (!mounted) return;
       debugPrint('[home] 载入插件首页 $id');
       _syncedHomeId = id;
+      _syncedHomeVersion = plugin.version;
       setState(() => _homeSpec = spec);
       _startHomeWatchdog(id);
     } catch (error, stack) {
@@ -274,6 +287,12 @@ class _MainShellState extends State<MainShell> {
     final spec = _homeSpec;
     if (spec != null) {
       return PluginView(
+        // key 里带版本号：插件升级后 `setState` 换了 spec，但同为 PluginView，
+        // State 会被复用、`initState` 不重跑 —— WebView 还是原来那个，
+        // 页面也就还是旧的。换 key 才能强制重建一个干净的 WebView。
+        key: ValueKey<String>(
+          'home-${spec.bridge.pluginId}@${_syncedHomeVersion ?? ''}',
+        ),
         entryPath: spec.entryPath,
         bridge: spec.bridge,
         hooks: spec.hooks,

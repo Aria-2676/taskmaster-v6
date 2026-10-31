@@ -103,7 +103,18 @@ class _PluginViewState extends State<PluginView> {
       ),
     );
     _controller = controller;
-    controller.loadFile(widget.entryPath);
+    // **先清缓存再加载**。`file://` 也走 WebView 的磁盘缓存：插件升级后
+    // 入口路径没变、内容变了，不清就会一直显示旧页面 —— 用户以为没升成功，
+    // 实际是缓存。顺序不能并行：并行时 loadFile 可能先命中旧缓存。
+    // 清的是本机 WebView 的资源缓存，本地文件重读代价可以忽略。
+    unawaited(() async {
+      try {
+        await controller.clearCache().timeout(const Duration(seconds: 2));
+      } catch (_) {
+        // 清缓存失败不该让页面打不开：继续加载，最坏是这一次看到旧页面
+      }
+      await controller.loadFile(widget.entryPath);
+    }());
   }
 
   @override

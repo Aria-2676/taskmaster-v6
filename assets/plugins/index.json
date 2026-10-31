@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "publishedAt": "2026-10-31T14:20:54Z",
+  "publishedAt": "2026-10-31T14:32:58Z",
   "plugins": [
     {
       "id": "demo_help",
@@ -35,6 +35,28 @@
         "path": "plugins/packages/energy_currency_v1.0.0.zip",
         "sha256": "01dd5115a13204255d430dea75b81d3267d7c8b2052d825bd5c8eaa87d008a21",
         "sizeBytes": 4470
+      }
+    },
+    {
+      "id": "list_mode",
+      "name": "待办清单",
+      "version": "1.0.0",
+      "contract": 1,
+      "description": "所有待办拉平，逾期排最前。",
+      "icon": "checklist",
+      "permissions": [
+        "task:read",
+        "task:write"
+      ],
+      "home": {
+        "label": "清单模式",
+        "hint": "所有待办拉平，逾期排最前",
+        "order": 20
+      },
+      "package": {
+        "path": "plugins/packages/list_mode_v1.0.0.zip",
+        "sha256": "84620bc8ffc906d371a9e7ee027dc1624928f7b9be7cb054e63c30b1f464f70e",
+        "sizeBytes": 5252
       }
     },
     {

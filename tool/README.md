@@ -7,6 +7,13 @@
 | 脚本 | 干什么 | 什么时候跑 |
 |---|---|---|
 | `publish_release.ps1` | 发版一条命令：推送 → GitHub Release → 四个包上传校验 → 重写 `update.json` → 刷 CDN 缓存 | **要发新版本时，日常只跑这个** |
+
+> 注意 `publish_release.ps1` 的 `-Notes` 是数组，**不能用
+> `powershell -File ... -Notes @('a','b')` 传**：`-File` 不做表达式解析，
+> `@(...)` 会被拆成普通字符串，多出来那截按位置绑到 `$OwnerRepo` 上，
+> API 请求会打到 `repos/<一段中文>/releases`。要带 notes 就写一个纯 ASCII 的
+> 包装脚本，或者用 `-Command` 调用。同理：**`.ps1` 一律存成带 BOM 的 UTF-8**，
+> 否则 PowerShell 5.1 按 GBK 读，中文字符串会被截断成 ParserError。
 | `publish_plugin.ps1` | 发插件一条命令：打包 → 版本守卫（同版本换内容直接拒） → 校验 → 提交 → 推送 → 刷缓存 | 改完插件要发布时 |
 | `make_app_icon.py` | 从 `icon_src/app_icon.png` 生成 10 张图标（5 档传统 + 5 档自适应前景） | 换图标时。**不要去装 flutter_launcher_icons**，见 pubspec 里的注释 |
 | `build_apk.ps1` | 只构建 + 出 `release-manifest.txt`（各包 sha256/大小），不发布 | 想先看看包多大、摘要多少，或排障时单独重跑构建 |

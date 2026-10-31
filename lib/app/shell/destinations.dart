@@ -65,6 +65,7 @@ class DestinationTile extends StatelessWidget {
     required this.onTap,
     this.selected = false,
     this.showChevron = false,
+    this.subtitle,
   });
 
   final AppDestination destination;
@@ -73,6 +74,13 @@ class DestinationTile extends StatelessWidget {
 
   /// 「我的」页里的入口带右箭头，侧边栏不带
   final bool showChevron;
+
+  /// 入口下面那行小字，例如「已装 2 个 · 启用 1 个」。
+  ///
+  /// 状态就该长在它对应的入口上：单独拎一行放页面顶部，会跟下面的入口列表
+  /// 抢视线，还显得格格不入。侧边栏不传，所以那边一行都没变。
+  final String? subtitle;
+
 
   @override
   Widget build(BuildContext context) {
@@ -99,13 +107,26 @@ class DestinationTile extends StatelessWidget {
               const SizedBox(width: 12),
             ],
             Expanded(
-              child: Text(
-                destination.label,
-                style: TextStyle(
-                  fontSize: 13,
-                  color: color,
-                  fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
-                ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: <Widget>[
+                  Text(
+                    destination.label,
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: color,
+                      fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
+                    ),
+                  ),
+                  if (subtitle != null) ...<Widget>[
+                    const SizedBox(height: 1),
+                    Text(
+                      subtitle!,
+                      style: TextStyle(fontSize: 10.5, color: scheme.outline),
+                    ),
+                  ],
+                ],
               ),
             ),
             if (!enabled)

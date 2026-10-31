@@ -14,7 +14,7 @@ import 'package:v5_app/app/shell/profile_stub_page.dart';
 Future<void> _pump(
   WidgetTester tester, {
   required CurrencySummary? currency,
-  String summary = '已装 2 个插件 · 启用 1 个',
+  String summary = '已装 2 个 · 启用 1 个',
   ValueChanged<AppDestination>? onOpen,
 }) async {
   await tester.pumpWidget(
@@ -56,8 +56,8 @@ void main() {
       expect(find.byKey(const Key('profile-currency-balance')), findsNothing);
       expect(find.textContaining('未安装'), findsNothing);
       expect(find.textContaining('当前货币'), findsNothing);
-      // 插件概况仍然在 —— 它是这一页的状态，不是货币的一部分
-      expect(find.text('已装 2 个插件 · 启用 1 个'), findsOneWidget);
+      // 顶部第一块就是「入口」，没有别的东西插在前面
+      expect(find.text('入口'), findsOneWidget);
     });
 
     testWidgets('有货币：插件名 + 千分位余额分两行显示', (tester) async {
@@ -83,17 +83,35 @@ void main() {
     });
   });
 
-  group('插件概况行', () {
-    testWidgets('点一下去插件市场（文案在邀请用户，就该点得动）', (tester) async {
+  group('插件数量', () {
+    testWidgets('挂在「插件市场」入口下面，不单独占一行', (tester) async {
+      await _pump(tester, currency: null, summary: '已装 2 个 · 启用 1 个');
+
+      final marketTile = find.ancestor(
+        of: find.text('插件市场'),
+        matching: find.byType(DestinationTile),
+      );
+      expect(marketTile, findsOneWidget);
+      expect(
+        find.descendant(
+          of: marketTile,
+          matching: find.text('已装 2 个 · 启用 1 个'),
+        ),
+        findsOneWidget,
+        reason: '状态要长在它对应的入口上，不要单独占页面顶部',
+      );
+    });
+
+    testWidgets('点这行去插件市场', (tester) async {
       AppDestination? opened;
       await _pump(
         tester,
         currency: null,
-        summary: '还没装插件 · 去插件市场看看',
+        summary: '还没装插件',
         onOpen: (d) => opened = d,
       );
 
-      await tester.tap(find.text('还没装插件 · 去插件市场看看'));
+      await tester.tap(find.text('还没装插件'));
       await tester.pumpAndSettle();
 
       expect(opened, AppDestination.pluginMarket);

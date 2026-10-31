@@ -972,16 +972,19 @@ class _MainShellState extends State<MainShell> {
     );
   }
 
-  /// 「我的」页第二行：装了几个、启用几个。
+  /// 「插件市场」入口下面那行小字：装了几个、其中几个生效。
   ///
   /// 停用中的插件也算"装了"—— 用户对"我装过什么"和"现在生效的有几个"
   /// 是两件事，分开写才不至于让他以为插件丢了。
+  ///
+  /// 不再单独占一行：「我的」页顶部该留给身份/余额，一串数字挂在那里
+  /// 既抢第一眼，又和下面的入口列表对不上齐。
   String get _pluginSummary {
     final market = widget.marketStore;
-    if (market == null) return '插件未接入';
+    if (market == null) return '未接入';
     final installed = market.installed.length;
-    if (installed == 0) return '还没装插件 · 去插件市场看看';
-    return '已装 $installed 个插件 · 启用 ${market.active.length} 个';
+    if (installed == 0) return '还没装插件';
+    return '已装 $installed 个 · 启用 ${market.active.length} 个';
   }
 
   /// 当前模式是否允许用 `+` 建任务。插件模式下不允许（见 [build] 里的注释）。

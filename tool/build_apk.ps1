@@ -176,14 +176,37 @@ $expectCn = 'TaskMaster'
 if ($apksigner) {
     Write-Step 'verify signing cert'
     foreach ($apk in $apks) {
-        $subject = & $apksigner.FullName 'verify' '--print-certs' $apk.FullName 2>&1 |
-            Select-String -Pattern '^Signer #1 certificate DN:' |
-            Select-Object -First 1
-        if (-not $subject) {
-            throw "无法读取 $($apk.Name) 的签名证书（apksigner 无输出）。"
+        # apksigner 会往 stderr 打 JVM 的 "A restricted method in java.lang.System
+        # has been called" 警告。本脚本开着 $ErrorActionPreference = 'Stop'，这条
+        # stderr 会被 PowerShell 包成 NativeCommandError **直接终止脚本** ——
+        # 表现是"包全构建成功，验签第一行就死"，看着像签名有问题，实际是
+        # 检查它的人自己崩了。所以这一段单独把错误策略降成 Continue，
+        # 只看退出码和 stdout。
+        $prevEap = $ErrorActionPreference
+        $ErrorActionPreference = 'Continue'
+        try {
+            $verifyOutput = & $apksigner.FullName 'verify' '--print-certs' $apk.FullName 2>$null
+            $verifyCode = $LASTEXITCODE
+        } finally {
+            $ErrorActionPreference = $prevEap
         }
-        if ($subject.Line -notmatch $expectCn) {
-            throw ("$($apk.Name) 的签名不是 $expectCn —— 实际是：$($subject.Line)`n" +
+        if ($verifyCode -ne 0) {
+            throw "apksigner 校验 $($apk.Name) 失败（exit $verifyCode）。"
+        }
+        # 两个坑叠在一起，都不能靠"贴一行正则"绕：
+        #   1. 措辞随 build-tools 变过 —— 老版本 `Signer #1 certificate DN:`，
+        #      build-tools 37 是 `V2 Signer: certificate DN:`，前缀认死就匹配不上；
+        #   2. apksigner.bat 的行为 `\r`（只有回车没有换行），PowerShell 抓到的是
+        #      一坨没有行结构的字符串，Select-String 按行匹配等于什么都没匹配到。
+        # 所以先把输出拼成一整段，只认 `certificate DN:` 后面那截。
+        $text = ($verifyOutput -join "`n")
+        $dnMatch = [regex]::Match($text, 'certificate DN:\s*(.+)')
+        if (-not $dnMatch.Success) {
+            throw "无法读取 $($apk.Name) 的签名证书（apksigner 输出：$text）"
+        }
+        $subject = $dnMatch.Groups[1].Value
+        if ($subject -notmatch $expectCn) {
+            throw ("$($apk.Name) 的签名不是 $expectCn —— 实际是：$subject`n" +
                    "  这通常意味着构建回退到了 debug key（key.properties 缺失或写坏）。`n" +
                    "  这种包**绝对不能分发**：与已发布版本签名不一致，用户无法覆盖安装。`n" +
                    "  请先跑 tool\setup_android_keystore_auto.ps1 生成 key.properties 再重新构建。")

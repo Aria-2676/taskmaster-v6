@@ -19,12 +19,15 @@ class CurrencySummary {
 ///
 /// 以前这里还塞了日历条形态、删除确认、回收站保留时长这些开关，结果是同一页
 /// 上半截是身份、下半截是配置面板，加几个功能就挤成一锅。开关全部搬到
-/// 设置页（见 `pages/settings_page.dart`），这里只留：货币卡片、插件概况、
-/// 以及通往各处的入口。
+/// 设置页（见 `pages/settings_page.dart`），这里只留：货币卡片、以及入口。
 ///
 /// 货币卡片**没装货币插件时整个不画**。以前那行写的是"当前货币：未安装"，
 /// 一进「我的」就顶着一句"你没有这个"——没有的功能不该占位置，
 /// 否则每加一个可选能力，这一页就多一行"未安装"。
+///
+/// 插件数量也不再单独占一行，改成「插件市场」入口的副标题：它是那个入口的
+/// 状态，不是这一页的主角。放在最上面会抢走第一眼，还和下面的入口列表
+/// 格格不入 —— 现在这一页顶部要么是货币卡片，要么直接就是入口列表。
 class ProfileStubPage extends StatelessWidget {
   const ProfileStubPage({
     super.key,
@@ -36,7 +39,7 @@ class ProfileStubPage extends StatelessWidget {
   /// 当前货币。null = 不显示这一块（由主壳算好，这里不碰状态）
   final CurrencySummary? currency;
 
-  /// 例如「已装 2 个插件 · 启用 1 个」。零插件时提示去装一个
+  /// 「插件市场」那行下面的小字，例如「已装 2 个 · 启用 1 个」
   final String pluginSummary;
 
   final ValueChanged<AppDestination> onOpenDestination;
@@ -51,13 +54,8 @@ class ProfileStubPage extends StatelessWidget {
       children: <Widget>[
         if (summary != null) ...<Widget>[
           _CurrencyCard(currency: summary),
-          const SizedBox(height: 10),
+          const SizedBox(height: 20),
         ],
-        _PluginRow(
-          summary: pluginSummary,
-          onTap: () => onOpenDestination(AppDestination.pluginMarket),
-        ),
-        const SizedBox(height: 20),
         Text('入口', style: TextStyle(fontSize: 12, color: scheme.onSurfaceVariant)),
         const SizedBox(height: 2),
         for (final destination in AppDestination.values
@@ -65,6 +63,9 @@ class ProfileStubPage extends StatelessWidget {
           DestinationTile(
             destination: destination,
             showChevron: true,
+            subtitle: destination == AppDestination.pluginMarket
+                ? pluginSummary
+                : null,
             onTap: () => onOpenDestination(destination),
           ),
       ],
@@ -144,43 +145,6 @@ class _CurrencyCard extends StatelessWidget {
             ),
           ),
         ],
-      ),
-    );
-  }
-}
-
-/// 插件概况：一行状态 + 右箭头，点进去就是插件市场。
-///
-/// 做成可点是因为文案本身就在邀请用户（"去插件市场看看"），
-/// 一行写着"去看看"却点不动，比不写更让人别扭。
-class _PluginRow extends StatelessWidget {
-  const _PluginRow({required this.summary, required this.onTap});
-
-  final String summary;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(10),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
-        child: Row(
-          children: <Widget>[
-            Icon(Icons.extension_outlined, size: 15, color: scheme.outline),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Text(
-                summary,
-                style: TextStyle(fontSize: 12, color: scheme.onSurfaceVariant),
-              ),
-            ),
-            Icon(Icons.chevron_right, size: 16, color: scheme.outlineVariant),
-          ],
-        ),
       ),
     );
   }

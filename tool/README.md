@@ -19,6 +19,15 @@
 | `purge_jsdelivr.ps1` | 同上 | 手改了 `update.json` 或插件索引，想立刻让 CDN 生效 |
 | `make_demo_plugin.py` | `publish_plugin` | 只想重新打包 zip + 生成索引，不提交 |
 
+**`make_demo_plugin.py` 是幂等的**：同样一份源码打两次，第二次一个字节都不动
+（内容一致就保留旧文件）。这不是洁癖——包名里的版本号不随重打包而变，
+字节一变，索引里的 sha256 就和线上那份文件对不上，新装用户校验失败，
+报出来像网络问题。自检（不需要 pytest）：
+
+```
+python test/plugin_packaging/test_make_demo_plugin.py
+```
+
 ## 一次性 / 偶发：正常情况下永远不用跑
 
 | 脚本 | 干什么 | 什么时候才有用 |

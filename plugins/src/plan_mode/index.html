@@ -86,17 +86,21 @@
   .title { font-size: 13.5px; line-height: 1.45; word-break: break-word; }
   .meta { font-size: 11px; color: var(--muted); margin-top: 2px; }
   .task.done .title { color: var(--done); text-decoration: line-through; }
-  .empty { color: var(--muted); font-size: 11.5px; padding: 2px 4px 8px; }
+  .empty { color: var(--muted); font-size: 11.5px; padding: 2px 4px 6px; }
 
-  /* 「这天加一条」。每条虚线比正式任务浅一档：它是入口，不是任务本身。 */
-  .add {
-    display: block; width: 100%; text-align: left;
-    padding: 7px 10px; margin: 0 0 2px;
-    border: 1px dashed var(--line); border-radius: 10px;
+  /* 「加一条」收进日期标题右侧的一个小 +。
+     之前是每天末尾一整行虚线按钮 —— 七天就是七行，把"一屏铺开"的密度吃掉了。
+     列表的留白应该属于任务，不属于入口。 */
+  .head-add {
+    width: 26px; height: 26px; flex: none;
+    margin-left: 6px;
+    border: 1px dashed var(--line); border-radius: 8px;
     background: transparent; color: var(--muted);
-    font: inherit; font-size: 12.5px;
+    font: inherit; font-size: 15px; line-height: 1;
+    display: flex; align-items: center; justify-content: center;
+    padding: 0;
   }
-  .add:active { background: var(--chip); color: var(--accent); }
+  .head-add:active { background: var(--chip); color: var(--accent); border-color: var(--accent); }
   .input {
     width: 100%; padding: 11px 12px; margin: 0 0 10px;
     border: 1px solid var(--line); border-radius: 10px;
@@ -244,12 +248,22 @@
         '<span class="day-name">' + labelOf(day.date, index) + '</span>' +
         '<span class="day-date">' + (day.date.getMonth() + 1) + '月' + day.date.getDate() + '日</span>' +
         '<span class="day-count">' + tasks.length + '</span>';
+
+      var addBtn = document.createElement('button');
+      addBtn.type = 'button';
+      addBtn.className = 'head-add';
+      addBtn.setAttribute('aria-label', '往这天加一条');
+      addBtn.textContent = '＋';
+      addBtn.addEventListener('click', function () { openAdd(day, index); });
+      head.appendChild(addBtn);
       section.appendChild(head);
 
-      if (!tasks.length) {
+      // 空天不各写一句提示：七天里六天是空的，六行"这天还没有安排"比空着更吵。
+      // 只有今天保留一句 —— 它是一屏的落点，用户第一眼看的也是这里。
+      if (!tasks.length && index === 0) {
         var empty = document.createElement('div');
         empty.className = 'empty';
-        empty.textContent = index === 0 ? '今天还没有安排' : '这天还没有安排';
+        empty.textContent = '今天还没有安排';
         section.appendChild(empty);
       }
 
@@ -282,12 +296,6 @@
         row.addEventListener('click', function () { openSheet(task); });
         section.appendChild(row);
       });
-
-      var addBtn = document.createElement('button');
-      addBtn.className = 'add';
-      addBtn.textContent = index === 0 ? '＋ 今天加一条' : '＋ 这天加一条';
-      addBtn.addEventListener('click', function () { openAdd(day, index); });
-      section.appendChild(addBtn);
 
       host.appendChild(section);
     });

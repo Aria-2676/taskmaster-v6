@@ -1,7 +1,7 @@
 {
   "id": "plan_mode",
   "name": "周计划",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "contract": 1,
   "entry": "index.html",
   "description": "把未来七天铺开，一件事挪到哪天就是哪天。",

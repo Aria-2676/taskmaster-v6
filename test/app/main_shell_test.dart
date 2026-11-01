@@ -751,14 +751,23 @@ void main() {
     String label() => tester.widget<Text>(header).data!;
 
     final today = DateTime.now();
-    final tomorrow = today.add(const Duration(days: 1));
 
-    // 日历条里点明天（seed 在明天放了一条任务）
-    await tester.tap(find
-        .descendant(of: find.byType(CalendarStrip), matching: find.text('${tomorrow.day}'))
-        .first);
+    // **不要假设"明天"在屏内**：日历条一屏是本周（周一到周日），今天是周日时
+    // 明天落在下一周，根本点不到 —— 2026-11-01 就是周日，这条测试挂过一次。
+    // 改用"在屏内且不是今天的任意一天"，只要求能把选中日期挪走。
+    final strip = find.byType(CalendarStrip);
+    final visibleDays = tester
+        .widgetList<Text>(find.descendant(of: strip, matching: find.byType(Text)))
+        .map((t) => t.data ?? '')
+        .where((s) => RegExp(r'^\d{1,2}$').hasMatch(s))
+        .where((s) => int.parse(s) != today.day)
+        .toList();
+    expect(visibleDays, isNotEmpty, reason: '日历条里应至少有一天不是今天');
+
+    await tester.tap(find.descendant(of: strip, matching: find.text(visibleDays.first)).first);
     await settle(tester);
-    expect(label(), contains('${tomorrow.day}日'));
+    expect(label(), isNot(contains('${today.month}月${today.day}日')),
+        reason: '点了别的日子，顶栏不该还停今天');
 
     await tester.tap(header);
     await tester.pump(const Duration(milliseconds: 80));

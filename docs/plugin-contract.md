@@ -74,11 +74,12 @@
 
 **不用 app 版本号做兼容判断，用 `contract` 整数。**
 
-- 宿主声明：`supportedContract = 1`
+- 宿主声明：`PluginContract.current = 1`（`lib/core/plugin/plugin_manifest.dart`）
 - 插件声明：`"contract": 1`
-- 判定规则：
-  - `plugin.contract > host.supportedContract` → **拒绝安装**，提示"需要更新 App"
-  - `plugin.contract <= host.supportedContract` → 允许安装
+- 判定规则（代码里唯一的判据是 `PluginContract.accepts()`）：
+  - `plugin.contract > PluginContract.current` → **拒绝安装**，提示"需要更新 App"
+  - `plugin.contract < PluginContract.min` → 拒绝（老到不再兼容）
+  - 区间内 → 允许安装
   - `host` 字段是第二道保险（判断具体版本区间），只在必要时用
 
 **什么情况要升 `contract`**：变了插槽的数据结构、变了权限名、变了 API 签名。

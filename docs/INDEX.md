@@ -1,16 +1,26 @@
 # 文档地图
 
+> 最后更新：2026-11-01
+
 > 每个主题**只有一个权威来源**。这里说明谁负责什么、什么时候该读。
 > 2026-10-31 重写：上一版指向了三个**本仓库不存在**的文件（`CLAUDE.md`、
 > `tool/ROADMAP.md`、`.trae/rules/`，它们都在 V5 仓库），另有两处状态停在"待实现"。
+> 2026-11-01：规则唯一源迁入 `docs/conventions/` 与 `docs/ai/`；新增路线图与 AI 工作流。
 
 ## 约定
 
 1. **事实以代码为准**，文档只是快照——冲突时改文档，不改认知。
-2. **规则在 `.workbuddy/skills/delivery-protocol/`**。本仓库**没有** `.trae/`，那是 V5 的。
+2. **规则唯一源在 `docs/conventions/`**；`docs/ai/rules/` 只是检查清单。
+   跨平台 AI 入口是 `docs/ai/README.md`。`.workbuddy/`、`.trae/`、`CLAUDE.md` 里的旧副本只作历史，不再维护。
 3. **取舍只记在 `docs/decisions.md`**，同一个问题不重复讨论第二遍。
 4. 过时的断言必须**删掉或标为已证伪**，不允许"留个参考"——它会在半年后误导排期。
 5. **常读文档有行数上限**：超了就拆开或移入 `docs/archive/`。记录性文档不限长，但不放在常读路径上。
+
+## AI 与协作入口
+
+- 任何 agent 开工：`AGENTS.md` → `docs/ai/README.md` → `docs/INDEX.md` → `docs/decisions.md`。
+- 规则唯一源：`docs/conventions/`；任务 claim 与交接：`docs/ai/work/`。
+- 平台本地记忆/规则不作为项目依据；冲突时以仓库文档为准。
 
 ## 文件分工
 
@@ -19,13 +29,16 @@
 | `README.md` | 对外：是什么、怎么跑、和 V5 的关系 | 新人/对外介绍 | 维护中 |
 | `docs/INDEX.md`（本文） | 文档地图、代码放哪的判据、已证伪清单 | 找不到东西时 | 维护中 |
 | `docs/decisions.md` | 关键取舍与为什么 | 想改既有设计前 | 维护中 |
+| `docs/ROADMAP.md` | 后续开发：优先级、出口条件、依赖、风险 | 排期/质疑方向时 | 维护中 |
 | `docs/platform-decision.md` | 为什么做平台、方案矩阵、为什么不换栈 | 质疑方向时 | 已定稿 |
 | `docs/main-package.md` | 主包清单、数据库切分、扩展位、插件依赖 | 动手前必读 | 已定稿 |
 | `docs/plugin-contract.md` | 包格式、契约版本、数据 API、插槽钩子、分发 | 写插件/写运行时 | 骨架，待细化 |
 | `docs/update-channels.md` | 更新清单：一个仓库一份 + 本地状态隔离 + 发版流程 | 改 updater / 发版之前 | 已实现 |
 | `docs/two-way-channel.md` | V5 ↔ V6 双向引流：入口读对方清单、被引用的版本冻结、维护纪律 | 动引流入口之前 | 已实现 |
 | `docs/acceptance/` | **正在进行的**验收清单；签收后移入 `archive/acceptance/` | 交付与验收时 | 维护中 |
-| `.workbuddy/skills/delivery-protocol/` | 交付纪律：先定案、未验收不推送、验收清单写法 | 每次动手前 | 维护中 |
+| `docs/conventions/` | 协作/架构/编码/交付/验收模板的唯一源 | 每次动手前 | 维护中 |
+| `docs/ai/` | 跨平台 AI 开工顺序、skills、规则卡、任务模板（含开工卡 `session-start.md`） | AI 开工/交接时 | 维护中 |
+| `AGENTS.md` | 根目录指针：先读 `docs/ai/README.md` | 任何 agent 进入仓库 | 维护中 |
 | `tool/README.md` | 脚本分三类：入口 / 部件 / 一次性 | 想知道该跑哪个脚本时 | 维护中 |
 | `docs/archive/` | 归档区（design / acceptance / handoff 三个子目录） | 查历史时 | 只增不改 |
 
@@ -54,6 +67,7 @@
 | 「多平台支持：**iOS**」 | `ios/` 只有 `flutter create` 骨架，从未构建。iOS 已放弃 |
 | 「V6 读 `update_v6.json`」 | 分仓前的老方案，**没落地**。V6 读本仓库根 `update.json`，V5 那份在 `note_study` |
 | 「引流的入口写死对方的版本号」 | 5.5.29 / 6.0.3 起改成**读对方的清单**，否则改一次就要两边各发一版 |
+| 「规则放在 `.workbuddy/skills/delivery-protocol/`，不进仓库」 | 2026-11-01 起规则唯一源迁入 `docs/conventions/`；`docs/ai/rules/` 只是检查清单；`.workbuddy/` 只作本地历史 |
 
 > 测试环境若遇到 `WebSocketException: Invalid WebSocket upgrade request`，
 > **先清代理变量**（`env -u HTTP_PROXY -u HTTPS_PROXY -u http_proxy -u https_proxy NO_PROXY=127.0.0.1,localhost`）。

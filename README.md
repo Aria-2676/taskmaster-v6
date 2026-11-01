@@ -1,5 +1,7 @@
 # 任务管家 V6
 
+> 最后更新：2026-11-01
+
 字段可配置、插件可扩的任务管理应用。Flutter，Android 单平台（iOS 明确放弃）。
 
 ## 和 V5 的关系
@@ -22,8 +24,18 @@ V5 装过的用户会在更新弹窗里看到 6.0.0（一次可选升级，可�
 flutter pub get
 flutter run                          # 正式版入口（不写演示数据、检查更新）
 flutter run -t lib/main_v6_preview.dart   # 预览：写演示数据、不联网
-flutter test                         # 441 条
+flutter test                         # 以实际输出为准
 ```
+
+## 协作与 AI 开发
+
+- **新 agent / 新人先读** [`AGENTS.md`](AGENTS.md) → [`docs/ai/README.md`](docs/ai/README.md) →
+  [`docs/INDEX.md`](docs/INDEX.md) → [`docs/decisions.md`](docs/decisions.md)。
+- 规则唯一源：[`docs/conventions/`](docs/conventions/README.md)；AI 工作流、skills、规则卡：
+  [`docs/ai/`](docs/ai/README.md)。
+- 后续计划与出口条件：[`docs/ROADMAP.md`](docs/ROADMAP.md)。
+- 交付纪律：**未验收不推送**；提交前先 `flutter analyze lib` + 全量测试。
+  详见 [`docs/conventions/delivery.md`](docs/conventions/delivery.md)。
 
 ## 结构
 

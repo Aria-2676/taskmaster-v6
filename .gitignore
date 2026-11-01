@@ -83,3 +83,8 @@ export-*.json
 # ── 本仓库不含 React Native（换栈已否决，见 docs/decisions.md）────────────
 # 目录里如果还留着 node_modules（旧存档的残留），不要提交
 node_modules/
+
+# AI 工具的原始上传件与截图：只入库改写后的文档，原始件不入库
+# （公开仓库；且它们和 docs/ 是同一件事的第二份副本）
+.uploads/
+.screenshots/

@@ -72,6 +72,18 @@
   .pick:active { background: var(--chip); }
   .pick.on { border-color: var(--accent); color: var(--accent); font-weight: 600; background: var(--chip); }
 
+  /* 临时提示用独立的浮层，不借用 #hint：
+     页面每秒 refresh 一次，render() 会把 #hint 重置成"通知权限未开启"那类常驻提示，
+     写在里面的临时提示活不过一秒。 */
+  .toast {
+    position: fixed; left: 50%; bottom: 88px; transform: translateX(-50%);
+    max-width: 86%; padding: 7px 12px; border-radius: 999px;
+    background: rgba(0,0,0,.82); color: #fff; font-size: 12px;
+    text-align: center; opacity: 0; transition: opacity .18s;
+    pointer-events: none; z-index: 12;
+  }
+  .toast.on { opacity: 1; }
+
   /* 圆环用 SVG：一条底环 + 一条进度环，靠 stroke-dashoffset 走，不用 canvas。 */
   .ring { position: relative; width: 236px; height: 236px; margin: 6px 0 2px; }
   .ring svg { transform: rotate(-90deg); }
@@ -155,6 +167,8 @@
   <p class="sub" id="durSub">休息时长随专注时长联动</p>
   <div class="grid" id="durGrid"></div>
 </div>
+
+<div class="toast" id="toast"></div>
 
 <script>
   // 番茄钟：**界面在插件里，计时和通知在主包**。
@@ -403,9 +417,9 @@
       if (res && res.applied === 'next') {
         // 这一轮已经开始了：改动**留给下一轮**，本轮圆环不动。
         // 不这么做的话，中途改时长等于给这一轮凭空加减时间。
-        render(); // 先重画（render 会重置 hint），再压一条临时提示
         var b = breaksFor(minutes);
-        flashHint('已设为 ' + minutes + ' 分钟，短休 ' + b.short + ' 分钟，下一轮生效');
+        render();
+        flashToast('已设为 ' + minutes + ' 分钟，短休 ' + b.short + ' 分钟，下一轮生效');
       } else {
         STATE.session = res && res.session ? res.session : STATE.session;
         render();
@@ -419,18 +433,17 @@
     }
   }
 
-  // 临时提示：3.6 秒后撤掉。撤掉时重画一次，别把"通知权限未开启"那类
-  // 常驻提示一起擦掉。这个时长按"读一遍 20 字的句子"估的，
-  // 原来 2.6 秒偏短，用户还没看完就没了。
-  var hintTimer = null;
-  function flashHint(text) {
-    var hint = document.getElementById('hint');
-    hint.textContent = text;
-    if (hintTimer) clearTimeout(hintTimer);
-    hintTimer = setTimeout(function () {
-      hint.textContent = '';
-      hintTimer = null;
-      render();
+  // 临时提示：3.6 秒后撤掉。用独立浮层而不是 #hint —— #hint 每秒被 render()
+  // 重置一次，写在里面的提示活不过一秒。时长按"读一遍 20 字的句子"估的。
+  var toastTimer = null;
+  function flashToast(text) {
+    var el = document.getElementById('toast');
+    el.textContent = text;
+    el.classList.add('on');
+    if (toastTimer) clearTimeout(toastTimer);
+    toastTimer = setTimeout(function () {
+      el.classList.remove('on');
+      toastTimer = null;
     }, 3600);
   }
 

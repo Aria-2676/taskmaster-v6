@@ -1,28 +1,54 @@
 {
   "id": "pomodoro",
   "name": "番茄钟",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "contract": 2,
   "host": ">=6.1.0",
   "entry": "index.html",
   "description": "25 分钟专注，到点提醒。记录存在自己的表里。",
   "icon": "timer",
-  "permissions": ["notify:local"],
-  "hooks": ["pomodoro.sessionFinished"],
+  "permissions": [
+    "notify:local"
+  ],
+  "hooks": [
+    "pomodoro.sessionFinished"
+  ],
   "storage": {
     "version": 1,
     "tables": [
       {
         "name": "records",
         "columns": [
-          { "name": "session_id", "type": "text" },
-          { "name": "mode", "type": "text" },
-          { "name": "duration_seconds", "type": "integer" },
-          { "name": "actual_seconds", "type": "integer" },
-          { "name": "ended_at", "type": "text" },
-          { "name": "task_id", "type": "integer" }
+          {
+            "name": "session_id",
+            "type": "text"
+          },
+          {
+            "name": "mode",
+            "type": "text"
+          },
+          {
+            "name": "duration_seconds",
+            "type": "integer"
+          },
+          {
+            "name": "actual_seconds",
+            "type": "integer"
+          },
+          {
+            "name": "ended_at",
+            "type": "text"
+          },
+          {
+            "name": "task_id",
+            "type": "integer"
+          }
         ],
-        "indexes": [["ended_at"]]
+        "indexes": [
+          [
+            "ended_at"
+          ]
+        ]
       }
     ]
   }

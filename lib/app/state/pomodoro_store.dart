@@ -51,6 +51,10 @@ class PomodoroStore extends ChangeNotifier {
   DateTime? _runningSince;
   Timer? _ticker;
 
+  /// 通知权限：`null` = 还没问过。Android 13+ 必须显式申请，
+  /// 不申请的话通知会被系统直接丢掉（importance=NONE），而且一点错都不报。
+  bool? _canNotify;
+
   /// 已经为哪个 session 派发过结束事件。**同一个会话只发一次** ——
   /// tick、冷启动恢复、用户手动 skip 三条路都可能走到结算，去重必须靠它，
   /// 否则插件会收到重复的奖励事件。
@@ -130,6 +134,7 @@ class PomodoroStore extends ChangeNotifier {
     );
     _runningSince = _now();
     _startTicker();
+    await _ensureNotifyPermission();
     await _scheduleNotification();
     await _persist();
     notifyListeners();
@@ -154,6 +159,7 @@ class PomodoroStore extends ChangeNotifier {
     _session = current.resume();
     _runningSince = _now();
     _startTicker();
+    await _ensureNotifyPermission();
     await _scheduleNotification();
     await _persist();
     notifyListeners();
@@ -224,6 +230,7 @@ class PomodoroStore extends ChangeNotifier {
       'plannedSeconds': current.planned.inSeconds,
       'remainingSeconds': current.remaining.inSeconds,
       'progress': current.progress,
+      'canNotify': _canNotify,
       if (current.taskId != null) 'taskId': current.taskId,
     };
   }
@@ -297,11 +304,40 @@ class PomodoroStore extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// 申请一次通知权限。
+  ///
+  /// **只在真正开始计时时问**，不在启动时问：用户还没决定要用番茄钟，
+  /// 一进 App 就弹系统对话框是在消耗他的注意力。
+  Future<void> _ensureNotifyPermission() async {
+    final notifications = _notifications;
+    if (notifications == null) return;
+    if (_canNotify != null) return;
+    try {
+      _canNotify = await notifications.requestPermission();
+    } catch (error, stack) {
+      // 问不出来就当作"没有权限"，让界面提示去开，而不是假装能通知
+      debugPrint('[pomodoro] 申请通知权限失败：$error');
+      assert(() {
+        debugPrintStack(stackTrace: stack);
+        return true;
+      }());
+      _canNotify = false;
+    }
+  }
+
+  /// 当前能不能发通知（`null` = 还没问过）。插件据此显示"到点不会响"的提示。
+  bool? get canNotify => _canNotify;
+
   Future<void> _scheduleNotification() async {
     final current = _session;
     final notifications = _notifications;
     if (current == null || notifications == null) return;
     if (!current.running || current.finished) return;
+    if (_canNotify == false) {
+      // 没权限就别排了：排了也不会显示，反而让人以为一切正常
+      debugPrint('[pomodoro] 没有通知权限，跳过提醒排期');
+      return;
+    }
 
     final isFocus = current.isFocus;
     final minutes = current.planned.inMinutes;

@@ -181,6 +181,11 @@
     skip.disabled = s.finished;
     reset.disabled = false;
     renderDots(s.round);
+
+    // 没有通知权限时说清楚，别让用户以为到点一定会响
+    document.getElementById('hint').innerHTML = s.canNotify === false
+      ? '<span class="warn">系统没给通知权限</span><br>到点不会响，去系统设置里允许「任务管家6」发通知'
+      : '';
   }
 
   function renderDots(round) {

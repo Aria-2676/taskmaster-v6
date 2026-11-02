@@ -8,51 +8,51 @@
                      "minSupported 决定强制更新：低于它的客户端只能升级、不能跳过。留空表示不强制。"
                  ],
     "schemaVersion":  1,
-    "updatedAt":  "2026-10-31T14:40:33Z",
+    "updatedAt":  "2026-11-02T04:04:30Z",
     "minSupported":  "6.0.0",
     "latest":  {
-                   "version":  "6.0.6",
+                   "version":  "6.1.0",
                    "notes":  [
-                                 "插件升级后不用重启了：升完回到首页直接是新版本。",
-                                 "新插件「待办清单」：所有待办拉平，逾期排最前，可按逾期 / 今天 / 本周筛选。",
-                                 "计划模式里点圆圈就能直接完成任务，不用再点开动作层。"
+                                 "新插件「番茄钟」：25 分钟专注，到点通知；退到桌面或杀掉应用也会提醒",
+                                 "番茄钟的记录由主包提供，重开应用后不会丢；今天专注几次、共多少分钟一眼能看到",
+                                 "清单模式可以新建待办了：点标题旁的 ＋，选个截止日期就行"
                              ],
                    "downloads":  {
                                      "android-arm64-v8a":  {
-                                                               "url":  "https://github.com/Aria-2676/taskmaster-v6/releases/download/v6.0.6/app-arm64-v8a-release.apk",
+                                                               "url":  "https://github.com/Aria-2676/taskmaster-v6/releases/download/v6.1.0/app-arm64-v8a-release.apk",
                                                                "mirrors":  [
-                                                                               "https://ghfast.top/https://github.com/Aria-2676/taskmaster-v6/releases/download/v6.0.6/app-arm64-v8a-release.apk",
-                                                                               "https://gh-proxy.com/https://github.com/Aria-2676/taskmaster-v6/releases/download/v6.0.6/app-arm64-v8a-release.apk"
+                                                                               "https://ghfast.top/https://github.com/Aria-2676/taskmaster-v6/releases/download/v6.1.0/app-arm64-v8a-release.apk",
+                                                                               "https://gh-proxy.com/https://github.com/Aria-2676/taskmaster-v6/releases/download/v6.1.0/app-arm64-v8a-release.apk"
                                                                            ],
-                                                               "sha256":  "65254f8f6ae30e19fcabf7b836e74da5deb3e7ad91abd499359e85d2804722c4",
-                                                               "sizeBytes":  21499262
+                                                               "sha256":  "7e924437e5c71d1bb752eeb4f2a259e64b07776f627380d6d49d7d27e1705cb8",
+                                                               "sizeBytes":  21925654
                                                            },
                                      "android-armeabi-v7a":  {
-                                                                 "url":  "https://github.com/Aria-2676/taskmaster-v6/releases/download/v6.0.6/app-armeabi-v7a-release.apk",
+                                                                 "url":  "https://github.com/Aria-2676/taskmaster-v6/releases/download/v6.1.0/app-armeabi-v7a-release.apk",
                                                                  "mirrors":  [
-                                                                                 "https://ghfast.top/https://github.com/Aria-2676/taskmaster-v6/releases/download/v6.0.6/app-armeabi-v7a-release.apk",
-                                                                                 "https://gh-proxy.com/https://github.com/Aria-2676/taskmaster-v6/releases/download/v6.0.6/app-armeabi-v7a-release.apk"
+                                                                                 "https://ghfast.top/https://github.com/Aria-2676/taskmaster-v6/releases/download/v6.1.0/app-armeabi-v7a-release.apk",
+                                                                                 "https://gh-proxy.com/https://github.com/Aria-2676/taskmaster-v6/releases/download/v6.1.0/app-armeabi-v7a-release.apk"
                                                                              ],
-                                                                 "sha256":  "9536334d6fe67b1ac6581e797da2e70c241d28a154a9cb5c1aa87ce6a56fb7b1",
-                                                                 "sizeBytes":  19333962
+                                                                 "sha256":  "b16586d433bd4f4de06675e96e45af08f2f8f2f194c96d9bc97cd22d65ef8369",
+                                                                 "sizeBytes":  19760354
                                                              },
                                      "android-x86_64":  {
-                                                            "url":  "https://github.com/Aria-2676/taskmaster-v6/releases/download/v6.0.6/app-x86_64-release.apk",
+                                                            "url":  "https://github.com/Aria-2676/taskmaster-v6/releases/download/v6.1.0/app-x86_64-release.apk",
                                                             "mirrors":  [
-                                                                            "https://ghfast.top/https://github.com/Aria-2676/taskmaster-v6/releases/download/v6.0.6/app-x86_64-release.apk",
-                                                                            "https://gh-proxy.com/https://github.com/Aria-2676/taskmaster-v6/releases/download/v6.0.6/app-x86_64-release.apk"
+                                                                            "https://ghfast.top/https://github.com/Aria-2676/taskmaster-v6/releases/download/v6.1.0/app-x86_64-release.apk",
+                                                                            "https://gh-proxy.com/https://github.com/Aria-2676/taskmaster-v6/releases/download/v6.1.0/app-x86_64-release.apk"
                                                                         ],
-                                                            "sha256":  "738944857d95de12cc489c3b617622d55384001c49e39ad3dd74f3f93b4c544e",
-                                                            "sizeBytes":  23048570
+                                                            "sha256":  "0dd2d43a6d90e2d8dfd6a1ffc4a0dbcd29f7c26517e6218fedab10eb5f70e9cb",
+                                                            "sizeBytes":  23409426
                                                         },
                                      "android":  {
-                                                     "url":  "https://github.com/Aria-2676/taskmaster-v6/releases/download/v6.0.6/app-release.apk",
+                                                     "url":  "https://github.com/Aria-2676/taskmaster-v6/releases/download/v6.1.0/app-release.apk",
                                                      "mirrors":  [
-                                                                     "https://ghfast.top/https://github.com/Aria-2676/taskmaster-v6/releases/download/v6.0.6/app-release.apk",
-                                                                     "https://gh-proxy.com/https://github.com/Aria-2676/taskmaster-v6/releases/download/v6.0.6/app-release.apk"
+                                                                     "https://ghfast.top/https://github.com/Aria-2676/taskmaster-v6/releases/download/v6.1.0/app-release.apk",
+                                                                     "https://gh-proxy.com/https://github.com/Aria-2676/taskmaster-v6/releases/download/v6.1.0/app-release.apk"
                                                                  ],
-                                                     "sha256":  "288ee172444ef79ec780f418b6c7e69e95c39a698b52509d9779b33584346275",
-                                                     "sizeBytes":  60879844
+                                                     "sha256":  "459e0fd2a73bacda3fd79e5b0951e9c971fc4d3e52f5c1e68d750d1b166a2fb2",
+                                                     "sizeBytes":  62027132
                                                  }
                                  }
                }

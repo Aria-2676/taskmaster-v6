@@ -166,7 +166,7 @@
 <div class="mask" id="durMask"></div>
 <div class="sheet" id="durSheet">
   <h2>专注时长</h2>
-  <p class="sub" id="durSub">休息时长随专注时长联动</p>
+  <p class="sub" id="durSub">休息时长随专注时长自动配置</p>
   <div class="grid" id="durGrid"></div>
 </div>
 
@@ -241,7 +241,7 @@
       main.textContent = '开始专注';
       skip.disabled = true;
       reset.disabled = true;
-      renderDots(0);
+      renderDots(0, 'focus');
       return;
     }
 
@@ -265,7 +265,7 @@
     }
     skip.disabled = s.finished;
     reset.disabled = false;
-    renderDots(s.round);
+    renderDots(s.round, s.mode);
 
     // 没有通知权限时说清楚，别让用户以为到点一定会响
     document.getElementById('hint').innerHTML = s.canNotify === false
@@ -273,13 +273,18 @@
       : '';
   }
 
-  function renderDots(round) {
+  // 四个点 = 这一组里已经完成几个专注。
+  //
+  // 关键在"什么时候清零"：第 4 个专注做完时四个点都亮着（这一组满了），
+  // 长休期间保持满格；**进入下一轮专注时清零**，从头数。
+  // 之前只看 round % 4，长休结束那一刻就掉了 3 个点，看起来像往回跳。
+  function renderDots(round, phase) {
     var host = document.getElementById('dots');
-    var filled = ((round % 4) + 4) % 4;
+    var done = ((round % 4) + 4) % 4;
+    var groupFull = done === 0 && round > 0 && phase === 'long_break';
     var html = '';
     for (var i = 0; i < 4; i++) {
-      // 第 4 个专注之后是长休，所以 0 也算"满一圈"
-      var on = filled === 0 ? round > 0 : i < filled;
+      var on = groupFull || i < done;
       html += '<span class="dot' + (on ? ' on' : '') + '"></span>';
     }
     host.innerHTML = html;
@@ -388,10 +393,10 @@
         '<span class="b">休 ' + b.short + '</span>' +
         '</button>';
     }).join('');
-    var cur = breaksFor(STATE.focusMinutes);
+    // 这里**不写具体分钟数**：运行中改过时长时，本轮实际生效的和所选的不一致，
+    // 写在说明里就是错的。每个档位卡片上已经标了配套休息（「休 N」）。
     document.getElementById('durSub').textContent =
-      '短休 ' + cur.short + ' 分钟 · 长休 ' + cur.long +
-      ' 分钟，随专注时长联动。本轮开始后的修改于下一轮生效。';
+      '休息时长随专注时长自动配置。本轮开始后的修改于下一轮生效。';
   }
 
   function openDur() {

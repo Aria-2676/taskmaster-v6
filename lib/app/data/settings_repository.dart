@@ -90,6 +90,12 @@ class SettingsKeys {
   /// 权限、时序、进程是否活着的影响 —— 6.1.0 在模拟器上就出现过
   /// "杀进程那轮的记录永远补不回来"。历史是**数据源**，事件只是通知。
   static const String pomodoroHistory = 'timer.pomodoro.history';
+
+  /// 某个插件**是否隐藏侧边栏入口**（`1` = 隐藏）。
+  ///
+  /// 用"隐藏"而不是"显示"：默认全部显示，只有用户主动关掉的才有记录。
+  /// 这样新装的插件天然出现，不用额外写一条。
+  static String sidebarHidden(String pluginId) => 'ui.sidebar_hidden.$pluginId';
 }
 
 /// `settings` 表的读写。主包所有"用户开关"都走这里，

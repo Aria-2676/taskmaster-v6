@@ -112,6 +112,44 @@ class PluginMarketStore extends ChangeNotifier {
   bool isInstalled(String pluginId) =>
       installed.any((p) => p.pluginId == pluginId);
 
+  /// 用户主动隐藏了侧边栏入口的插件 id。
+  ///
+  /// 和"停用"是**两件事**：停用是插件本身不跑（连首页、货币位都不给），
+  /// 隐藏只是不在侧边栏占一格 —— 它照样能跑、能当首页、能从市场打开。
+  /// 插件多了之后侧边栏会变成一串入口，用户需要能收起来几个常用的。
+  final Set<String> _sidebarHidden = <String>{};
+
+  /// 隐藏集合只在 [refresh] 里读一次：键的个数等于插件数，
+  /// 每次刷新都扫一遍没必要，而用户改动的路径只有本页面。
+  bool _sidebarLoaded = false;
+
+  Set<String> get sidebarHidden => Set<String>.unmodifiable(_sidebarHidden);
+
+  /// 读一次隐藏集合。启动后调用一次即可（键在 settings 里，异步）。
+  Future<void> loadSidebarHidden() async {
+    final next = <String>{};
+    for (final plugin in installed) {
+      final hidden = await _settings.getBool(
+        SettingsKeys.sidebarHidden(plugin.pluginId),
+        fallback: false,
+      );
+      if (hidden) next.add(plugin.pluginId);
+    }
+    if (setEquals(next, _sidebarHidden)) return;
+    _sidebarHidden
+      ..clear()
+      ..addAll(next);
+    notifyListeners();
+  }
+
+  /// 切换某个插件是否显示在侧边栏。
+  Future<void> setSidebarVisible(String pluginId, bool visible) async {
+    await _settings.setBool(SettingsKeys.sidebarHidden(pluginId), !visible);
+    final changed =
+        visible ? _sidebarHidden.remove(pluginId) : _sidebarHidden.add(pluginId);
+    if (changed) notifyListeners();
+  }
+
   /// 停用中的插件对**外壳**不可见：侧边栏入口、首页候选、货币位都不给它。
   ///
   /// 市场页仍然用 [installed]（用户得看得见它、把它开回来）。
@@ -150,6 +188,11 @@ class PluginMarketStore extends ChangeNotifier {
 
     // 本地库先读：这一步不会失败，先让"已安装"有内容
     installed = await _installer.store.all();
+    // 侧边栏过滤要用这份集合，必须在 installed 之后读；只读一次
+    if (!_sidebarLoaded) {
+      _sidebarLoaded = true;
+      await loadSidebarHidden();
+    }
 
     await _loadIndex(notify: false);
 

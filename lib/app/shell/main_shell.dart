@@ -17,6 +17,7 @@ import '../../core/updater/providers/app_update_provider.dart';
 import '../../core/updater/services/legacy_v5_service.dart';
 import '../../core/updater/services/app_update_launcher.dart';
 import '../pages/settings_page.dart';
+import '../pages/sidebar_entries_page.dart';
 import '../pages/plugin_page.dart';
 import '../pages/tag_manager_page.dart';
 import '../pages/task_editor_page.dart';
@@ -731,6 +732,14 @@ class _MainShellState extends State<MainShell> {
                   : () => navigator.push(
                         MaterialPageRoute<void>(builder: widget.backupPageBuilder!),
                       ),
+              onOpenSidebarEntries: widget.marketStore == null
+                  ? null
+                  : () => navigator.push(
+                        MaterialPageRoute<void>(
+                          builder: (_) =>
+                              SidebarEntriesPage(store: widget.marketStore!),
+                        ),
+                      ),
             ),
           ),
         );
@@ -881,7 +890,13 @@ class _MainShellState extends State<MainShell> {
             child: SideNav(
               currentTab: _tab,
               onOpenDestination: _openDestination,
-              installedPlugins: widget.marketStore?.active ?? const <InstalledPlugin>[],
+              // 用户在「设置 › 侧边栏入口」里收起来的插件不进侧栏
+              installedPlugins: (widget.marketStore?.active ??
+                      const <InstalledPlugin>[])
+                  .where((p) =>
+                      !(widget.marketStore?.sidebarHidden.contains(p.pluginId) ??
+                          false))
+                  .toList(growable: false),
               pluginNameOf: (id) => widget.marketStore?.index.findById(id)?.name ?? id,
               onOpenPlugin: _openPlugin,
             ),

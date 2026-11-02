@@ -24,6 +24,7 @@ class SettingsPage extends StatelessWidget {
     this.pluginSummary,
     this.onOpenBackup,
     this.onDownloadLegacy,
+    this.onOpenSidebarEntries,
   });
 
   final TaskStore store;
@@ -47,6 +48,10 @@ class SettingsPage extends StatelessWidget {
   /// 下载旧版（V5）。两个 App 包名不同、能共存，所以这条是"留个回去的门"，
   /// 不是"降级"。为 null 时整行不显示。
   final VoidCallback? onDownloadLegacy;
+
+  /// 侧边栏入口管理。为 null 时（没有插件基础设施）整行不显示 ——
+  /// 不放点不动的入口。
+  final VoidCallback? onOpenSidebarEntries;
 
   @override
   Widget build(BuildContext context) {
@@ -155,6 +160,15 @@ class SettingsPage extends StatelessWidget {
               subtitle: '首页用内置视图，还是换成一整页插件',
               onTap: () => onOpenDestination(AppDestination.homeMode),
             ),
+            if (onOpenSidebarEntries != null) ...<Widget>[
+              const Divider(height: 20),
+              _LinkRow(
+                icon: Icons.view_sidebar_outlined,
+                title: '侧边栏入口',
+                subtitle: '哪些插件在侧边栏显示入口',
+                onTap: onOpenSidebarEntries!,
+              ),
+            ],
           ]),
 
           if (onOpenBackup != null) ...<Widget>[

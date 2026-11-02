@@ -39,6 +39,7 @@ import 'data/task_repository.dart';
 import 'shell/main_shell.dart';
 import 'state/field_store.dart';
 import 'state/currency_store.dart';
+import '../core/services/local_notification_service.dart';
 import 'state/pomodoro_store.dart';
 import 'state/home_mode_store.dart';
 import 'state/plugin_market_store.dart';
@@ -190,7 +191,12 @@ class _V6PreviewAppState extends State<V6PreviewApp> {
       final journal = EventJournal(db);
       HookBus.instance.register(journal);
       // 番茄钟会话：冷启动把上次没跑完的那轮接上（进程被杀也不丢）。
-      final pomodoro = PomodoroStore(settings: settings);
+      // **通知服务必须传**：不传的话 `_scheduleNotification` 直接 return，
+      // 到点什么都不发生，而且一点错都不报（第一版就是这么漏的）。
+      final pomodoro = PomodoroStore(
+        settings: settings,
+        notifications: LocalNotificationService.instance,
+      );
       unawaited(pomodoro.load());
 
       if (!mounted) return;

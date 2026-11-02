@@ -7,6 +7,7 @@ import 'package:v5_app/app/state/pomodoro_store.dart';
 import 'package:v5_app/core/data/v6_database.dart';
 import 'package:v5_app/core/data/v6_plugin_tables.dart';
 import 'package:v5_app/core/extension/extension_hook.dart';
+import 'package:v5_app/core/services/local_notification_service.dart';
 import 'package:v5_app/core/services/pomodoro_timer.dart';
 
 /// 会话管理的测试：**重点是"进程不在了"这种情况**。
@@ -26,6 +27,50 @@ class _Recorder implements HookListener {
   Future<void> onEvent(HookEvent event) async => payloads.add(event.payload);
 }
 
+class _FakeSink implements NotificationSink {
+  final List<String> calls = <String>[];
+  final List<DateTime> scheduledAt = <DateTime>[];
+  int cancelCount = 0;
+  bool permissionGranted = true;
+
+  @override
+  Future<bool> requestPermission() async {
+    calls.add('requestPermission');
+    return permissionGranted;
+  }
+
+  @override
+  Future<void> show({
+    required int id,
+    required String title,
+    required String body,
+    String channelId = 'plugin',
+  }) async {
+    calls.add('show');
+  }
+
+  @override
+  Future<NotificationScheduleResult> scheduleAt({
+    required int id,
+    required DateTime at,
+    required String title,
+    required String body,
+    String channelId = 'plugin',
+  }) async {
+    calls.add('schedule');
+    scheduledAt.add(at);
+    return permissionGranted
+        ? NotificationScheduleResult.exact
+        : NotificationScheduleResult.denied;
+  }
+
+  @override
+  Future<void> cancel(int id) async {
+    calls.add('cancel');
+    cancelCount++;
+  }
+}
+
 void main() {
   sqfliteFfiInit();
   databaseFactory = databaseFactoryFfiNoIsolate;
@@ -35,11 +80,13 @@ void main() {
   late _Recorder recorder;
   late DateTime fakeNow;
 
+  late _FakeSink sink;
+
   PomodoroStore build() {
     final store = PomodoroStore(
       settings: settings,
       now: () => fakeNow,
-      // 通知传 null：单测里没有平台通道，排期逻辑本身在真机验
+      notifications: sink,
     );
     addTearDown(store.dispose);
     return store;
@@ -55,6 +102,7 @@ void main() {
     HookBus.instance.clear();
     HookBus.instance.register(recorder);
     fakeNow = DateTime(2026, 11, 1, 9, 0);
+    sink = _FakeSink();
   });
 
   tearDown(() async {
@@ -134,6 +182,11 @@ void main() {
     expect(recorder.payloads, hasLength(1));
     expect(recorder.payloads.single['actualSeconds'], 420);
     expect(recorder.payloads.single['durationSeconds'], 1500);
+
+    // 跳过之后要能往前：进下一阶段、不自动跑，而不是停在"已结束"
+    expect(store.session!.phase, PomodoroPhase.shortBreak);
+    expect(store.session!.remaining, store.session!.planned, reason: '新一轮应该是满的');
+    expect(store.running, isFalse);
   });
 
   test('冷启动恢复：不在前台的那段时间要补进去', () async {
@@ -227,6 +280,39 @@ void main() {
     expect(store.session!.phase, PomodoroPhase.shortBreak);
     expect(store.session!.round, 1, reason: '轮次必须推进，否则第 4 轮永远进不了长休');
     expect(store.running, isTrue, reason: 'next 的语义就是"开始休息"，不用再点一次');
+  });
+
+  test('开始计时会申请权限并排一条提醒（装配漏接线就抓得住）', () async {
+    final store = build();
+    await store.start();
+
+    expect(sink.calls, contains('requestPermission'), reason: 'Android 13+ 必须申请，否则通知被静默丢弃');
+    expect(sink.calls, contains('schedule'));
+    expect(sink.scheduledAt.single.difference(fakeNow), store.session!.planned,
+        reason: '应按这一轮的时长排，而不是一个写死的时刻');
+    expect(store.canNotify, isTrue);
+  });
+
+  test('暂停时取消提醒，继续时重排', () async {
+    final store = build();
+    await store.start();
+    sink.calls.clear();
+
+    await store.pause();
+    expect(sink.cancelCount, 1);
+
+    await store.resume();
+    expect(sink.calls, contains('schedule'), reason: '继续之后必须重新排，否则这一轮没有提醒');
+  });
+
+  test('没有通知权限时：不排提醒，并把 canNotify=false 交给界面', () async {
+    sink.permissionGranted = false;
+    final store = build();
+    await store.start();
+
+    expect(store.canNotify, isFalse);
+    expect(sink.calls, isNot(contains('schedule')), reason: '排了也不会显示，不要制造"一切正常"的假象');
+    expect(store.stateJson!['canNotify'], isFalse);
   });
 
   test('没有会话时 stateJson 是 null（插件据此画空态）', () {

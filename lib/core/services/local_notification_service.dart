@@ -22,6 +22,33 @@ enum NotificationScheduleResult {
   failed,
 }
 
+/// 通知能力的接口。
+///
+/// 存在的唯一理由：让"到底有没有去排提醒"能被测试断言。
+/// 番茄钟第一版就在这儿栽过 —— 装配时忘了注入通知服务，`_notifications` 是 null，
+/// 所有通知调用静默 return：不弹权限框、不排闹钟、到点什么都不发生，
+/// 而单测全绿（因为单测也没传通知服务）。有接口才能塞假实现。
+abstract class NotificationSink {
+  Future<bool> requestPermission();
+
+  Future<void> show({
+    required int id,
+    required String title,
+    required String body,
+    String channelId,
+  });
+
+  Future<NotificationScheduleResult> scheduleAt({
+    required int id,
+    required DateTime at,
+    required String title,
+    required String body,
+    String channelId,
+  });
+
+  Future<void> cancel(int id);
+}
+
 /// 本地通知的唯一入口：即时通知、定时提醒、取消。
 ///
 /// 存在理由：番茄钟要"到点提醒"，清单模式/其他插件也想用同一套能力。
@@ -29,7 +56,7 @@ enum NotificationScheduleResult {
 /// 精确闹钟降级只在这里处理一次。
 ///
 /// **只做本地通知**：不联网、不推送、不需要任何服务器（与项目"零持续费用"一致）。
-class LocalNotificationService {
+class LocalNotificationService implements NotificationSink {
   LocalNotificationService._();
 
   static final LocalNotificationService instance = LocalNotificationService._();

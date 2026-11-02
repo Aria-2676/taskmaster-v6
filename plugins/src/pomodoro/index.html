@@ -176,7 +176,9 @@
     } else if (s.running) {
       main.textContent = '暂停';
     } else {
-      main.textContent = '继续';
+      // 一秒没跑过就是"开始"，否则是"继续" —— 跳过之后进的是新一轮，
+      // 显示"继续"会让人以为还能接着上一轮跑
+      main.textContent = s.remainingSeconds === s.plannedSeconds ? '开始' : '继续';
     }
     skip.disabled = s.finished;
     reset.disabled = false;

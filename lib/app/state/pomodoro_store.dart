@@ -22,7 +22,7 @@ class PomodoroStore extends ChangeNotifier {
   PomodoroStore({
     required SettingsRepository settings,
     HookBus? hooks,
-    LocalNotificationService? notifications,
+    NotificationSink? notifications,
     DateTime Function()? now,
     Duration tickInterval = const Duration(seconds: 1),
   })  : _settings = settings,
@@ -36,7 +36,7 @@ class PomodoroStore extends ChangeNotifier {
 
   final SettingsRepository _settings;
   final HookBus _hooks;
-  final LocalNotificationService? _notifications;
+  final NotificationSink? _notifications;
   final DateTime Function() _now;
   final Duration _tickInterval;
 
@@ -178,12 +178,21 @@ class PomodoroStore extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// 提前结束这一轮：照常结算并派发事件（用户主动结束也算一次会话）。
+  /// 提前结束这一轮：照常结算并派发事件（用户主动结束也算一次会话），
+  /// **并进入下一阶段**（不自动开跑）。
+  ///
+  /// 为什么必须往前走一步：只结算不推进的话，会停在一个"本轮结束、但没有下一轮"
+  /// 的状态 —— 界面只剩「继续」，而继续的是刚结算过的那一轮，用户不知道该点哪。
+  /// 这是模拟器上点出来的，单测里看不出来。
   Future<void> skip() async {
     final current = _session;
     if (current == null) return;
     _session = _accumulate();
     await _settle();
+    _session = _session!.advance(_plan);
+    _settledSessionId = null;
+    await _persist();
+    notifyListeners();
   }
 
   /// 进入下一阶段（专注→休息 / 休息→专注）。**不自动开跑**，等用户点。

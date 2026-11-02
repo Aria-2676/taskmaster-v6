@@ -337,6 +337,115 @@ void main() {
     expect(store.stateJson!['canNotify'], isFalse);
   });
 
+  group('历史（timer.history 的数据源）', () {
+    test('结算后写进历史，且最近的在前', () async {
+      final store = build();
+      await store.start();
+      final focus = store.session!.planned;
+      fakeNow = fakeNow.add(focus);
+      await store.debugPump();
+      await store.next();
+
+      final shortBreak = store.session!.planned;
+      fakeNow = fakeNow.add(shortBreak);
+      await store.debugPump();
+
+      final rows = store.history();
+      expect(rows, hasLength(2));
+      expect(rows.first['mode'], 'short_break', reason: '最近一条在前');
+      expect(rows.last['mode'], 'focus');
+      expect(rows.first['actualSeconds'], shortBreak.inSeconds);
+    });
+
+    test('历史落盘，换一个 store 也读得到（进程重开的场景）', () async {
+      final first = build();
+      await first.start();
+      final planned = first.session!.planned;
+      fakeNow = fakeNow.add(planned);
+      await first.debugPump();
+      final id = first.session!.sessionId;
+
+      // 换实例：模拟进程被杀后重开
+      final second = build();
+      await second.load();
+
+      final rows = second.history();
+      expect(rows, hasLength(1));
+      expect(rows.single['sessionId'], id);
+      expect(rows.single['actualSeconds'], planned.inSeconds);
+    });
+
+    test('同一个会话不会记两条', () async {
+      final store = build();
+      await store.start();
+      fakeNow = fakeNow.add(store.session!.planned);
+      await store.debugPump();
+
+      // 再推进几次、反复 load 同一份状态，历史都不该变长
+      await store.debugPump();
+      final reloaded = build();
+      await reloaded.load();
+
+      expect(store.history(), hasLength(1));
+      expect(reloaded.history(), hasLength(1));
+    });
+
+    test('since 只取区间内的，limit 封顶', () async {
+      final store = build();
+      await store.start();
+      fakeNow = fakeNow.add(store.session!.planned);
+      await store.debugPump();
+
+      final cutoff = fakeNow.subtract(const Duration(minutes: 1));
+      expect(store.history(since: cutoff), hasLength(1));
+      expect(store.history(since: fakeNow.add(const Duration(minutes: 1))), isEmpty);
+
+      await store.next();
+      fakeNow = fakeNow.add(store.session!.planned);
+      await store.debugPump();
+      expect(store.history(limit: 1), hasLength(1));
+      expect(store.history(limit: 1).single['mode'], 'short_break');
+    });
+
+    test('超过上限时丢最旧的（不能无限长）', () async {
+      final store = build();
+      // 直接往设置里塞 205 条，看读回来会不会截断到上限
+      await settings.set(
+        SettingsKeys.pomodoroHistory,
+        jsonEncode(List<Map<String, Object?>>.generate(
+          PomodoroStore.historyLimit + 5,
+          (i) => <String, Object?>{
+            'sessionId': 'old-$i',
+            'mode': 'focus',
+            'durationSeconds': 60,
+            'actualSeconds': 60,
+            'endedAt': DateTime(2026, 10, 1, 0, i % 60).toUtc().toIso8601String(),
+          },
+        )),
+      );
+
+      final reloaded = build();
+      await reloaded.load();
+      await reloaded.start();
+      fakeNow = fakeNow.add(reloaded.session!.planned);
+      await reloaded.debugPump();
+
+      expect(reloaded.history(limit: PomodoroStore.historyLimit),
+          hasLength(PomodoroStore.historyLimit));
+      expect(reloaded.history().first['sessionId'], isNot(startsWith('old-')));
+    });
+
+    test('历史里存的是 UTC 时间（插件按本地日期过滤才准）', () async {
+      final store = build();
+      await store.start();
+      fakeNow = fakeNow.add(store.session!.planned);
+      await store.debugPump();
+
+      final endedAt = store.history().single['endedAt'] as String;
+      expect(endedAt.endsWith('Z'), isTrue, reason: '必须是 UTC，带 Z');
+    });
+  });
+
   test('没有会话时 stateJson 是 null（插件据此画空态）', () {
     expect(build().stateJson, isNull);
   });

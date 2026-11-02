@@ -60,6 +60,15 @@ class PomodoroStore extends ChangeNotifier {
   /// 否则插件会收到重复的奖励事件。
   String? _settledSessionId;
 
+  /// 已结束会话的历史（最近的在后）。插件读它，而不是靠事件补发。
+  ///
+  /// 保留上限 [historyLimit] 条：settings 是一行一行的 KV，无限追加会让
+  /// 每次读写都搬一份越来越大的 JSON。
+  static const int historyLimit = 200;
+
+  List<Map<String, Object?>> _history = <Map<String, Object?>>[];
+  bool _historyLoaded = false;
+
   PomodoroPlan get plan => _plan;
 
   PomodoroTimer? get session => _session;
@@ -71,6 +80,8 @@ class PomodoroStore extends ChangeNotifier {
   /// 补的时候**只看墙上时间**，不假设进程一直在跑。已经超过计划时长的，
   /// 直接结算 —— 用户回来看到的是"这一轮早就结束了"，而不是一个停在 24:59 的假象。
   Future<void> load() async {
+    await _ensureHistory();
+
     final raw = await _settings.get(SettingsKeys.pomodoroSession);
     if (raw == null || raw.isEmpty) return;
 
@@ -310,11 +321,13 @@ class PomodoroStore extends ChangeNotifier {
     if (cancelReminder) await _cancelNotification();
     await _persist();
 
+    final record = current.toFinishedPayload(_now());
+    // **这里必须 await**：历史是数据源，进程随时可能被杀；
+    // 而事件只是通知，可以丢（丢了插件还能查历史）。
+    await _appendHistory(record);
+
     // **不 await**：钩子是通知不是拦截，插件慢不能拖住结算。
-    unawaited(_hooks.emit(
-      HookId.pomodoroSessionFinished,
-      payload: current.toFinishedPayload(_now()),
-    ));
+    unawaited(_hooks.emit(HookId.pomodoroSessionFinished, payload: record));
     notifyListeners();
   }
 
@@ -371,6 +384,54 @@ class PomodoroStore extends ChangeNotifier {
 
   Future<void> _cancelNotification() async {
     await _notifications?.cancel(notificationId);
+  }
+
+  /// 读一次历史（惰性，只读一次）。读不懂就当空，不让一条坏数据卡住计时。
+  Future<void> _ensureHistory() async {
+    if (_historyLoaded) return;
+    _historyLoaded = true;
+    try {
+      final raw = await _settings.get(SettingsKeys.pomodoroHistory);
+      if (raw == null || raw.isEmpty) return;
+      final decoded = jsonDecode(raw);
+      if (decoded is! List) return;
+      _history = decoded
+          .whereType<Map>()
+          .map((row) => Map<String, Object?>.from(row))
+          .toList();
+    } catch (error) {
+      debugPrint('[pomodoro] 历史解析失败，按空处理：$error');
+      _history = <Map<String, Object?>>[];
+    }
+  }
+
+  Future<void> _appendHistory(Map<String, Object?> record) async {
+    await _ensureHistory();
+    final id = record['sessionId'];
+    // 同一个会话只记一条：结算本身已经去重，这里再挡一次是因为
+    // 历史落盘和 `_settledSessionId` 之间没有事务性 —— 崩在中间就可能重复。
+    if (id is String && _history.any((row) => row['sessionId'] == id)) return;
+
+    _history.add(record);
+    if (_history.length > historyLimit) {
+      _history = _history.sublist(_history.length - historyLimit);
+    }
+    await _settings.set(SettingsKeys.pomodoroHistory, jsonEncode(_history));
+  }
+
+  /// 已结束的会话，**最近的在前**。
+  ///
+  /// [since] 用于"今天"这类区间查询；[limit] 封顶防止插件一次拉太多。
+  /// 只读：插件不该能改主包的计时记录。
+  List<Map<String, Object?>> history({int limit = 50, DateTime? since}) {
+    final rows = _history.reversed.where((row) {
+      if (since == null) return true;
+      final raw = row['endedAt'];
+      if (raw is! String) return false;
+      final at = DateTime.tryParse(raw);
+      return at != null && !at.isBefore(since);
+    }).take(limit).toList();
+    return rows;
   }
 
   Future<void> _persist() async {

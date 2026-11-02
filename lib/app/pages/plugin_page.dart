@@ -3,6 +3,7 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:webview_flutter/webview_flutter.dart';
+import 'package:webview_flutter_android/webview_flutter_android.dart';
 
 import '../../core/extension/extension_hook.dart';
 import '../../core/plugin/plugin_hook_channel.dart';
@@ -77,6 +78,20 @@ class _PluginViewState extends State<PluginView> {
 
     final controller = WebViewController();
     controller.setJavaScriptMode(JavaScriptMode.unrestricted);
+    // 把插件页的 console 转到 logcat。
+    //
+    // release 包里 WebView 的 console **哪里都看不到**（没有 DevTools 可连），
+    // 而插件的错误恰好只会出现在这里 —— 6.1.0 就是因为看不见插件里的
+    // console.warn，多花了一小时才定位到"事件补发被权限拒掉"。
+    // 截断到 300 字符：插件的调试输出可能很长，刷屏反而掩盖有用的那行。
+    final platform = controller.platform;
+    if (platform is AndroidWebViewController) {
+      unawaited(platform.setOnConsoleMessage((message) {
+        final text = message.message;
+        debugPrint('[plugin:${widget.bridge.pluginId}] ${message.level.name} '
+            '${text.length > 300 ? '${text.substring(0, 300)}…' : text}');
+      }));
+    }
     controller.setBackgroundColor(const Color(0x00000000));
     controller.addJavaScriptChannel('HostBridge', onMessageReceived: _onHostMessage);
     controller.setNavigationDelegate(

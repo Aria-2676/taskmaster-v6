@@ -118,6 +118,7 @@ class PluginBridge {
         'timer.resume' => await _timerControl(_pomodoro, (s) => s.resume()),
         'timer.reset' => await _timerControl(_pomodoro, (s) => s.reset()),
         'timer.skip' => await _timerControl(_pomodoro, (s) => s.skip()),
+        'timer.history' => _timerHistory(params),
         'timer.next' => await _timerControl(_pomodoro, (s) => s.next()),
         'notify.show' => await _notifyShow(params),
         'notify.schedule' => await _notifySchedule(params),
@@ -648,6 +649,40 @@ class PluginBridge {
   }
 
   Map<String, Object?> _timerState() => _ok(_pomodoro?.stateJson);
+
+  /// 已结束的会话（最近的在前）。
+  ///
+  /// **这是历史记录的权威来源**，插件不该指望 `event.pending` 来攒数据：
+  /// 事件会被权限、时序、进程是否活着影响 —— 6.1.0 就出现过"杀进程那轮的
+  /// 记录永远补不回来"，而这一条查询能直接看到。事件退回它本来的角色：通知刷新。
+  Map<String, Object?> _timerHistory(Map<String, Object?> params) {
+    final store = _pomodoroOrThrow();
+
+    final rawLimit = params['limit'];
+    final limit = rawLimit == null ? 50 : (rawLimit is int ? rawLimit : -1);
+    if (limit < 1 || limit > PomodoroStore.historyLimit) {
+      throw _BridgeError(
+        'bad_params',
+        'limit 必须是 1~${PomodoroStore.historyLimit} 的整数',
+      );
+    }
+
+    DateTime? since;
+    final rawSince = params['since'];
+    if (rawSince != null) {
+      if (rawSince is! String) {
+        throw const _BridgeError('bad_params', 'since 必须是 ISO8601 字符串');
+      }
+      since = DateTime.tryParse(rawSince);
+      if (since == null) {
+        throw const _BridgeError('bad_params', 'since 读不懂，要 ISO8601');
+      }
+    }
+
+    return _ok(<String, Object?>{
+      'sessions': store.history(limit: limit, since: since),
+    });
+  }
 
   Future<Map<String, Object?>> _timerControl(
     PomodoroStore? store,

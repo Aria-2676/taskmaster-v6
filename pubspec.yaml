@@ -30,6 +30,9 @@ dependencies:
 
   # 插件运行时（WebView 整页 + 包解压校验）
   webview_flutter: ^4.14.1
+  # 显式依赖：只用它的 AndroidWebViewController.setOnConsoleMessage，
+  # 把插件页的 console 转到 logcat（release 包里这是唯一能看到插件内部的手段）
+  webview_flutter_android: ^4.14.1
   archive: ^4.2.0
   crypto: ^3.0.7
   convert: ^3.1.2

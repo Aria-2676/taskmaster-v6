@@ -216,64 +216,45 @@
   }
 
   async function refreshRecords() {
-    var rows = await window.host.call('db.select', {
-      table: 'records',
-      where: [{ column: 'ended_at', op: '>=', value: todayKey() }],
-      orderBy: [{ column: 'ended_at', desc: true }],
-      limit: 100,
+    // 记录**直接问主包**，不再自己攒表：事件只用来触发刷新。
+    // 这么改是因为事件补发会被权限/时序/进程是否活着影响 ——
+    // 杀进程那轮的记录曾经永远补不回来，而查询把这三件事一次绕开。
+    var res = await window.host.call('timer.history', { limit: 100 });
+    var rows = ((res && res.sessions) || []).filter(function (r) {
+      // endedAt 是 UTC，必须按本地日期判断"今天"，否则跨时区会算错一天
+      return localDayKey(r.endedAt) === todayKey();
     });
-    rows = rows || [];
 
     var focus = rows.filter(function (r) { return r.mode === 'focus'; });
     var minutes = focus.reduce(function (sum, r) {
-      return sum + Math.round((r.actual_seconds || 0) / 60);
+      return sum + Math.round((r.actualSeconds || 0) / 60);
     }, 0);
     document.getElementById('today').textContent = focus.length
       ? '今天 ' + focus.length + ' 次 · 共 ' + minutes + ' 分钟'
       : '今天还没有记录';
 
     var host = document.getElementById('records');
-    var recent = rows.slice(0, 5);
-    host.innerHTML = recent.map(function (r) {
-      var when = (r.ended_at || '').slice(11, 16);
-      var mins = Math.round((r.actual_seconds || 0) / 60);
+    host.innerHTML = rows.slice(0, 5).map(function (r) {
+      var mins = Math.round((r.actualSeconds || 0) / 60);
       return '<div class="rec">' +
         '<span class="mode">' + phaseName(r.mode) + '</span>' +
         '<span>' + mins + ' 分钟</span>' +
-        '<span class="when">' + when + '</span>' +
+        '<span class="when">' + localTime(r.endedAt) + '</span>' +
         '</div>';
     }).join('');
   }
 
-  // ---- 事件：一次会话结束 → 落库（按 session_id 幂等）----
+  function localDayKey(iso) {
+    var d = new Date(iso);
+    if (isNaN(d.getTime())) return '';
+    // 格式必须和 todayKey() 完全一致，否则永远比不上
+    return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate());
+  }
 
-  async function recordSession(payload) {
-    if (!payload || !payload.sessionId) return;
-
-    var exists = await window.host.call('db.select', {
-      table: 'records',
-      columns: ['session_id'],
-      where: [{ column: 'session_id', op: '=', value: payload.sessionId }],
-      limit: 1,
-    });
-    if (exists && exists.length) {
-      // 补发过来的同一条：记录已在，不重复写
-      await refreshRecords();
-      return;
-    }
-
-    await window.host.call('db.insert', {
-      table: 'records',
-      values: {
-        session_id: payload.sessionId,
-        mode: payload.mode || 'focus',
-        duration_seconds: payload.durationSeconds || 0,
-        actual_seconds: payload.actualSeconds || 0,
-        ended_at: payload.endedAt || new Date().toISOString(),
-        task_id: payload.taskId == null ? null : payload.taskId,
-      },
-    });
-    await refreshRecords();
+  function localTime(iso) {
+    var d = new Date(iso);
+    if (isNaN(d.getTime())) return '';
+    return ('0' + d.getHours()).slice(-2) + ':' + ('0' + d.getMinutes()).slice(-2);
   }
 
   // ---- 按钮 ----
@@ -324,14 +305,12 @@
       document.getElementById('ver').textContent = 'v' + sys.version;
     } catch (error) { /* 版本显示不出来不影响用 */ }
 
-    // 页面没开着时结束的会话，事件落在宿主的队列里，这里补上
+    // 页面没开着时结束的会话：记录已经由主包写进历史，这里只需要把事件清掉。
+    // 不再靠事件「补数据」—— 那是权限和时序的雷区（6.1.0 踩过）。
     try {
       var pending = await window.host.call('event.pending', { limit: 50 });
       var acked = [];
       for (var i = 0; i < (pending || []).length; i++) {
-        if (pending[i].event === 'pomodoro.sessionFinished') {
-          await recordSession(pending[i].payload);
-        }
         acked.push(pending[i].id);
       }
       if (acked.length) await window.host.call('event.ack', { ids: acked });
@@ -341,8 +320,9 @@
       console.warn('[pomodoro] 读取待补发事件失败：', error);
     }
 
-    window.host.on('pomodoro.sessionFinished', function (payload) {
-      recordSession(payload);
+    window.host.on('pomodoro.sessionFinished', function () {
+      // 事件只是「有变化了」的通知，数据去主包查
+      refreshRecords();
     });
 
     await refresh();

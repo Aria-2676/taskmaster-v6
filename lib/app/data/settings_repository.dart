@@ -83,6 +83,13 @@ class SettingsKeys {
   /// 番茄钟的**运行时**会话状态（JSON）。插件没装也要能计时，所以放主包设置里。
   /// 只存"正在计时/暂停中"的会话；已结束的会话记录由插件自己的表保存。
   static const String pomodoroSession = 'timer.pomodoro.session';
+
+  /// 已结束会话的**历史**（JSON 数组，最近的在后）。
+  ///
+  /// 为什么主包要留一份：插件拿"这节课结束了"只能靠事件补发，而补发会受
+  /// 权限、时序、进程是否活着的影响 —— 6.1.0 在模拟器上就出现过
+  /// "杀进程那轮的记录永远补不回来"。历史是**数据源**，事件只是通知。
+  static const String pomodoroHistory = 'timer.pomodoro.history';
 }
 
 /// `settings` 表的读写。主包所有"用户开关"都走这里，

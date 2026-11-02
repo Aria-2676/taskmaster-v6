@@ -1,4 +1,5 @@
 import 'plugin_manifest.dart';
+import 'plugin_host.dart';
 
 /// 索引里的一项：一句话描述 + 从哪儿下。
 ///
@@ -19,6 +20,7 @@ class PluginIndexEntry {
     this.icon,
     this.permissions = const <String>{},
     this.home,
+    this.host,
   });
 
   factory PluginIndexEntry.fromJson(Map<String, Object?> json) {
@@ -53,6 +55,7 @@ class PluginIndexEntry {
       description: json['description'] is String ? json['description']! as String : null,
       icon: json['icon'] is String ? json['icon']! as String : null,
       permissions: _parsePermissions(json['permissions']),
+      host: PluginHostRequirement.tryParse(json['host']),
       home: PluginHomeSpec.tryParse(json['home']),
       package: PluginPackage.fromJson(Map<String, Object?>.from(pkg)),
     );
@@ -82,10 +85,33 @@ class PluginIndexEntry {
   /// 不带这一段，模式名就只能退回插件的长名字。
   final PluginHomeSpec? home;
 
+  /// 从 `plugin.json` 复制的版本门槛（`host`），理由同 [permissions]：
+  /// 市场要在**下载之前**就告诉用户"这台机器装不了"。
+  final PluginHostRequirement? host;
+
   final PluginPackage package;
 
-  /// 当前宿主能不能装这一项
-  bool get installable => PluginContract.accepts(contract);
+  /// 当前宿主能不能装这一项。
+  ///
+  /// [current] 是 App 自己的版本；为 null 表示还没拿到（启动早期）。
+  /// 拿不到版本时**不拦** —— 宁可先让人看到货架，也不要因为一个还没加载完的
+  /// 版本号把整页标灰。
+  bool installableFor(AppSemver? current) {
+    if (!PluginContract.accepts(contract)) return false;
+    final requirement = host;
+    if (requirement == null || current == null) return true;
+    return requirement.allows(current);
+  }
+
+  /// 装不上的原因（市场标灰时显示）。不装不上时返回 null。
+  String? blockedReason(AppSemver? current) {
+    if (!PluginContract.accepts(contract)) return '与当前app版本不匹配';
+    final requirement = host;
+    if (requirement != null && current != null && !requirement.allows(current)) {
+      return requirement.summary;
+    }
+    return null;
+  }
 }
 
 /// `plugins/index.json`。

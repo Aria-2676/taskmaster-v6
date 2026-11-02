@@ -10,6 +10,10 @@
     <uses-permission android:name="android.permission.VIBRATE"/>
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
     <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM"/>
+    <!-- Android 13+ 的精确闹钟：声明 USE_EXACT_ALARM 后无需用户在系统设置里额外允许。
+         仅闹钟/计时类应用可用；本应用自签分发、不进商店，因此不受商店政策约束。
+         番茄钟"到点必响"依赖它，缺了会退化成可能晚几分钟。 -->
+    <uses-permission android:name="android.permission.USE_EXACT_ALARM"/>
     <!-- 自签分发：应用内下载新版本 APK 后需要拉起系统安装器。
          Android 8.0+ 必须声明该权限，且用户首次仍需手动允许「安装未知应用」。 -->
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES"/>
@@ -40,6 +44,24 @@
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
         </activity>
+
+
+        <!-- flutter_local_notifications 的定时通知接收器。
+             没有这两个，`zonedSchedule` 排的闹钟到点**不会响**（静默失败），
+             所以它们不是可选配置。开机广播用于重启后把未触发的提醒补排回来。 -->
+        <receiver
+            android:exported="false"
+            android:name="com.dexterous.flutterlocalnotifications.ScheduledNotificationReceiver" />
+        <receiver
+            android:exported="false"
+            android:name="com.dexterous.flutterlocalnotifications.ScheduledNotificationBootReceiver">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED"/>
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED"/>
+                <action android:name="android.intent.action.QUICKBOOT_POWERON" />
+                <action android:name="com.htc.intent.action.QUICKBOOT_POWERON"/>
+            </intent-filter>
+        </receiver>
 
         <!-- Don't delete the meta-data below.
              This is used by the Flutter tool to generate GeneratedPluginRegistrant.java -->

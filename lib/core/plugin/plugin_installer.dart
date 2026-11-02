@@ -78,7 +78,9 @@ class PluginInstaller {
     required Uri packageUrl,
     void Function(double progress)? onProgress,
   }) async {
-    if (!entry.installable) {
+    // 这里只判契约：安装器不认识 App 版本，`host` 门槛由市场在**下载之前**挡
+    // （`PluginMarketStore.canInstall`）。包内 manifest 的 contract 还会再判一次。
+    if (!PluginContract.accepts(entry.contract)) {
       throw PluginInstallException(
         '契约版本 ${entry.contract} 不受支持（宿主支持 ${PluginContract.min}~${PluginContract.current}）',
       );

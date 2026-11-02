@@ -89,6 +89,25 @@
   .meta .late { color: var(--warn); }
   .empty { color: var(--muted); font-size: 12px; text-align: center; padding: 34px 0; }
 
+  /* 新建入口放在标题行右侧：清单的第一屏本来就该全是待办，
+     单独占一行「＋ 新建」会把内容挤下去（计划模式那次已经吃过这个亏）。 */
+  .head-add {
+    width: 26px; height: 26px; flex: none; margin-left: 6px;
+    border: 1px dashed var(--line); border-radius: 8px;
+    background: transparent; color: var(--muted);
+    font: inherit; font-size: 15px; line-height: 1;
+    display: flex; align-items: center; justify-content: center; padding: 0;
+  }
+  .head-add:active { background: var(--chip); color: var(--accent); border-color: var(--accent); }
+  .field { display: flex; flex-direction: column; gap: 6px; margin-bottom: 10px; }
+  .field label { font-size: 11.5px; color: var(--muted); }
+  .input {
+    width: 100%; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px;
+    background: transparent; color: var(--fg); font: inherit; font-size: 14px;
+  }
+  .input:focus { outline: none; border-color: var(--accent); }
+  input[type="date"] { color-scheme: light dark; }
+
   .mask { position: fixed; inset: 0; background: rgba(0,0,0,.32); display: none; z-index: 10; }
   .mask.on { display: block; }
   .sheet {
@@ -122,6 +141,7 @@
   <div class="head">
     <h1>清单</h1>
     <span class="sum" id="sum">读取中…</span>
+    <button class="head-add" id="addOpen" type="button" aria-label="新建待办">＋</button>
   </div>
   <div class="filters" id="filters"></div>
   <div id="list"></div>
@@ -138,6 +158,23 @@
   </div>
   <div class="grid" style="margin-top:7px; grid-template-columns: 1fr;">
     <button class="pick" id="closeSheet">取消</button>
+  </div>
+</div>
+<div class="mask" id="addMask"></div>
+<div class="sheet" id="addSheet">
+  <h2>新建待办</h2>
+  <p class="sub">写个标题，选个截止日期</p>
+  <div class="field">
+    <label for="addTitle">做什么</label>
+    <input class="input" id="addTitle" maxlength="60" placeholder="要做什么？" enterkeyhint="done">
+  </div>
+  <div class="field">
+    <label for="addDate">截止日期</label>
+    <input class="input" id="addDate" type="date">
+  </div>
+  <div class="grid" style="grid-template-columns: 1fr 1fr;">
+    <button class="pick" id="addCancel">取消</button>
+    <button class="pick primary" id="addSubmit">添加</button>
   </div>
 </div>
 <div class="toast" id="toast"></div>
@@ -326,6 +363,52 @@
       });
   }
 
+  // ---- 新建待办 ----
+
+  function openAdd() {
+    document.getElementById('addTitle').value = '';
+    // 默认今天：多数待办就是"今天要做的"，改日期是少数情况
+    document.getElementById('addDate').value = key(today());
+    document.getElementById('addMask').classList.add('on');
+    document.getElementById('addSheet').classList.add('on');
+    setTimeout(function () { document.getElementById('addTitle').focus(); }, 120);
+  }
+
+  function closeAdd() {
+    document.getElementById('addMask').classList.remove('on');
+    document.getElementById('addSheet').classList.remove('on');
+    document.getElementById('addTitle').blur();
+  }
+
+  function submitAdd() {
+    var titleInput = document.getElementById('addTitle');
+    var title = (titleInput.value || '').trim();
+    if (!title) { titleInput.focus(); return; }
+
+    var day = document.getElementById('addDate').value || key(today());
+    closeAdd();
+
+    window.host.call('task.create', { title: title, date: day })
+      .then(function (created) {
+        // 自己先插进本地列表：用户看到的"刚加的那条"立刻就在，
+        // 不用等一次整页重读。
+        state.tasks.push({
+          id: created && created.id != null ? created.id : 0,
+          title: title,
+          dueDate: day,
+          isDone: false,
+          priority: 'white',
+          estimatedMinutes: 0,
+          tags: [],
+        });
+        render();
+        toast('加好了');
+      })
+      .catch(function (error) {
+        toast('添加失败：' + (error.message || error.code));
+      });
+  }
+
   // ---- 动作层 ----
 
   var picked = null;
@@ -383,6 +466,13 @@
     if (!task) return;
     closeSheet();
     toggleDone(task);
+  });
+  document.getElementById('addOpen').addEventListener('click', openAdd);
+  document.getElementById('addCancel').addEventListener('click', closeAdd);
+  document.getElementById('addMask').addEventListener('click', closeAdd);
+  document.getElementById('addSubmit').addEventListener('click', submitAdd);
+  document.getElementById('addTitle').addEventListener('keydown', function (event) {
+    if (event.key === 'Enter') submitAdd();
   });
   document.getElementById('closeSheet').addEventListener('click', closeSheet);
   document.getElementById('mask').addEventListener('click', closeSheet);

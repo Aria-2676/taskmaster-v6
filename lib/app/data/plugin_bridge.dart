@@ -8,6 +8,9 @@ import '../models/task.dart';
 import '../data/settings_repository.dart';
 import '../data/task_repository.dart';
 import '../state/currency_store.dart';
+import '../../core/services/local_notification_service.dart';
+import '../../core/services/pomodoro_timer.dart';
+import '../state/pomodoro_store.dart';
 
 /// 插件 ↔ 宿主的数据通道（宿主侧）。
 ///
@@ -33,9 +36,11 @@ class PluginBridge {
     this.data,
     this.onChanged,
     CurrencyStore? currency,
+    PomodoroStore? pomodoro,
   })  : _tasks = tasks,
         _settings = settings,
-        _currency = currency;
+        _currency = currency,
+        _pomodoro = pomodoro;
 
   final String pluginId;
 
@@ -72,6 +77,10 @@ class PluginBridge {
   /// 而不是静默返回 0 —— 静默会让插件以为自己写成功了。
   final CurrencyStore? _currency;
 
+  /// 番茄钟会话。宿主没接线时 `timer.*` 回 `unavailable`，
+  /// 而不是假装成功 —— 插件能立刻知道自己面对的是老主包。
+  final PomodoroStore? _pomodoro;
+
   Future<Map<String, Object?>> dispatch(String method, Map<String, Object?> params) async {
     try {
       return switch (method) {
@@ -102,6 +111,17 @@ class PluginBridge {
         'store.get' => await _storeGet(params),
         'store.set' => await _storeSet(params),
         'store.remove' => await _storeRemove(params),
+        // 6.1.0 新增：计时与通知（能力见 docs/capabilities.md）
+        'timer.start' => await _timerStart(params),
+        'timer.state' => _timerState(),
+        'timer.pause' => await _timerControl(_pomodoro, (s) => s.pause()),
+        'timer.resume' => await _timerControl(_pomodoro, (s) => s.resume()),
+        'timer.reset' => await _timerControl(_pomodoro, (s) => s.reset()),
+        'timer.skip' => await _timerControl(_pomodoro, (s) => s.skip()),
+        'timer.next' => await _timerControl(_pomodoro, (s) => s.next()),
+        'notify.show' => await _notifyShow(params),
+        'notify.schedule' => await _notifySchedule(params),
+        'notify.cancel' => await _notifyCancel(params),
         _ => _error('unknown_method', '未知方法：$method'),
       };
     } on _BridgeError catch (error) {
@@ -583,6 +603,109 @@ class PluginBridge {
 
   // ---- 工具 ----
 
+  // ---- timer：番茄钟。主包只给能力，界面在插件里（见 docs/ROADMAP.md 方向判据 8）----
+
+  /// 没有接线时**明确回 unavailable**，不是假装成功：
+  /// 插件据此可以提示"这版 App 还没有计时能力"，而不是拿一个空状态继续画。
+  PomodoroStore _pomodoroOrThrow() {
+    final store = _pomodoro;
+    if (store == null) {
+      throw const _BridgeError('unavailable', '这版 App 没有计时能力（需要 6.1.0+）');
+    }
+    return store;
+  }
+
+  Future<Map<String, Object?>> _timerStart(Map<String, Object?> params) async {
+    final store = _pomodoroOrThrow();
+    final rawMode = params['mode'];
+    final mode = rawMode == null
+        ? PomodoroPhase.focus
+        : PomodoroPhase.tryParse(rawMode is String ? rawMode : null);
+    if (mode == null) {
+      throw const _BridgeError('bad_params', 'mode 只能是 focus / short_break / long_break');
+    }
+    final rawTask = params['taskId'];
+    if (rawTask != null && rawTask is! int) {
+      throw const _BridgeError('bad_params', 'taskId 必须是整数');
+    }
+    await store.start(mode: mode, taskId: rawTask as int?);
+    return _ok(store.stateJson);
+  }
+
+  Map<String, Object?> _timerState() => _ok(_pomodoro?.stateJson);
+
+  Future<Map<String, Object?>> _timerControl(
+    PomodoroStore? store,
+    Future<void> Function(PomodoroStore store) action,
+  ) async {
+    if (store == null) {
+      throw const _BridgeError('unavailable', '这版 App 没有计时能力（需要 6.1.0+）');
+    }
+    await action(store);
+    return _ok(store.stateJson);
+  }
+
+  // ---- notify：本地通知（需要 notify:local）----
+
+  /// 通知 id 按插件命名空间派生：两个插件都用 id=1 时不会互相覆盖。
+  int _pluginNotificationId(Object? raw) {
+    if (raw is! int || raw < 0) {
+      throw const _BridgeError('bad_params', 'id 必须是非负整数');
+    }
+    return ('$pluginId#$raw').hashCode & 0x7FFFFFFF;
+  }
+
+  String _channelOf(Object? raw) {
+    return raw == LocalNotificationService.channelPomodoro
+        ? LocalNotificationService.channelPomodoro
+        : LocalNotificationService.channelPlugin;
+  }
+
+  Future<Map<String, Object?>> _notifyShow(Map<String, Object?> params) async {
+    _require(PluginPermissions.notifyLocal);
+    final id = _pluginNotificationId(params['id']);
+    await LocalNotificationService.instance.show(
+      id: id,
+      title: _stringParam(params, 'title'),
+      body: _stringParam(params, 'body'),
+      channelId: _channelOf(params['channel']),
+    );
+    return _ok(<String, Object?>{'id': id});
+  }
+
+  Future<Map<String, Object?>> _notifySchedule(Map<String, Object?> params) async {
+    _require(PluginPermissions.notifyLocal);
+    final id = _pluginNotificationId(params['id']);
+    final raw = params['afterSeconds'];
+    if (raw is! int || raw < 1 || raw > 86400) {
+      throw const _BridgeError('bad_params', 'afterSeconds 必须是 1~86400 的整数（最长一天）');
+    }
+    final result = await LocalNotificationService.instance.scheduleAt(
+      id: id,
+      at: DateTime.now().add(Duration(seconds: raw)),
+      title: _stringParam(params, 'title'),
+      body: _stringParam(params, 'body'),
+      channelId: _channelOf(params['channel']),
+    );
+    return _ok(<String, Object?>{
+      'id': id,
+      // 如实回报：inexact = 系统没给精确闹钟，可能晚几分钟；denied = 通知权限被拒
+      'result': switch (result) {
+        NotificationScheduleResult.exact => 'exact',
+        NotificationScheduleResult.inexact => 'inexact',
+        NotificationScheduleResult.denied => 'denied',
+        NotificationScheduleResult.failed => 'failed',
+      },
+    });
+  }
+
+  Future<Map<String, Object?>> _notifyCancel(Map<String, Object?> params) async {
+    _require(PluginPermissions.notifyLocal);
+    final id = _pluginNotificationId(params['id']);
+    await LocalNotificationService.instance.cancel(id);
+    return _ok(<String, Object?>{'id': id});
+  }
+
   void _require(String permission) {
     if (!permissions.contains(permission)) {
       throw _BridgeError('permission_denied', '缺少权限：$permission');
@@ -630,6 +753,9 @@ class PluginPermissions {
   static const String taskDelete = 'task:delete';
 
   static const String tagRead = 'tag:read';
+
+  /// 发本地通知。**单独一条**：能弹通知就能打扰用户，不能和别的权限混。
+  static const String notifyLocal = 'notify:local';
 
   /// 读自己的货币余额
   static const String currencyRead = 'currency:read';

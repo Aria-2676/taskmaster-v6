@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "publishedAt": "2026-10-31T14:32:58Z",
+  "publishedAt": "2026-11-02T02:35:22Z",
   "plugins": [
     {
       "id": "demo_help",
@@ -40,7 +40,7 @@
     {
       "id": "list_mode",
       "name": "待办清单",
-      "version": "1.0.0",
+      "version": "1.1.0",
       "contract": 1,
       "description": "所有待办拉平，逾期排最前。",
       "icon": "checklist",
@@ -54,9 +54,9 @@
         "order": 20
       },
       "package": {
-        "path": "plugins/packages/list_mode_v1.0.0.zip",
-        "sha256": "84620bc8ffc906d371a9e7ee027dc1624928f7b9be7cb054e63c30b1f464f70e",
-        "sizeBytes": 5252
+        "path": "plugins/packages/list_mode_v1.1.0.zip",
+        "sha256": "980c690cf285e6cac5922a5e5d9f5994b86680751f15a14c521b4967180ffe7d",
+        "sizeBytes": 6274
       }
     },
     {
@@ -79,6 +79,23 @@
         "path": "plugins/packages/plan_mode_v1.2.2.zip",
         "sha256": "6574cb93d1b4cc08f47dd406f87bce40eb042fd3544437921f672a25c4ee4b3f",
         "sizeBytes": 6290
+      }
+    },
+    {
+      "id": "pomodoro",
+      "name": "番茄钟",
+      "version": "1.0.0",
+      "contract": 2,
+      "description": "25 分钟专注，到点提醒。记录存在自己的表里。",
+      "icon": "timer",
+      "permissions": [
+        "notify:local"
+      ],
+      "host": ">=6.1.0",
+      "package": {
+        "path": "plugins/packages/pomodoro_v1.0.0.zip",
+        "sha256": "e508c8552dd2a7495a3bd992cf1677fc4b460244176457074d69410dbf238441",
+        "sizeBytes": 5151
       }
     }
   ]

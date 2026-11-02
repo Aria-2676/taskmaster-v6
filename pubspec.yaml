@@ -5,7 +5,7 @@ publish_to: 'none'
 # versionCode 是 Android 覆盖安装的唯一判据（只比整数）。
 # 6.0.0 必须严格大于 V5 发布包的 versionCode —— V5 最后一个包是 +0，
 # 这里给 6000 留足余量，之后每次发版 +1。
-version: 6.0.6+6006
+version: 6.1.0+6100
 
 environment:
   sdk: ^3.11.1
@@ -40,6 +40,8 @@ dependencies:
   open_filex: ^4.7.0
   connectivity_plus: ^7.3.1
   flutter_local_notifications: ^18.0.1
+  # 定时通知要构造 TZDateTime；它是上一条的传递依赖，这里提成直接依赖
+  timezone: ^0.10.1
   share_plus: ^12.0.2
   file_picker: ^11.0.3
 

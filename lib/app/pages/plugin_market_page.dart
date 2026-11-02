@@ -314,15 +314,18 @@ class _PluginMarketPageState extends State<PluginMarketPage> {
       );
     }
 
-    if (!entry.installable) {
-      // 写全"与当前 app 版本不匹配"：原来那句「需要更新」有歧义 ——
-      // 是在催插件更新，还是在催 App？用户看不出该找谁。
+    final blocked = entry.blockedReason(store.appVersion);
+    if (blocked != null) {
+      // 文案要说清"该找谁"：要么催 App 更新（版本不够），要么提示接口不兼容。
+      // 具体门槛写进 tooltip，卡片上只留一句短的。
       return Tooltip(
-        message: '这个插件要求的接口版本比你这版 App 新，装上会跑不起来',
+        message: blocked == '与当前app版本不匹配'
+            ? '这个插件要求的接口版本比你这版 App 新，装上会跑不起来'
+            : '这个插件要求更新的 App：$blocked',
         child: SizedBox(
           width: 78,
           child: Text(
-            '与当前app版本不匹配',
+            blocked,
             textAlign: TextAlign.right,
             style: TextStyle(
               fontSize: 10.5,

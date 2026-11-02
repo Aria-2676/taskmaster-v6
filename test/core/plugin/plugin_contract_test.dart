@@ -10,6 +10,7 @@ import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'package:v5_app/core/data/v6_database.dart';
 import 'package:v5_app/core/data/v6_plugin_tables.dart';
 import 'package:v5_app/core/extension/extension_slot.dart';
+import 'package:v5_app/core/plugin/plugin_host.dart';
 import 'package:v5_app/core/plugin/plugin_index.dart';
 import 'package:v5_app/core/plugin/plugin_manifest.dart';
 import 'package:v5_app/core/plugin/plugin_store.dart';
@@ -181,7 +182,7 @@ void main() {
       expect(PluginIndex.empty.plugins, isEmpty);
     });
 
-    test('installable 反映契约兼容性', () {
+    test('installableFor 反映契约兼容性', () {
       final index = PluginIndex.parse(_indexJson(plugins: <Object?>[
         <String, Object?>{
           'id': 'old',
@@ -191,7 +192,7 @@ void main() {
           'package': <String, Object?>{'path': 'a.zip', 'sha256': _sha, 'sizeBytes': 1},
         },
       ]));
-      expect(index.plugins.single.installable, isFalse);
+      expect(index.plugins.single.installableFor(AppSemver.tryParse('6.1.0')), isFalse);
     });
   });
 
@@ -250,6 +251,24 @@ void main() {
 
       await store.remove('pomodoro');
       expect(await store.find('pomodoro'), isNull);
+    });
+  });
+
+  // 版本门槛：manifest 的 host 与索引里那份必须一致，且解析不出来不能锁死插件。
+  group('host 门槛', () {
+    Map<String, Object?> withHost(Object? host) =>
+        <String, Object?>{..._manifestJson(), 'host': host};
+
+    test('不写 / 写坏 = 不限制', () {
+      expect(PluginManifest.parse(_manifestJson()).host, isNull);
+      expect(PluginManifest.parse(withHost(null)).host, isNull);
+      expect(PluginManifest.parse(withHost('^6.1.0')).host, isNull);
+    });
+
+    test('>=6.1.0 只放行够新的主包', () {
+      final host = PluginManifest.parse(withHost('>=6.1.0')).host!;
+      expect(host.allows(AppSemver.tryParse('6.1.0')!), isTrue);
+      expect(host.allows(AppSemver.tryParse('6.0.6')!), isFalse);
     });
   });
 

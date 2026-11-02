@@ -1,4 +1,5 @@
 import '../extension/extension_hook.dart';
+import 'plugin_host.dart';
 import '../extension/extension_slot.dart';
 import 'plugin_storage.dart';
 
@@ -22,7 +23,13 @@ class PluginContract {
   const PluginContract._();
 
   /// 当前宿主实现的契约版本。**改扩展点接口时必须 +1**。
-  static const int current = 1;
+  ///
+  /// 1 → 2（2026-11-01）：新增 `timer.*` / `notify.*` 两组方法。
+  /// 这是**新增**不是破坏，所以 [min] 保持 1，老插件照常装。
+  /// 升它的现实理由：6.0.x 那一版**不认识** manifest 的 `host` 字段，
+  /// 只认 contract —— 不升的话老主包会把需要 6.1 能力的插件正常装下去，
+  /// 然后插件调 `timer.start` 得到 unknown_method。
+  static const int current = 2;
 
   /// 还能接受的最老契约。降它等于放弃对老插件的兼容。
   static const int min = 1;
@@ -148,6 +155,7 @@ class PluginManifest {
     this.hooks = const <HookId>{},
     this.permissions = const <String>{},
     this.home,
+    this.host,
     this.storage = const PluginStorageSpec(version: 1, tables: <PluginTableDecl>[]),
   });
 
@@ -191,6 +199,7 @@ class PluginManifest {
       hooks: _parseHooks(json['hooks']),
       permissions: _parsePermissions(json['permissions']),
       home: PluginHomeSpec.tryParse(json['home']),
+      host: PluginHostRequirement.tryParse(json['host']),
       storage: PluginStorageSpec.fromJson(json['storage']),
     );
   }
@@ -228,6 +237,12 @@ class PluginManifest {
   /// 可当首页模式的声明。null = 没声明：仍可当首页，但默认不在快捷切换里。
   final PluginHomeSpec? home;
 
+  /// 这一版主包是否够新（`host: ">=6.1.0"`）。缺省 = 不限制。
+  ///
+  /// 和 `contract` 分工：contract 管"接口兼不兼容"，host 管"要哪个 App 版本"。
+  /// 两者都不满足就该**装不上**，而不是装上之后按钮点了没反应。
+  final PluginHostRequirement? host;
+
   /// 插件自己的表声明。空 = 不存自己的数据（只读写主包任务的那种插件）。
   ///
   /// 表会建成 `plg_<id>_<name>`；插件**永远拿不到表名之外的自由** ——
@@ -245,6 +260,7 @@ class PluginManifest {
     'tag:read',
     'currency:read',
     'currency:write',
+    'notify:local',
   };
 
   bool has(String permission) => permissions.contains(permission);

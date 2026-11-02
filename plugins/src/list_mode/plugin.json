@@ -1,7 +1,7 @@
 {
   "id": "list_mode",
   "name": "待办清单",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "contract": 1,
   "entry": "index.html",
   "description": "所有待办拉平，逾期排最前。",
@@ -11,5 +11,8 @@
     "hint": "所有待办拉平，逾期排最前",
     "order": 20
   },
-  "permissions": ["task:read", "task:write"]
+  "permissions": [
+    "task:read",
+    "task:write"
+  ]
 }

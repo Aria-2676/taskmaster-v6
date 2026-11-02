@@ -49,7 +49,7 @@ REPO_DIR = os.path.join(ROOT, "plugins", "packages")
 # 随包只该有一种理由：断网时**必须**可用，且没有它 App 就没法用。
 # 现在一个都不满足 —— 索引随包（`assets/plugins/index.json`），货架永远是满的，
 # 装的时候再联网下载。所以这里收的是"谁例外"，不是"谁走仓库"。
-REPO_ONLY = {"demo_help", "energy_currency", "plan_mode", "list_mode"}
+REPO_ONLY = {"demo_help", "energy_currency", "plan_mode", "list_mode", "pomodoro"}
 
 FIXED_TIME = (1980, 1, 1, 0, 0, 0)
 
@@ -162,6 +162,9 @@ def main() -> None:
                 # 跟着叫「周计划」，塞不进顶栏。和 permissions 同一个理由：
                 # 打包脚本从 plugin.json 复制，不在索引里手写。
                 **({"home": manifest["home"]} if manifest.get("home") else {}),
+                # 版本门槛也复制一份：市场要在**下载之前**就告诉用户
+                # "这版 App 装不了，需要更新"，那时候包还没下下来。
+                **({"host": manifest["host"]} if manifest.get("host") else {}),
                 "package": package,
             }
         )

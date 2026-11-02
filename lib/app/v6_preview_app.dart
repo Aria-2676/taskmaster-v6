@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:package_info_plus/package_info_plus.dart';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -10,6 +11,7 @@ import 'package:provider/provider.dart';
 import 'package:sqflite/sqflite.dart' show Database;
 
 import '../core/data/v6_database.dart';
+import '../core/utils/app_logger.dart';
 import '../core/extension/extension_hook.dart';
 import '../core/extension/extension_slot.dart';
 import '../core/plugin/event_journal.dart';
@@ -37,6 +39,7 @@ import 'data/task_repository.dart';
 import 'shell/main_shell.dart';
 import 'state/field_store.dart';
 import 'state/currency_store.dart';
+import 'state/pomodoro_store.dart';
 import 'state/home_mode_store.dart';
 import 'state/plugin_market_store.dart';
 import 'state/task_store.dart';
@@ -91,6 +94,9 @@ class _V6PreviewAppState extends State<V6PreviewApp> {
   HomeModeStore? _home;
   CurrencyStore? _currency;
   EventJournal? _journal;
+
+  /// 番茄钟会话（主包能力，界面在插件里）。
+  PomodoroStore? _pomodoro;
   AppUpdateProvider? _update;
   Object? _error;
 
@@ -183,6 +189,9 @@ class _V6PreviewAppState extends State<V6PreviewApp> {
       // **全局只注册一次**，不是每次打开插件都注册 —— 否则同一条事件会写多份。
       final journal = EventJournal(db);
       HookBus.instance.register(journal);
+      // 番茄钟会话：冷启动把上次没跑完的那轮接上（进程被杀也不丢）。
+      final pomodoro = PomodoroStore(settings: settings);
+      unawaited(pomodoro.load());
 
       if (!mounted) return;
       setState(() {
@@ -191,6 +200,7 @@ class _V6PreviewAppState extends State<V6PreviewApp> {
         _home = home;
         _currency = currency;
         _journal = journal;
+        _pomodoro = pomodoro;
         _market = PluginMarketStore(
           installer: installer,
           // 索引：远端 → 本地缓存 → 随包的兜底（见 PluginIndexLoader）
@@ -230,10 +240,27 @@ class _V6PreviewAppState extends State<V6PreviewApp> {
             unawaited(_resumePluginCurrency(pluginId));
           },
         );
+        // 插件 `host` 门槛要拿 App 自己的版本；`PackageInfo` 是异步的，
+        // 拿到之前市场一律当作"够新"，所以这里补一次即可（不会闪）。
+        unawaited(_bindAppVersion());
       });
     } catch (e) {
       if (!mounted) return;
       setState(() => _error = e);
+    }
+  }
+
+  /// 把 App 版本交给插件市场，用于判断插件的 `host`（最低版本）门槛。
+  ///
+  /// 失败不致命：拿不到版本就当作"够新"，货架照常显示 —— 只是标不出
+  /// "需要更新 App" 那几个。宁可少标，不要因为读不到版本把整页标灰。
+  Future<void> _bindAppVersion() async {
+    try {
+      final info = await PackageInfo.fromPlatform();
+      if (!mounted) return;
+      _market?.setAppVersion(info.version);
+    } catch (error, stack) {
+      AppLogger.warn('PluginMarket', '读不到 App 版本，插件 host 门槛本次不生效', error, stack);
     }
   }
 
@@ -339,6 +366,8 @@ class _V6PreviewAppState extends State<V6PreviewApp> {
         onChanged: () => _store?.load(),
         // 宿主没接货币时传 null，bridge 会回 bad_params 而不是静默成功
         currency: _currency,
+        // 计时能力：没接时 timer.* 回 unavailable，插件据此提示"这版 App 没有"
+        pomodoro: _pomodoro,
       ),
       hooks: manifest.hooks,
     );

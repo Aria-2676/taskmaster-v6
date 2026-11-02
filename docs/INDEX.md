@@ -30,6 +30,7 @@
 | `docs/INDEX.md`（本文） | 文档地图、代码放哪的判据、已证伪清单 | 找不到东西时 | 维护中 |
 | `docs/decisions.md` | 关键取舍与为什么 | 想改既有设计前 | 维护中 |
 | `docs/ROADMAP.md` | 后续开发：优先级、出口条件、依赖、风险 | 排期/质疑方向时 | 维护中 |
+| `docs/capabilities.md` | **版本 × 能力对照**：插件能调什么、`host` 该写多少 | 写插件/加 bridge 能力时 | 维护中 |
 | `docs/platform-decision.md` | 为什么做平台、方案矩阵、为什么不换栈 | 质疑方向时 | 已定稿 |
 | `docs/main-package.md` | 主包清单、数据库切分、扩展位、插件依赖 | 动手前必读 | 已定稿 |
 | `docs/plugin-contract.md` | 包格式、契约版本、数据 API、插槽钩子、分发 | 写插件/写运行时 | 骨架，待细化 |

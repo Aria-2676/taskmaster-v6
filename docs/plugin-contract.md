@@ -68,18 +68,33 @@
 打包脚本会把它从 `plugin.json` 复制进 `index.json`（和 `permissions` 同一个理由：
 切换列表拿的是已装插件，但显示名来自索引）。
 
+### 最低宿主版本（`host`，可选）
+
+```json
+"host": ">=6.1.0"
+```
+
+- 语法只支持比较符拼接：`>=6.1.0`、`<7.0.0`、`>=6.1.0 <7.0.0`（空格分隔，**全部满足**才算通过）。
+  `^`、`~`、`||` 一律不认 —— 认不出来当"没声明"，不会让插件永远装不上。
+- 只比较三段版本号，构建号（`+6001`）不参与。
+- 不满足时：市场里标灰显示「需要 App >=6.1.0」，**下载之前**就挡掉。
+- 能力清单见 `docs/capabilities.md`；不写 `host` = 不限制（老插件都是这样）。
+
+打包脚本同样会把它复制进 `index.json`：市场要在下载前就知道装不装得上。
+
 ---
 
 ## 2. 契约版本
 
 **不用 app 版本号做兼容判断，用 `contract` 整数。**
 
-- 宿主声明：`PluginContract.current = 1`（`lib/core/plugin/plugin_manifest.dart`）
+- 宿主声明：`PluginContract.current = 2`（`lib/core/plugin/plugin_manifest.dart`）
 - 插件声明：`"contract": 1`
 - 判定规则（代码里唯一的判据是 `PluginContract.accepts()`）：
   - `plugin.contract > PluginContract.current` → **拒绝安装**，提示"需要更新 App"
   - `plugin.contract < PluginContract.min` → 拒绝（老到不再兼容）
   - 区间内 → 允许安装
+- **6.1.0 起多一道 `host` 门槛**，见下节；两者的分工写进 `docs/capabilities.md`
   - `host` 字段是第二道保险（判断具体版本区间），只在必要时用
 
 **什么情况要升 `contract`**：变了插槽的数据结构、变了权限名、变了 API 签名。

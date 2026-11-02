@@ -7,6 +7,7 @@ import 'package:crypto/crypto.dart';
 import 'package:flutter/services.dart' show rootBundle;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as p;
+import 'package:v5_app/core/plugin/plugin_host.dart';
 import 'package:v5_app/core/plugin/plugin_index.dart';
 import 'package:v5_app/core/plugin/plugin_manifest.dart';
 
@@ -86,6 +87,20 @@ void main() {
 
       expect(entry.permissions.toSet(), declared.toSet(),
           reason: '${entry.id}: 索引与 plugin.json 的权限对不上');
+    }
+  });
+
+  test('索引里的 host 门槛与包内 plugin.json 一致', () async {
+    // 市场在**下载之前**就靠索引里的这份判断"装不装得上"，
+    // 和包内对不上会出现"能装但装完跑不起来"。
+    final index = await loadIndex();
+    for (final entry in index.plugins) {
+      final manifest = jsonDecode(
+        File('plugins/src/${entry.id}/plugin.json').readAsStringSync(),
+      ) as Map<String, Object?>;
+      final declared = PluginHostRequirement.tryParse(manifest['host']);
+      expect(entry.host?.raw, declared?.raw,
+          reason: '${entry.id}: 索引与 plugin.json 的 host 不一致');
     }
   });
 

@@ -79,6 +79,10 @@ class SettingsKeys {
 
   /// 上面那份索引是什么时候拉到的（ISO-8601 UTC），界面用来写"显示 X 的索引"。
   static const String pluginIndexFetchedAt = 'plugins.index.fetched_at';
+
+  /// 番茄钟的**运行时**会话状态（JSON）。插件没装也要能计时，所以放主包设置里。
+  /// 只存"正在计时/暂停中"的会话；已结束的会话记录由插件自己的表保存。
+  static const String pomodoroSession = 'timer.pomodoro.session';
 }
 
 /// `settings` 表的读写。主包所有"用户开关"都走这里，

@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import '../../core/plugin/plugin_host.dart';
 
 import '../../core/plugin/plugin_index.dart';
 import '../../core/plugin/plugin_installer.dart';
@@ -24,6 +25,21 @@ class PluginMarketStore extends ChangeNotifier {
   })  : _installer = installer,
         _indexLoader = indexLoader,
         _urlFor = urlFor;
+
+  /// App 自己的版本，用来判断插件的 `host` 门槛。
+  ///
+  /// 由装配层在 `PackageInfo` 加载完后写入；没写入时一律当作"够新"，
+  /// 避免启动早期把整个货架标灰。
+  AppSemver? appVersion;
+
+  void setAppVersion(String? raw) {
+    final parsed = AppSemver.tryParse(raw);
+    if (parsed == appVersion) return;
+    appVersion = parsed;
+    notifyListeners();
+  }
+
+  bool canInstall(PluginIndexEntry entry) => entry.installableFor(appVersion);
 
   final PluginInstaller _installer;
   final Future<PluginIndexResult> Function() _indexLoader;
@@ -118,7 +134,7 @@ class PluginMarketStore extends ChangeNotifier {
   /// 契约不支持的条目不当作升级（`installable` 为 false，装了也装不上）。
   PluginIndexEntry? updateFor(InstalledPlugin item) {
     final entry = index.findById(item.pluginId);
-    if (entry == null || !entry.installable) return null;
+    if (entry == null || !canInstall(entry)) return null;
     return VersionUtils.isNewer(entry.version, item.version) ? entry : null;
   }
 

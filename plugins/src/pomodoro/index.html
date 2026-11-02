@@ -1,0 +1,354 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>番茄钟</title>
+<style>
+  :root {
+    --bg: #ffffff;
+    --fg: #1b1b1f;
+    --muted: #5f5e6a;
+    --line: #e6e1ee;
+    --accent: #6750a4;
+    --chip: #eeedfe;
+    --focus: #d64545;
+    --break: #2f7d5d;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #141218;
+      --fg: #e6e1e9;
+      --muted: #a8a4b3;
+      --line: #2b2830;
+      --accent: #cfbdfe;
+      --chip: #26215c;
+      --focus: #ff8a8a;
+      --break: #6fd3a4;
+    }
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  body {
+    margin: 0; background: var(--bg); color: var(--fg);
+    font: 14px/1.5 -apple-system, "Segoe UI", "Noto Sans SC", system-ui, sans-serif;
+    -webkit-text-size-adjust: 100%;
+  }
+  .wrap { padding: 12px 16px 24px; display: flex; flex-direction: column; align-items: center; }
+
+  .head { width: 100%; display: flex; align-items: baseline; gap: 8px; padding: 0 2px 6px; }
+  .head h1 { font-size: 15px; font-weight: 600; margin: 0; }
+  .head .ver { color: var(--muted); font-size: 11px; margin-left: auto; }
+
+  /* 圆环用 SVG：一条底环 + 一条进度环，靠 stroke-dashoffset 走，不用 canvas。 */
+  .ring { position: relative; width: 236px; height: 236px; margin: 6px 0 2px; }
+  .ring svg { transform: rotate(-90deg); }
+  .ring .track { stroke: var(--line); }
+  .ring .bar { stroke: var(--accent); transition: stroke-dashoffset .35s linear; }
+  .ring.run .bar { stroke: var(--focus); }
+  .ring.rest .bar { stroke: var(--break); }
+  .center {
+    position: absolute; inset: 0; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; gap: 2px;
+  }
+  .time { font-size: 46px; font-weight: 300; font-variant-numeric: tabular-nums; letter-spacing: 1px; }
+  .phase { font-size: 12.5px; color: var(--muted); }
+  .dots { display: flex; gap: 5px; margin-top: 6px; }
+  .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--line); }
+  .dot.on { background: var(--accent); }
+
+  .actions { display: flex; gap: 8px; margin-top: 14px; width: 100%; max-width: 320px; }
+  .btn {
+    flex: 1; padding: 11px 0; border-radius: 11px; font: inherit; font-size: 13.5px;
+    border: 1px solid var(--line); background: transparent; color: var(--fg);
+  }
+  .btn.primary { border-color: var(--accent); color: var(--accent); font-weight: 600; }
+  .btn:active { background: var(--chip); }
+  .btn:disabled { opacity: .45; }
+
+  .stats {
+    margin-top: 18px; width: 100%; max-width: 320px;
+    display: flex; align-items: baseline; gap: 8px;
+    color: var(--muted); font-size: 12px;
+  }
+  .records { width: 100%; max-width: 320px; margin-top: 6px; }
+  .rec {
+    display: flex; align-items: center; gap: 8px;
+    padding: 7px 2px; border-bottom: 1px solid var(--line); font-size: 12.5px;
+  }
+  .rec:last-child { border-bottom: none; }
+  .rec .mode { color: var(--muted); font-size: 11.5px; width: 34px; flex: none; }
+  .rec .when { margin-left: auto; color: var(--muted); font-size: 11px; }
+  .hint { color: var(--muted); font-size: 11.5px; margin-top: 14px; text-align: center; line-height: 1.6; }
+  .warn { color: var(--focus); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="head">
+    <h1>番茄钟</h1>
+    <span class="ver" id="ver"></span>
+  </div>
+
+  <div class="ring" id="ring">
+    <svg width="236" height="236" viewBox="0 0 236 236">
+      <circle class="track" cx="118" cy="118" r="104" fill="none" stroke-width="10"/>
+      <circle class="bar" id="bar" cx="118" cy="118" r="104" fill="none" stroke-width="10"
+              stroke-linecap="round" stroke-dasharray="653.45" stroke-dashoffset="0"/>
+    </svg>
+    <div class="center">
+      <div class="time" id="time">25:00</div>
+      <div class="phase" id="phase">专注</div>
+      <div class="dots" id="dots"></div>
+    </div>
+  </div>
+
+  <div class="actions">
+    <button class="btn primary" id="main">开始专注</button>
+    <button class="btn" id="skip" disabled>跳过</button>
+    <button class="btn" id="reset" disabled>重置</button>
+  </div>
+
+  <div class="stats">
+    <span id="today">今天还没有记录</span>
+  </div>
+  <div class="records" id="records"></div>
+  <div class="hint" id="hint"></div>
+</div>
+
+<script>
+  // 番茄钟：**界面在插件里，计时和通知在主包**。
+  //
+  // 插件不自己 setTimeout 计时 —— 那样关掉页面就停、进程被杀就归零。
+  // 这里只做三件事：读状态、画状态、把按钮点成 timer.* 调用。
+  //
+  // 到点事件由主包派发（pomodoro.sessionFinished），插件只负责落一条记录。
+  // 落库前先按 session_id 查一次：事件可能因为补发而重复到达，重复插入会让
+  // "今天专注几次"直接翻倍。
+
+  var RING = 653.45; // 2πr，r=104
+  var STATE = { session: null, poll: null, bridgeOk: true };
+
+  function pad(n) { return (n < 10 ? '0' : '') + n; }
+  function mmss(seconds) {
+    var s = Math.max(0, Math.round(seconds));
+    return pad(Math.floor(s / 60)) + ':' + pad(s % 60);
+  }
+  function phaseName(mode) {
+    return mode === 'short_break' ? '短休' : mode === 'long_break' ? '长休' : '专注';
+  }
+  function todayKey() {
+    var d = new Date();
+    return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate());
+  }
+
+  // ---- 渲染 ----
+
+  function render() {
+    var s = STATE.session;
+    var ring = document.getElementById('ring');
+    var main = document.getElementById('main');
+    var skip = document.getElementById('skip');
+    var reset = document.getElementById('reset');
+
+    if (!s) {
+      document.getElementById('time').textContent = '25:00';
+      document.getElementById('phase').textContent = '专注';
+      document.getElementById('bar').setAttribute('stroke-dashoffset', String(RING));
+      ring.className = 'ring';
+      main.textContent = '开始专注';
+      skip.disabled = true;
+      reset.disabled = true;
+      renderDots(0);
+      return;
+    }
+
+    var isBreak = s.mode !== 'focus';
+    document.getElementById('time').textContent = mmss(s.remainingSeconds);
+    document.getElementById('phase').textContent =
+      phaseName(s.mode) + (s.finished ? ' · 结束' : '');
+    document.getElementById('bar').setAttribute(
+      'stroke-dashoffset', String(RING * (1 - (s.progress || 0)))
+    );
+    ring.className = 'ring' + (s.finished ? '' : (isBreak ? ' rest' : ' run'));
+
+    if (s.finished) {
+      main.textContent = isBreak ? '结束休息' : '开始休息';
+    } else if (s.running) {
+      main.textContent = '暂停';
+    } else {
+      main.textContent = '继续';
+    }
+    skip.disabled = s.finished;
+    reset.disabled = false;
+    renderDots(s.round);
+  }
+
+  function renderDots(round) {
+    var host = document.getElementById('dots');
+    var filled = ((round % 4) + 4) % 4;
+    var html = '';
+    for (var i = 0; i < 4; i++) {
+      // 第 4 个专注之后是长休，所以 0 也算"满一圈"
+      var on = filled === 0 ? round > 0 : i < filled;
+      html += '<span class="dot' + (on ? ' on' : '') + '"></span>';
+    }
+    host.innerHTML = html;
+  }
+
+  async function refresh() {
+    try {
+      STATE.session = await window.host.call('timer.state', {});
+      render();
+    } catch (error) {
+      if (error && error.code === 'unavailable') {
+        STATE.bridgeOk = false;
+        document.getElementById('hint').innerHTML =
+          '<span class="warn">这版 App 没有计时能力</span><br>需要 6.1.0 或更新的版本';
+      }
+    }
+  }
+
+  async function refreshRecords() {
+    var rows = await window.host.call('db.select', {
+      table: 'records',
+      where: [{ column: 'ended_at', op: '>=', value: todayKey() }],
+      orderBy: [{ column: 'ended_at', desc: true }],
+      limit: 100,
+    });
+    rows = rows || [];
+
+    var focus = rows.filter(function (r) { return r.mode === 'focus'; });
+    var minutes = focus.reduce(function (sum, r) {
+      return sum + Math.round((r.actual_seconds || 0) / 60);
+    }, 0);
+    document.getElementById('today').textContent = focus.length
+      ? '今天 ' + focus.length + ' 次 · 共 ' + minutes + ' 分钟'
+      : '今天还没有记录';
+
+    var host = document.getElementById('records');
+    var recent = rows.slice(0, 5);
+    host.innerHTML = recent.map(function (r) {
+      var when = (r.ended_at || '').slice(11, 16);
+      var mins = Math.round((r.actual_seconds || 0) / 60);
+      return '<div class="rec">' +
+        '<span class="mode">' + phaseName(r.mode) + '</span>' +
+        '<span>' + mins + ' 分钟</span>' +
+        '<span class="when">' + when + '</span>' +
+        '</div>';
+    }).join('');
+  }
+
+  // ---- 事件：一次会话结束 → 落库（按 session_id 幂等）----
+
+  async function recordSession(payload) {
+    if (!payload || !payload.sessionId) return;
+
+    var exists = await window.host.call('db.select', {
+      table: 'records',
+      columns: ['session_id'],
+      where: [{ column: 'session_id', op: '=', value: payload.sessionId }],
+      limit: 1,
+    });
+    if (exists && exists.length) {
+      // 补发过来的同一条：记录已在，不重复写
+      await refreshRecords();
+      return;
+    }
+
+    await window.host.call('db.insert', {
+      table: 'records',
+      values: {
+        session_id: payload.sessionId,
+        mode: payload.mode || 'focus',
+        duration_seconds: payload.durationSeconds || 0,
+        actual_seconds: payload.actualSeconds || 0,
+        ended_at: payload.endedAt || new Date().toISOString(),
+        task_id: payload.taskId == null ? null : payload.taskId,
+      },
+    });
+    await refreshRecords();
+  }
+
+  // ---- 按钮 ----
+
+  document.getElementById('main').addEventListener('click', async function () {
+    var s = STATE.session;
+    if (!s) {
+      STATE.session = await window.host.call('timer.start', { mode: 'focus' });
+      render();
+      return;
+    }
+    if (s.finished) {
+      // `timer.next` 一步到位：推进轮次（第 4 个专注后是长休）并立刻开跑。
+      // 别自己算下一阶段 —— round 是主包的，插件算会两边对不上。
+      await window.host.call('timer.next', {});
+      await refresh();
+      return;
+    }
+    await window.host.call(s.running ? 'timer.pause' : 'timer.resume', {});
+    await refresh();
+  });
+
+  document.getElementById('skip').addEventListener('click', async function () {
+    await window.host.call('timer.skip', {});
+    await refresh();
+  });
+
+  document.getElementById('reset').addEventListener('click', async function () {
+    await window.host.call('timer.reset', {});
+    await refresh();
+  });
+
+  // ---- 启动 ----
+
+  function whenHostReady(callback, tries) {
+    tries = tries || 0;
+    if (window.host) return callback();
+    if (tries > 100) {
+      document.getElementById('hint').textContent = '宿主通道没起来';
+      return;
+    }
+    setTimeout(function () { whenHostReady(callback, tries + 1); }, 30);
+  }
+
+  whenHostReady(async function () {
+    try {
+      var sys = await window.host.call('system.info', {});
+      document.getElementById('ver').textContent = 'v' + sys.version;
+    } catch (error) { /* 版本显示不出来不影响用 */ }
+
+    // 页面没开着时结束的会话，事件落在宿主的队列里，这里补上
+    try {
+      var pending = await window.host.call('event.pending', { limit: 50 });
+      var acked = [];
+      for (var i = 0; i < (pending || []).length; i++) {
+        if (pending[i].event === 'pomodoro.sessionFinished') {
+          await recordSession(pending[i].payload);
+        }
+        acked.push(pending[i].id);
+      }
+      if (acked.length) await window.host.call('event.ack', { ids: acked });
+    } catch (error) {
+      // 没有 storage/hooks 的宿主会在这里报错，不影响计时本身
+    }
+
+    window.host.on('pomodoro.sessionFinished', function (payload) {
+      recordSession(payload);
+    });
+
+    await refresh();
+    await refreshRecords();
+
+    // 每秒问一次状态：主包才是计时的真相，插件不自己扣秒
+    STATE.poll = setInterval(refresh, 1000);
+  });
+
+  document.addEventListener('visibilitychange', function () {
+    if (!document.hidden && window.host) {
+      refresh();
+      refreshRecords();
+    }
+  });
+</script>
+</body>
+</html>

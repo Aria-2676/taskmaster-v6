@@ -446,6 +446,57 @@ void main() {
     });
   });
 
+  group('会话 id（历史去重靠它，不能撞）', () {
+    test('重置后再跑一轮，算新会话（不会被去重吃掉）', () async {
+      final store = build();
+      await store.start();
+      fakeNow = fakeNow.add(store.session!.planned);
+      await store.debugPump();
+      expect(store.history(), hasLength(1));
+
+      await store.reset();
+      // 走"继续"这条路（插件旧版本就是这样调的）—— 主包必须自己兜住：
+      final before = store.session!.sessionId;
+      await store.resume();
+      expect(store.session!.sessionId, isNot(before),
+          reason: '一秒没跑过的继续应该是新会话');
+
+      fakeNow = fakeNow.add(store.session!.planned);
+      await store.debugPump();
+      expect(store.history(), hasLength(2), reason: '第二轮必须记上，不能被去重丢掉');
+    });
+
+    test('暂停后继续是同一会话（不能拆成两条）', () async {
+      final store = build();
+      await store.start();
+      final id = store.session!.sessionId;
+      final half = Duration(seconds: store.session!.planned.inSeconds ~/ 2);
+
+      fakeNow = fakeNow.add(half);
+      await store.debugPump();
+      await store.pause();
+      await store.resume();
+
+      expect(store.session!.sessionId, id);
+      expect(store.session!.elapsed, half, reason: '继续不能把已跑的时间抹掉');
+
+      fakeNow = fakeNow.add(store.session!.planned - half);
+      await store.debugPump();
+      expect(store.history(), hasLength(1), reason: '一次专注只记一条');
+    });
+
+    test('进入下一阶段后是新会话', () async {
+      final store = build();
+      await store.start();
+      final first = store.session!.sessionId;
+      fakeNow = fakeNow.add(store.session!.planned);
+      await store.debugPump();
+      await store.next();
+
+      expect(store.session!.sessionId, isNot(first));
+    });
+  });
+
   test('没有会话时 stateJson 是 null（插件据此画空态）', () {
     expect(build().stateJson, isNull);
   });

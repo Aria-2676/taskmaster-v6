@@ -145,9 +145,12 @@ class PomodoroStore extends ChangeNotifier {
     );
     _runningSince = _now();
     _startTicker();
+    // **先落盘再排提醒**：状态是根本，提醒只是锦上添花。
+    // 反过来的话，排提醒一抛异常，这一轮就从未存进磁盘 ——
+    // 进程被杀之后再打开，看到的还是上一轮的状态（记录随之丢失）。
+    await _persist();
     await _ensureNotifyPermission();
     await _scheduleNotification();
-    await _persist();
     notifyListeners();
   }
 
@@ -167,12 +170,17 @@ class PomodoroStore extends ChangeNotifier {
     final current = _session;
     if (current == null || current.running || current.finished) return;
 
-    _session = current.resume();
+    // 一秒都没跑过的"继续"其实就是"开始"：换一个新 id。
+    // 否则重置过的会话会带着旧 id 继续跑，历史去重时被当成重复丢掉。
+    _session = current.elapsed == Duration.zero
+        ? current.copyWith(sessionId: _newSessionId())
+        : current;
+    _session = _session!.resume();
     _runningSince = _now();
     _startTicker();
+    await _persist();
     await _ensureNotifyPermission();
     await _scheduleNotification();
-    await _persist();
     notifyListeners();
   }
 
@@ -182,7 +190,12 @@ class PomodoroStore extends ChangeNotifier {
 
     _stopTicker();
     _settledSessionId = null;
-    _session = current.reset(running: false);
+    // **重置必须换 sessionId**：重置 = 放弃这一段，后面再跑是新会话。
+    // 不换的话，`resume()` 会复用旧 id，而历史按 sessionId 去重 ——
+    // 这一轮永远记不上（2026-11-02 在模拟器上丢过一整轮，查了很久）。
+    _session = current
+        .reset(running: false)
+        .copyWith(sessionId: _newSessionId());
     _runningSince = null;
     await _cancelNotification();
     await _persist();
@@ -356,6 +369,16 @@ class PomodoroStore extends ChangeNotifier {
   bool? get canNotify => _canNotify;
 
   Future<void> _scheduleNotification() async {
+    try {
+      await _scheduleNotificationUnsafe();
+    } catch (error) {
+      // 提醒排不上不是致命的：计时照跑，界面会提示"到点可能不响"。
+      // 但**绝不能让它冒泡** —— 冒泡会打断调用方（start/resume）后续的持久化。
+      debugPrint('[pomodoro] 排提醒失败：$error');
+    }
+  }
+
+  Future<void> _scheduleNotificationUnsafe() async {
     final current = _session;
     final notifications = _notifications;
     if (current == null || notifications == null) return;
@@ -451,5 +474,12 @@ class PomodoroStore extends ChangeNotifier {
     );
   }
 
-  String _newSessionId() => 'pm-${_now().microsecondsSinceEpoch}';
+  /// 会话 id：时间戳 + 进程内自增序号。
+  ///
+  /// 只靠时间戳不够：同一微秒内连续两次开始（重置后立刻继续、脚本操作）
+  /// 会生成同一个 id，而历史按 id 去重 —— 后一轮会被当成重复静默丢掉。
+  int _sessionSeq = 0;
+
+  String _newSessionId() =>
+      'pm-${_now().microsecondsSinceEpoch}-${_sessionSeq++}';
 }

@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "publishedAt": "2026-11-02T03:40:59Z",
+  "publishedAt": "2026-11-02T03:53:22Z",
   "plugins": [
     {
       "id": "demo_help",
@@ -84,7 +84,7 @@
     {
       "id": "pomodoro",
       "name": "番茄钟",
-      "version": "1.2.0",
+      "version": "1.2.1",
       "contract": 2,
       "description": "25 分钟专注，到点提醒。记录由主包提供，插件只负责显示。",
       "icon": "timer",
@@ -93,9 +93,9 @@
       ],
       "host": ">=6.1.0",
       "package": {
-        "path": "plugins/packages/pomodoro_v1.2.0.zip",
-        "sha256": "976a95dc9bb421f4ea8df737aea3380aac312fe5b50b1f13554d35f60aa880bd",
-        "sizeBytes": 5423
+        "path": "plugins/packages/pomodoro_v1.2.1.zip",
+        "sha256": "fa65dff8fb85366684607a884813f6f2b09493b7173a7ec45d7732f2dd143a45",
+        "sizeBytes": 5518
       }
     }
   ]

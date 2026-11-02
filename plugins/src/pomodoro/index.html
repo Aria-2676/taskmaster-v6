@@ -273,7 +273,15 @@
       await refresh();
       return;
     }
-    await window.host.call(s.running ? 'timer.pause' : 'timer.resume', {});
+    if (s.running) {
+      await window.host.call('timer.pause', {});
+    } else if (s.remainingSeconds === s.plannedSeconds) {
+      // 一秒没跑过 = 开始（重置之后、或者刚进下一个阶段）。
+      // 调 resume 会复用上一个会话的 id，那一轮就记不进历史了。
+      await window.host.call('timer.start', { mode: s.mode });
+    } else {
+      await window.host.call('timer.resume', {});
+    }
     await refresh();
   });
 

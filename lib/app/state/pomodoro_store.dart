@@ -133,7 +133,22 @@ class PomodoroStore extends ChangeNotifier {
   }
 
   /// 开始一轮。[mode] 缺省专注。
-  Future<void> start({PomodoroPhase mode = PomodoroPhase.focus, int? taskId}) async {
+  ///
+  /// 三个时长由插件传（用户在预设里选的节奏，联动规则也在插件侧）。
+  /// **校验放在 bridge**，这里只管用；传了就更新 [plan]，
+  /// 后续 `next` / `advance` 沿用同一个节奏，不会出现"这一轮 45 分钟、
+  /// 下一轮变回 25 分钟"。
+  ///
+  /// 每次都传全三个而不是只传专注：进程重启后 plan 回到默认值，
+  /// 只传专注会出现"45 分钟专注 + 5 分钟休息"的错配。
+  Future<void> start({
+    PomodoroPhase mode = PomodoroPhase.focus,
+    int? taskId,
+    int? focusMinutes,
+    int? shortBreakMinutes,
+    int? longBreakMinutes,
+  }) async {
+    _applyPlan(focusMinutes, shortBreakMinutes, longBreakMinutes);
     _stopTicker();
     _settledSessionId = null;
     _session = PomodoroTimer.start(
@@ -248,6 +263,71 @@ class PomodoroStore extends ChangeNotifier {
     _session = advanced;
     _settledSessionId = null;
     await start(mode: advanced.phase, taskId: advanced.taskId);
+  }
+
+  /// 设置节奏（专注时长）。**不启动计时**，只改计划。
+  ///
+  /// 为什么单独一个能力，而不是"开始的时候带过来"：
+  /// 用户在空闲时改成 45 分钟，如果只在下一次 `start` 生效，
+  /// 圆环上还写着 25:00 —— 看起来像是没改成功。所以改完要立刻反映到当前阶段。
+  ///
+  /// 正在跑的时候**拒绝**（返回 false）：中途改时长会让这一轮按新时长重新算，
+  /// 等于凭空多/少一段时间，不如让用户先停。
+  /// 会话是否**已经跑过**。跑过就不许改节奏了。
+  ///
+  /// "开始后不允许改，除非重开"——判据不是 `running` 而是"跑过没有"：
+  /// 跑了两分钟再暂停，改时长会让这一轮按新时长重算，等于凭空加减时间。
+  /// 一秒没跑过（刚建会话就暂停）是例外，那时改等于没开始过。
+  bool get _started => _session != null &&
+      (_session!.running || _session!.elapsed > Duration.zero);
+
+  /// 返回值：`true` 表示**这一轮已经按新时长重建**；`false` 表示这一轮已经开始过，
+  /// 改动留给下一轮（本轮不受影响）。
+  ///
+  /// 为什么要区分：已经开跑的会话中途改时长，等于给这一轮凭空加减时间 ——
+  /// 但直接拒绝又很挫败（用户改了却什么都没发生，还得先重开）。
+  /// 所以改成"照样记下来，下一次生效"，界面按返回值说清楚是哪一种。
+  Future<bool> configure({
+    int? focusMinutes,
+    int? shortBreakMinutes,
+    int? longBreakMinutes,
+  }) async {
+    _applyPlan(focusMinutes, shortBreakMinutes, longBreakMinutes);
+
+    final current = _session;
+    if (current == null) {
+      await _persist();
+      notifyListeners();
+      return true;
+    }
+
+    if (_started) {
+      // 本轮不动。plan 已经改了，下一次 start / next 会用它。
+      notifyListeners();
+      return false;
+    }
+
+    // 空闲（一秒没跑过）：按新时长重建这一阶段，换 id —— 旧 id 那条已经作废
+    _session = current.copyWith(
+      planned: _plan.durationOf(current.phase),
+      sessionId: _newSessionId(),
+    );
+    await _persist();
+    notifyListeners();
+    return true;
+  }
+
+  /// 按传入的分钟数更新 [plan]。全为 null 时不动。
+  void _applyPlan(int? focus, int? shortBreak, int? longBreak) {
+    if (focus == null && shortBreak == null && longBreak == null) return;
+    _plan = PomodoroPlan(
+      focus: focus == null ? _plan.focus : Duration(minutes: focus),
+      shortBreak:
+          shortBreak == null ? _plan.shortBreak : Duration(minutes: shortBreak),
+      longBreak:
+          longBreak == null ? _plan.longBreak : Duration(minutes: longBreak),
+      roundsPerLongBreak: _plan.roundsPerLongBreak,
+    );
   }
 
   /// 给 bridge 用的状态快照。没有会话时返回 null。

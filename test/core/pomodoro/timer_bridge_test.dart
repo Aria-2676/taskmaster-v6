@@ -79,6 +79,71 @@ void main() {
     expect(row['endedAt'], endsWith('Z'));
   });
 
+  test('timer.start 带上 focusMinutes 就按它建会话', () async {
+    final store = buildStore();
+    final result = await bridgeWith(pomodoro: store)
+        .dispatch('timer.start', <String, Object?>{'focusMinutes': 45});
+
+    expect(result['ok'], isTrue);
+    expect((result['result']! as Map)['plannedSeconds'], 2700);
+  });
+
+  test('focusMinutes 越界报错，不能默默用默认值', () async {
+    final store = buildStore();
+    final bridge = bridgeWith(pomodoro: store);
+
+    for (final bad in <Object>[0, -5, 181, '30']) {
+      final result = await bridge.dispatch(
+        'timer.start',
+        <String, Object?>{'focusMinutes': bad},
+      );
+      expect(result['ok'], isFalse, reason: 'focusMinutes=$bad 应该被拒');
+      expect((result['error']! as Map)['code'], 'bad_params');
+    }
+  });
+
+  test('timer.configure 空闲时立即生效（applied=now）', () async {
+    final store = buildStore();
+    final result = await bridgeWith(pomodoro: store).dispatch(
+      'timer.configure',
+      <String, Object?>{'focusMinutes': 50},
+    );
+
+    expect(result['ok'], isTrue);
+    expect((result['result']! as Map)['applied'], 'now');
+  });
+
+  test('已经开始过时改：applied=next，本轮时长不变', () async {
+    final store = buildStore();
+    final bridge = bridgeWith(pomodoro: store);
+    await bridge.dispatch('timer.start', <String, Object?>{});
+
+    final result = await bridge.dispatch(
+      'timer.configure',
+      <String, Object?>{'focusMinutes': 15},
+    );
+
+    expect(result['ok'], isTrue, reason: '不报错：改动照样记下，只是本轮不生效');
+    expect((result['result']! as Map)['applied'], 'next');
+    expect(((result['result']! as Map)['session']! as Map)['plannedSeconds'], 1500);
+  });
+
+  test('三个时长可以一起改（联动）', () async {
+    final store = buildStore();
+    final result = await bridgeWith(pomodoro: store).dispatch(
+      'timer.configure',
+      <String, Object?>{
+        'focusMinutes': 45,
+        'shortBreakMinutes': 10,
+        'longBreakMinutes': 30,
+      },
+    );
+
+    expect(result['ok'], isTrue);
+    await bridgeWith(pomodoro: store).dispatch('timer.start', <String, Object?>{});
+    expect(store.session!.planned, const Duration(minutes: 45));
+  });
+
   test('limit 越界要报错，不是静默截断', () async {
     final store = buildStore();
     final bridge = bridgeWith(pomodoro: store);

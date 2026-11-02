@@ -30,6 +30,7 @@
 |---|---|---|
 | **6.0.0** | `system.info`；`task.count/list/create/update/setDone/delete`；`tag.list`；`event.pending/ack`；`db.insert/select/update/delete/aggregate`；`store.get/set/remove`（插件私有 KV）；`currency.get/set`；4 个区域插槽；钩子 `task.completed` / `task.recycled` / `task.restored`；页面级整页插件；首页模式（`home`） | 全部现有插件 |
 | **6.1.0** | `timer.start/state/pause/resume/reset/skip/next/history`；`notify.show/schedule/cancel`；钩子 `pomodoro.sessionFinished` 真正派发 | 番茄钟插件 |
+| **6.1.1** | `timer.configure`（设置专注/短休/长休）；`timer.start` 支持这三个时长 | 番茄钟 1.3.0 |
 
 > 表格只记**新增了什么**，不重复列旧能力 —— 想知道某版本能干什么，从上往下累加。
 
@@ -37,12 +38,13 @@
 
 | 能力 | 参数 | 返回 | 备注 |
 |---|---|---|---|
-| `timer.start` | `mode?`（`focus`/`short_break`/`long_break`）、`taskId?` | `{sessionId, mode, plannedSeconds, remainingSeconds}` | 同一时刻只有一个会话 |
+| `timer.start` | `mode?`、`taskId?`、`focusMinutes?`、`shortBreakMinutes?`、`longBreakMinutes?`（各 1~180） | `{sessionId, mode, plannedSeconds, remainingSeconds}` | 同一时刻只有一个会话；带时长就按它建这一轮。**三个一起传**，否则进程重启后会出现错配 |
 | `timer.state` | — | `{running, mode, remainingSeconds, plannedSeconds, round}` 或 `null` | 插件页面每次打开都要调它 |
 | `timer.pause` / `timer.resume` / `timer.reset` | — | 同 `timer.state` | 暂停期间不计入有效时长 |
 | `timer.skip` | — | 同 `timer.state` | 提前结束，照常派发钩子 |
 | `timer.next` | — | 同 `timer.state` | 进入下一阶段**并开跑**（第 4 个专注后是长休） |
 | `timer.history` | `limit?`（1~200，默认 50）、`since?`（ISO8601） | `{sessions: [{sessionId, mode, durationSeconds, actualSeconds, endedAt, taskId?}]}` | 已结束会话，**最近的在前**。这是记录的数据源，别用钩子补发去攒 |
+| `timer.configure` | 三个时长任选（各 1~180，至少一个） | `{applied: 'now'\|'next', session}` | 只改计划不启动。空闲时改立即生效（`now`）；**已经开跑则本轮不变、改动留给下一轮**（`next`），界面据此提示 |
 | `notify.show` | `title`、`body`、`channel?`（`pomodoro`/`plugin`） | `{ok}` | 即时通知，需 `notify:local` 权限 |
 | `notify.schedule` | `title`、`body`、`afterSeconds`、`channel?` | `{result: 'exact'\|'inexact'\|'denied'}` | **不保证准时**：系统拒精确闹钟时返回 `inexact` |
 | `notify.cancel` | `id` | `{ok}` | 取消由插件排的通知 |

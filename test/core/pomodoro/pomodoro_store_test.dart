@@ -446,6 +446,85 @@ void main() {
     });
   });
 
+  group('专注时长（预设 5~60）', () {
+    test('传 focusMinutes 就按它建这一轮', () async {
+      final store = build();
+      await store.start(focusMinutes: 45);
+      expect(store.session!.planned, const Duration(minutes: 45));
+      expect(store.stateJson!['plannedSeconds'], 2700);
+    });
+
+    test('configure 在空闲时立刻改掉时长，并换 id', () async {
+      final store = build();
+      await store.start();
+      await store.pause(); // 一秒没跑过就暂停：空闲且 elapsed 为 0
+      final before = store.session!.sessionId;
+
+      final ok = await store.configure(focusMinutes: 45);
+
+      expect(ok, isTrue);
+      expect(store.session!.planned, const Duration(minutes: 45),
+          reason: '圆环要立刻变，不能等下一轮');
+      expect(store.session!.sessionId, isNot(before), reason: '旧 id 那条已经作废');
+      expect(store.session!.elapsed, Duration.zero);
+    });
+
+    test('已经开跑时改：本轮不变，留给下一次', () async {
+      final store = build();
+      await store.start();
+      final before = store.session!.planned;
+
+      // 跑了几秒再改
+      fakeNow = fakeNow.add(const Duration(seconds: 30));
+      await store.debugPump();
+
+      expect(await store.configure(focusMinutes: 45), isFalse,
+          reason: 'false = 这一轮不重建，改动留给下一轮');
+      expect(store.session!.planned, before, reason: '本轮不能凭空加减时间');
+
+      // 下一次开始就该是新时长
+      await store.reset();
+      await store.start();
+      expect(store.session!.planned, const Duration(minutes: 45));
+    });
+
+    test('专注和休息一起改（联动）', () async {
+      final store = build();
+      await store.configure(
+        focusMinutes: 45,
+        shortBreakMinutes: 10,
+        longBreakMinutes: 30,
+      );
+      await store.start();
+      expect(store.session!.planned, const Duration(minutes: 45));
+
+      fakeNow = fakeNow.add(const Duration(minutes: 45));
+      await store.debugPump();
+      await store.next();
+
+      expect(store.session!.phase, PomodoroPhase.shortBreak);
+      expect(store.session!.planned, const Duration(minutes: 10),
+          reason: '短休要跟着专注一起改，不能还是 5 分钟');
+    });
+
+    test('改了之后下一轮专注也沿用（不能变回 25）', () async {
+      final store = build();
+      await store.configure(focusMinutes: 45);
+      await store.start();
+      expect(store.session!.planned, const Duration(minutes: 45));
+
+      fakeNow = fakeNow.add(const Duration(minutes: 45));
+      await store.debugPump();
+      await store.next(); // 进短休
+      fakeNow = fakeNow.add(store.session!.planned);
+      await store.debugPump();
+      await store.next(); // 回到专注
+
+      expect(store.session!.planned, const Duration(minutes: 45),
+          reason: 'plan 要在 store 里留住，不能每轮回到默认');
+    });
+  });
+
   group('会话 id（历史去重靠它，不能撞）', () {
     test('重置后再跑一轮，算新会话（不会被去重吃掉）', () async {
       final store = build();

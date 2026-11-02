@@ -1,11 +1,11 @@
 {
   "id": "pomodoro",
   "name": "番茄钟",
-  "version": "1.2.1",
+  "version": "1.3.0",
   "contract": 2,
-  "host": ">=6.1.0",
+  "host": ">=6.1.1",
   "entry": "index.html",
-  "description": "25 分钟专注，到点提醒。记录由主包提供，插件只负责显示。",
+  "description": "专注计时，到点提醒。专注时长可在 5~60 分钟里选。",
   "icon": "timer",
   "permissions": [
     "notify:local"

@@ -119,6 +119,7 @@ class PluginBridge {
         'timer.reset' => await _timerControl(_pomodoro, (s) => s.reset()),
         'timer.skip' => await _timerControl(_pomodoro, (s) => s.skip()),
         'timer.history' => _timerHistory(params),
+        'timer.configure' => await _timerConfigure(params),
         'timer.next' => await _timerControl(_pomodoro, (s) => s.next()),
         'notify.show' => await _notifyShow(params),
         'notify.schedule' => await _notifySchedule(params),
@@ -644,8 +645,50 @@ class PluginBridge {
     if (rawTask != null && rawTask is! int) {
       throw const _BridgeError('bad_params', 'taskId 必须是整数');
     }
-    await store.start(mode: mode, taskId: rawTask as int?);
+
+    await store.start(
+      mode: mode,
+      taskId: rawTask as int?,
+      // 三个时长一起传：进程重启后 plan 是默认值，只传专注会导致
+      // 「45 分钟专注 + 5 分钟休息」的错配。
+      focusMinutes: _minutesParam(params, 'focusMinutes'),
+      shortBreakMinutes: _minutesParam(params, 'shortBreakMinutes'),
+      longBreakMinutes: _minutesParam(params, 'longBreakMinutes'),
+    );
     return _ok(store.stateJson);
+  }
+
+  /// 读一个「分钟数」参数。允许 1~180：插件给的是 5~60 的预设，
+  /// 但接口放宽 —— 以后插件想加 90 分钟档，不用回头改主包。
+  int? _minutesParam(Map<String, Object?> params, String name) {
+    final raw = params[name];
+    if (raw == null) return null;
+    if (raw is! int || raw < 1 || raw > 180) {
+      throw _BridgeError('bad_params', '$name 必须是 1~180 的整数');
+    }
+    return raw;
+  }
+
+  Future<Map<String, Object?>> _timerConfigure(Map<String, Object?> params) async {
+    final store = _pomodoroOrThrow();
+    final focus = _minutesParam(params, 'focusMinutes');
+    final shortBreak = _minutesParam(params, 'shortBreakMinutes');
+    final longBreak = _minutesParam(params, 'longBreakMinutes');
+    if (focus == null && shortBreak == null && longBreak == null) {
+      throw const _BridgeError('bad_params', '至少传一个时长');
+    }
+    final immediate = await store.configure(
+      focusMinutes: focus,
+      shortBreakMinutes: shortBreak,
+      longBreakMinutes: longBreak,
+    );
+    // `applied` 说清这次改动落在哪：
+    //   now  = 这一轮已经按新时长重画了
+    //   next = 本轮已开始，改动留给下一轮（界面要提示，别让用户以为没生效）
+    return _ok(<String, Object?>{
+      'applied': immediate ? 'now' : 'next',
+      'session': store.stateJson,
+    });
   }
 
   Map<String, Object?> _timerState() => _ok(_pomodoro?.stateJson);

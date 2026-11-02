@@ -38,6 +38,39 @@
   .head { width: 100%; display: flex; align-items: baseline; gap: 8px; padding: 0 2px 6px; }
   .head h1 { font-size: 15px; font-weight: 600; margin: 0; }
   .head .ver { color: var(--muted); font-size: 11px; margin-left: auto; }
+  /* 时长按钮放标题行：不占内容高度，和清单模式的 ＋ 一个位置习惯 */
+  .head-min {
+    margin-left: auto; padding: 3px 9px; border-radius: 8px;
+    border: 1px solid var(--line); background: transparent;
+    color: var(--muted); font: inherit; font-size: 11.5px;
+  }
+  .head-min:active { background: var(--chip); color: var(--accent); }
+  .head-min + .ver { margin-left: 6px; }
+
+  .mask { position: fixed; inset: 0; background: rgba(0,0,0,.32); display: none; z-index: 10; }
+  .mask.on { display: block; }
+  .sheet {
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 11;
+    background: var(--bg); border-radius: 16px 16px 0 0;
+    padding: 14px 16px calc(16px + env(safe-area-inset-bottom));
+    transform: translateY(100%); transition: transform .18s ease-out;
+  }
+  .sheet.on { transform: translateY(0); }
+  .sheet h2 { font-size: 13.5px; margin: 0 0 2px; font-weight: 600; }
+  .sheet .sub { color: var(--muted); font-size: 11.5px; margin: 0 0 12px; }
+  .grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 7px; }
+  .pick {
+    border: 1px solid var(--line); border-radius: 9px; padding: 8px 0 7px;
+    text-align: center; font-size: 12.5px; background: transparent;
+    color: var(--fg); font-family: inherit;
+    display: flex; flex-direction: column; gap: 2px; align-items: center;
+  }
+  /* 每个档位直接把配好的休息时长写在下面：联动了什么，一眼能看见，
+     不用点进去才发现"原来休息也跟着变" */
+  .pick .b { font-size: 10px; color: var(--muted); }
+  .pick.on .b { color: var(--accent); }
+  .pick:active { background: var(--chip); }
+  .pick.on { border-color: var(--accent); color: var(--accent); font-weight: 600; background: var(--chip); }
 
   /* 圆环用 SVG：一条底环 + 一条进度环，靠 stroke-dashoffset 走，不用 canvas。 */
   .ring { position: relative; width: 236px; height: 236px; margin: 6px 0 2px; }
@@ -86,6 +119,7 @@
 <div class="wrap">
   <div class="head">
     <h1>番茄钟</h1>
+    <button class="head-min" id="durBtn" type="button">25 分钟</button>
     <span class="ver" id="ver"></span>
   </div>
 
@@ -115,6 +149,13 @@
   <div class="hint" id="hint"></div>
 </div>
 
+<div class="mask" id="durMask"></div>
+<div class="sheet" id="durSheet">
+  <h2>专注时长</h2>
+  <p class="sub" id="durSub">休息按 5:1 配好，开始之后这一轮不能改</p>
+  <div class="grid" id="durGrid"></div>
+</div>
+
 <script>
   // 番茄钟：**界面在插件里，计时和通知在主包**。
   //
@@ -126,7 +167,33 @@
   // "今天专注几次"直接翻倍。
 
   var RING = 653.45; // 2πr，r=104
-  var STATE = { session: null, poll: null, bridgeOk: true };
+  var STATE = { session: null, poll: null, bridgeOk: true, focusMinutes: 25 };
+
+  // 专注时长的预设：15~60，每 5 分钟一档。
+  //
+  // 为什么不是 5 起：成年人的高度专注区间是 10~40 分钟（光明网、科普中国、
+  // 百度百科引的是同一组数据），25 分钟是其中最"跳一跳够得着"的位置。
+  // 低于 10 分钟根本进不了状态 —— 5 分钟的"专注"没有实际意义，
+  // 与其给一个用不上的档位，不如把范围收在真有人用的地方。
+  // 上限 60：再长就该分两轮了，番茄钟的价值本来就在间歇。
+  var PRESETS = [15, 20, 25, 30, 35, 40, 45, 50, 60];
+
+  // 休息时长跟着专注走：短休按 5:1（和 25/5 这个经典比例同一套），
+  // 取最近的 5 分钟档、下限 5；长休 = 短休 × 3。
+  // 写成公式而不是一张对照表，是为了以后加档位不用重算。
+  function breaksFor(focusMinutes) {
+    var short = Math.max(5, Math.round(focusMinutes / 25) * 5);
+    return { short: short, long: short * 3 };
+  }
+
+  function planParams(minutes) {
+    var b = breaksFor(minutes);
+    return {
+      focusMinutes: minutes,
+      shortBreakMinutes: b.short,
+      longBreakMinutes: b.long,
+    };
+  }
 
   function pad(n) { return (n < 10 ? '0' : '') + n; }
   function mmss(seconds) {
@@ -151,7 +218,7 @@
     var reset = document.getElementById('reset');
 
     if (!s) {
-      document.getElementById('time').textContent = '25:00';
+      document.getElementById('time').textContent = mmss(STATE.focusMinutes * 60);
       document.getElementById('phase').textContent = '专注';
       document.getElementById('bar').setAttribute('stroke-dashoffset', String(RING));
       ring.className = 'ring';
@@ -262,7 +329,9 @@
   document.getElementById('main').addEventListener('click', async function () {
     var s = STATE.session;
     if (!s) {
-      STATE.session = await window.host.call('timer.start', { mode: 'focus' });
+      STATE.session = await window.host.call('timer.start', Object.assign(
+        { mode: 'focus' }, planParams(STATE.focusMinutes)
+      ));
       render();
       return;
     }
@@ -278,11 +347,97 @@
     } else if (s.remainingSeconds === s.plannedSeconds) {
       // 一秒没跑过 = 开始（重置之后、或者刚进下一个阶段）。
       // 调 resume 会复用上一个会话的 id，那一轮就记不进历史了。
-      await window.host.call('timer.start', { mode: s.mode });
+      await window.host.call('timer.start', Object.assign(
+        { mode: s.mode }, planParams(STATE.focusMinutes)
+      ));
     } else {
       await window.host.call('timer.resume', {});
     }
     await refresh();
+  });
+
+  // ---- 专注时长 ----
+
+  function renderDur() {
+    document.getElementById('durBtn').textContent = STATE.focusMinutes + ' 分钟';
+  }
+
+  function renderDurGrid() {
+    var host = document.getElementById('durGrid');
+    host.innerHTML = PRESETS.map(function (m) {
+      var on = m === STATE.focusMinutes ? ' on' : '';
+      var b = breaksFor(m);
+      return '<button class="pick' + on + '" data-min="' + m + '" type="button">' +
+        '<span>' + m + ' 分</span>' +
+        '<span class="b">休 ' + b.short + '</span>' +
+        '</button>';
+    }).join('');
+    var cur = breaksFor(STATE.focusMinutes);
+    document.getElementById('durSub').textContent =
+      '休息按 5:1 配好：短休 ' + cur.short + ' 分钟 · 长休 ' + cur.long +
+      ' 分钟。开始之后这一轮不能改。';
+  }
+
+  function openDur() {
+    renderDurGrid();
+    document.getElementById('durMask').classList.add('on');
+    document.getElementById('durSheet').classList.add('on');
+  }
+
+  function closeDur() {
+    document.getElementById('durMask').classList.remove('on');
+    document.getElementById('durSheet').classList.remove('on');
+  }
+
+  async function pickDur(minutes) {
+    closeDur();
+    if (minutes === STATE.focusMinutes) return;
+
+    try {
+      // 交给主包改计划。专注和休息**一起传**：只改专注会出现
+      // 45 分钟配 5 分钟休息的错配。
+      var res = await window.host.call('timer.configure', planParams(minutes));
+      STATE.focusMinutes = minutes;
+      renderDur();
+
+      if (res && res.applied === 'next') {
+        // 这一轮已经开始了：改动**留给下一轮**，本轮圆环不动。
+        // 不这么做的话，中途改时长等于给这一轮凭空加减时间。
+        render(); // 先重画（render 会重置 hint），再压一条临时提示
+        var b = breaksFor(minutes);
+        flashHint('已改为 ' + minutes + ' 分钟（休息 ' + b.short + ' 分），下一轮生效');
+      } else {
+        STATE.session = res && res.session ? res.session : STATE.session;
+        render();
+      }
+
+      // 存自己的偏好：主包不管用户的节奏，下次打开由插件带回来
+      window.host.call('store.set', { key: 'focusMinutes', value: String(minutes) })
+        .catch(function () { /* 存不上不影响这一轮，下次回到 25 分钟而已 */ });
+    } catch (error) {
+      document.getElementById('hint').textContent = '改时长失败：' + (error.message || error.code);
+    }
+  }
+
+  // 临时提示：2.6 秒后撤掉。撤掉时重画一次，别把"没有通知权限"那类
+  // 常驻提示一起擦掉。
+  var hintTimer = null;
+  function flashHint(text) {
+    var hint = document.getElementById('hint');
+    hint.textContent = text;
+    if (hintTimer) clearTimeout(hintTimer);
+    hintTimer = setTimeout(function () {
+      hint.textContent = '';
+      hintTimer = null;
+      render();
+    }, 2600);
+  }
+
+  document.getElementById('durBtn').addEventListener('click', openDur);
+  document.getElementById('durMask').addEventListener('click', closeDur);
+  document.getElementById('durGrid').addEventListener('click', function (event) {
+    var btn = event.target.closest('.pick');
+    if (btn) pickDur(parseInt(btn.getAttribute('data-min'), 10));
   });
 
   document.getElementById('skip').addEventListener('click', async function () {
@@ -332,6 +487,17 @@
       // 事件只是「有变化了」的通知，数据去主包查
       refreshRecords();
     });
+
+    // 读用户上次选的时长。读不到就用 25（主包默认）
+    try {
+      var saved = await window.host.call('store.get', { key: 'focusMinutes' });
+      var minutes = parseInt(saved && saved.value, 10);
+      // 只接受预设里的档位：老版本存过 5/10 的，这里会自动回到默认 25
+      if (PRESETS.indexOf(minutes) >= 0) {
+        STATE.focusMinutes = minutes;
+      }
+    } catch (error) { /* 读不到就用默认值 */ }
+    renderDur();
 
     await refresh();
     await refreshRecords();

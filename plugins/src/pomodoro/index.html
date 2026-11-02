@@ -419,8 +419,9 @@
     }
   }
 
-  // 临时提示：2.6 秒后撤掉。撤掉时重画一次，别把"没有通知权限"那类
-  // 常驻提示一起擦掉。
+  // 临时提示：3.6 秒后撤掉。撤掉时重画一次，别把"通知权限未开启"那类
+  // 常驻提示一起擦掉。这个时长按"读一遍 20 字的句子"估的，
+  // 原来 2.6 秒偏短，用户还没看完就没了。
   var hintTimer = null;
   function flashHint(text) {
     var hint = document.getElementById('hint');
@@ -430,7 +431,7 @@
       hint.textContent = '';
       hintTimer = null;
       render();
-    }, 2600);
+    }, 3600);
   }
 
   document.getElementById('durBtn').addEventListener('click', openDur);

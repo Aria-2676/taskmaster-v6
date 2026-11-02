@@ -102,6 +102,13 @@ android {
             } else {
                 signingConfigs.getByName("debug")
             }
+            // 显式声明 keep 规则文件（R8 默认开着，和 Flutter 自带的那份并行生效）。
+            // 不加的话 flutter_local_notifications 的排期列表反序列化会抛
+            // "Missing type parameter"，到点通知静默不弹。
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro",
+            )
         }
     }
 }

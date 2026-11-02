@@ -290,10 +290,24 @@ class PluginBridge {
   // 实时推送（`host.on`）只在插件页面活着的时候有效。用户勾任务的时候
   // 插件大概率没挂载 —— 那些事件在这里等它。
 
+  /// payload 里**带任务数据**的钩子。只有这些才需要 `task:read`。
+  ///
+  /// 为什么按钩子分而不是一律要求：番茄钟的 `pomodoro.sessionFinished` 只有
+  /// sessionId 和时长，没有任何任务内容。一律要求"读取你的任务"有两个后果：
+  /// 一个计时器被迫申请它根本用不到的权限；而且它调 `event.pending` 会被拒，
+  /// 插件侧一旦吞掉这个错误，就变成"杀进程那一轮的记录永远补不回来"——
+  /// 6.1.0 在模拟器上真踩过，查了很久才发现是权限把补发通道堵死了。
+  static const Set<HookId> _taskPayloadHooks = <HookId>{
+    HookId.taskCompleted,
+    HookId.taskRecycled,
+    HookId.taskRestored,
+  };
+
+  /// 这个插件会不会收到带任务数据的事件。
+  bool get _needsTaskReadForEvents => hooks.any(_taskPayloadHooks.contains);
+
   Future<Map<String, Object?>> _eventPending(Map<String, Object?> params) async {
-    // 事件 payload 里带着任务标题、日期、估时，等于一份任务数据，
-    // 所以要求同一份 `task:read`。没这个权限的插件只声明 hooks 也拿不到内容。
-    _require(PluginPermissions.taskRead);
+    if (_needsTaskReadForEvents) _require(PluginPermissions.taskRead);
     final journal = this.journal;
     if (journal == null || hooks.isEmpty) return _ok(const <Object?>[]);
 
@@ -312,7 +326,8 @@ class PluginBridge {
   }
 
   Future<Map<String, Object?>> _eventAck(Map<String, Object?> params) async {
-    _require(PluginPermissions.taskRead);
+    // ack 只是"这些我收下了"，不泄露内容；和 pending 用同一条判据保持一致
+    if (_needsTaskReadForEvents) _require(PluginPermissions.taskRead);
     final raw = params['ids'];
     if (raw is! List || raw.isEmpty) {
       throw const _BridgeError('bad_params', 'ids 必须是非空数组');

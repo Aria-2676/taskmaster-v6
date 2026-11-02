@@ -188,7 +188,7 @@ class PomodoroStore extends ChangeNotifier {
     final current = _session;
     if (current == null) return;
     _session = _accumulate();
-    await _settle();
+    await _settle(cancelReminder: true);
     _session = _session!.advance(_plan);
     _settledSessionId = null;
     await _persist();
@@ -290,8 +290,13 @@ class PomodoroStore extends ChangeNotifier {
   @visibleForTesting
   Future<void> debugPump() => _onTick();
 
-  /// 结算：停表、取消提醒、派发事件、落一条"已完成"的状态。
-  Future<void> _settle() async {
+  /// 结算：停表、派发事件、落一条"已完成"的状态。
+  ///
+  /// [cancelReminder] **只在"提前结束"时为 true**（skip / 重置）。
+  /// 自然到点时**不能**取消：那条通知就是到点提醒本身，主包在后台还在每秒 tick，
+  /// 一到点就结算 —— 顺手 cancel 会把闹钟刚弹出来的通知一起抹掉，
+  /// 表现成"到点什么都不响"。这个坑在模拟器上真踩过。
+  Future<void> _settle({bool cancelReminder = false}) async {
     final current = _session;
     if (current == null) return;
 
@@ -302,7 +307,7 @@ class PomodoroStore extends ChangeNotifier {
     _stopTicker();
     _runningSince = null;
     _session = current.copyWith(running: false);
-    await _cancelNotification();
+    if (cancelReminder) await _cancelNotification();
     await _persist();
 
     // **不 await**：钩子是通知不是拦截，插件慢不能拖住结算。

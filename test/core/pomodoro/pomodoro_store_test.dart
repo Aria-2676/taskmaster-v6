@@ -305,6 +305,28 @@ void main() {
     expect(sink.calls, contains('schedule'), reason: '继续之后必须重新排，否则这一轮没有提醒');
   });
 
+  test('自然到点不取消提醒（那条通知就是提醒本身）', () async {
+    final store = build();
+    await store.start();
+    final before = sink.cancelCount;
+
+    fakeNow = fakeNow.add(store.session!.planned);
+    await store.debugPump();
+
+    expect(store.session!.finished, isTrue);
+    expect(sink.cancelCount, before, reason: '到点时取消，会把闹钟刚弹的通知一起抹掉');
+  });
+
+  test('提前结束（skip）必须取消提醒，否则过点还会响一次', () async {
+    final store = build();
+    await store.start();
+    final before = sink.cancelCount;
+
+    await store.skip();
+
+    expect(sink.cancelCount, before + 1);
+  });
+
   test('没有通知权限时：不排提醒，并把 canNotify=false 交给界面', () async {
     sink.permissionGranted = false;
     final store = build();

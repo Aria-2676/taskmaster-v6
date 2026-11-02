@@ -336,7 +336,9 @@
       }
       if (acked.length) await window.host.call('event.ack', { ids: acked });
     } catch (error) {
-      // 没有 storage/hooks 的宿主会在这里报错，不影响计时本身
+      // 不静默：补发通道断了之后，"杀进程那轮的记录"就永远补不回来，
+      // 而表面上一点错都看不出来（真踩过，查了很久）
+      console.warn('[pomodoro] 读取待补发事件失败：', error);
     }
 
     window.host.on('pomodoro.sessionFinished', function (payload) {

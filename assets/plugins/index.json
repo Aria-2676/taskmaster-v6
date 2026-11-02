@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "publishedAt": "2026-11-02T04:34:27Z",
+  "publishedAt": "2026-11-02T04:36:31Z",
   "plugins": [
     {
       "id": "energy_currency",
@@ -67,7 +67,7 @@
     {
       "id": "pomodoro",
       "name": "番茄钟",
-      "version": "1.3.3",
+      "version": "1.3.4",
       "contract": 2,
       "description": "专注计时，到点提醒。专注时长可在 5~60 分钟里选。",
       "icon": "timer",
@@ -76,9 +76,9 @@
       ],
       "host": ">=6.1.1",
       "package": {
-        "path": "plugins/packages/pomodoro_v1.3.3.zip",
-        "sha256": "7a364ecaa0146805cb987b8b45d1ba05b05adcdf6ab8c9860c52b62eeb7ca965",
-        "sizeBytes": 8177
+        "path": "plugins/packages/pomodoro_v1.3.4.zip",
+        "sha256": "59c4f415c4433d3d5c29f62924fa61eea865db8529618f5aaed1562b67c2e6f2",
+        "sizeBytes": 8279
       }
     }
   ]

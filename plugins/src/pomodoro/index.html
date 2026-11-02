@@ -77,7 +77,9 @@
      写在里面的临时提示活不过一秒。 */
   .toast {
     position: fixed; left: 50%; bottom: 88px; transform: translateX(-50%);
-    max-width: 86%; padding: 7px 12px; border-radius: 999px;
+    /* max-content：不写的话收缩到"半个屏宽"就折行了 —— 22 个字的句子
+       会被切成两截。配 max-width 兜住超长文本。 */
+    width: max-content; max-width: 86%; padding: 7px 12px; border-radius: 999px;
     background: rgba(0,0,0,.82); color: #fff; font-size: 12px;
     text-align: center; opacity: 0; transition: opacity .18s;
     pointer-events: none; z-index: 12;

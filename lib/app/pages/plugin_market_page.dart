@@ -109,7 +109,7 @@ class _PluginMarketPageState extends State<PluginMarketPage> {
             ),
         const SizedBox(height: 14),
         Text(
-          '装完会在侧边栏出现入口；卸载后入口和它占的空间一起消失。',
+          '安装后会在侧边栏出现入口；卸载后入口随之移除。',
           style: TextStyle(fontSize: 11.5, height: 1.6, color: muted),
         ),
       ],

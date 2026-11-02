@@ -520,6 +520,13 @@
     } catch (error) { /* 读不到就用默认值 */ }
     renderDur();
 
+    // 把偏好同步给主包。不同步的话：重启后主包 plan 回到默认 25，
+    // 而头部按钮显示的是用户的 60 —— 点「跳过」推进出来的下一轮就是 25:00，
+    // 和头上的 60 对不上（2026-11-02 在模拟器上看到过）。
+    try {
+      await window.host.call('timer.configure', planParams(STATE.focusMinutes));
+    } catch (error) { /* 老主包没有 configure，退回默认节奏 */ }
+
     await refresh();
     await refreshRecords();
 

@@ -1,28 +1,11 @@
 {
   "schemaVersion": 1,
-  "publishedAt": "2026-11-02T04:16:06Z",
+  "publishedAt": "2026-11-02T04:27:44Z",
   "plugins": [
-    {
-      "id": "demo_help",
-      "name": "使用说明",
-      "version": "1.4.0",
-      "contract": 1,
-      "description": "验证安装、读写、事件与私有存储的示例插件",
-      "icon": "help",
-      "permissions": [
-        "task:read",
-        "task:write"
-      ],
-      "package": {
-        "path": "plugins/packages/demo_help_v1.4.0.zip",
-        "sha256": "ec437362b967259f383896190995fb1dfae3b10921f4beae7a6f1c0933aed2bf",
-        "sizeBytes": 4054
-      }
-    },
     {
       "id": "energy_currency",
       "name": "能量",
-      "version": "1.0.0",
+      "version": "1.0.1",
       "contract": 1,
       "description": "完成任务得能量。能量是任务管家的通用货币，以后商城、抽奖都花它。",
       "icon": "bolt",
@@ -32,15 +15,15 @@
         "currency:write"
       ],
       "package": {
-        "path": "plugins/packages/energy_currency_v1.0.0.zip",
-        "sha256": "01dd5115a13204255d430dea75b81d3267d7c8b2052d825bd5c8eaa87d008a21",
-        "sizeBytes": 4470
+        "path": "plugins/packages/energy_currency_v1.0.1.zip",
+        "sha256": "a93180f5530dafb31eb0ba60174940e83cd4db39a4c7fac441f1308584fb2e4a",
+        "sizeBytes": 4339
       }
     },
     {
       "id": "list_mode",
       "name": "待办清单",
-      "version": "1.1.0",
+      "version": "1.1.1",
       "contract": 1,
       "description": "所有待办拉平，逾期排最前。",
       "icon": "checklist",
@@ -54,15 +37,15 @@
         "order": 20
       },
       "package": {
-        "path": "plugins/packages/list_mode_v1.1.0.zip",
-        "sha256": "980c690cf285e6cac5922a5e5d9f5994b86680751f15a14c521b4967180ffe7d",
-        "sizeBytes": 6274
+        "path": "plugins/packages/list_mode_v1.1.1.zip",
+        "sha256": "39be81642ebcebd4699163e085618b78b795cf8a99d48757aeacc5b37159f0cc",
+        "sizeBytes": 6289
       }
     },
     {
       "id": "plan_mode",
       "name": "周计划",
-      "version": "1.2.2",
+      "version": "1.2.3",
       "contract": 1,
       "description": "把未来七天铺开，一件事挪到哪天就是哪天。",
       "icon": "calendar_view_week",
@@ -76,15 +59,15 @@
         "order": 10
       },
       "package": {
-        "path": "plugins/packages/plan_mode_v1.2.2.zip",
-        "sha256": "6574cb93d1b4cc08f47dd406f87bce40eb042fd3544437921f672a25c4ee4b3f",
-        "sizeBytes": 6290
+        "path": "plugins/packages/plan_mode_v1.2.3.zip",
+        "sha256": "a4b6088d641e1dac50cc44021d58039ac311fa771fd90749170548e439643afb",
+        "sizeBytes": 6299
       }
     },
     {
       "id": "pomodoro",
       "name": "番茄钟",
-      "version": "1.3.0",
+      "version": "1.3.1",
       "contract": 2,
       "description": "专注计时，到点提醒。专注时长可在 5~60 分钟里选。",
       "icon": "timer",
@@ -93,9 +76,9 @@
       ],
       "host": ">=6.1.1",
       "package": {
-        "path": "plugins/packages/pomodoro_v1.3.0.zip",
-        "sha256": "d42d3b3b8966a00bb55ea8eb7d29aa7efe209f92dfddbd330bf8eb76a53ee6bb",
-        "sizeBytes": 7924
+        "path": "plugins/packages/pomodoro_v1.3.1.zip",
+        "sha256": "9f7768ff15281819d9aa646def840f752b817d36aadbe3ab4fe36500907523c0",
+        "sizeBytes": 7967
       }
     }
   ]

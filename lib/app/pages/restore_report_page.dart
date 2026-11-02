@@ -54,7 +54,7 @@ class RestoreReportPage extends StatelessWidget {
               tone: _Tone.warn,
               children: <Widget>[
                 const Text(
-                  '多半是当前没装那个插件、库里也没有它的表。想恢复就先把它装上，再恢复一次。',
+                  '通常是因为未安装该插件，且数据库中不存在对应数据表。请先安装插件后重新恢复。',
                   style: TextStyle(fontSize: 12, height: 1.4),
                 ),
                 const SizedBox(height: 8),

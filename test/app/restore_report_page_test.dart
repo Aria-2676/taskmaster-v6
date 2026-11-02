@@ -30,13 +30,14 @@ void main() {
     expect(find.textContaining('这些字段被忽略'), findsNothing);
   });
 
-  testWidgets('有跳过的插件：标题改口，并给出"先装上再来"的出路', (tester) async {
+  testWidgets('有跳过的插件：标题改口，并给出"先安装再恢复"的出路', (tester) async {
     await pump(tester, reportWith(skipped: <String>['energy_currency']));
 
     expect(find.text('恢复完成，但有东西没进来'), findsOneWidget);
     expect(find.textContaining('这些没恢复'), findsOneWidget);
     expect(find.textContaining('energy_currency'), findsOneWidget);
-    expect(find.textContaining('先把它装上'), findsOneWidget);
+    // 文案已改为陈述式：说清原因 + 下一步，不带口语
+    expect(find.textContaining('先安装插件后重新恢复'), findsOneWidget);
   });
 
   testWidgets('有被丢弃的字段：逐个列出来，超过 20 个才折叠', (tester) async {

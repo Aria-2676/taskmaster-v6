@@ -513,7 +513,7 @@ class _MainShellState extends State<MainShell> {
             style: const TextStyle(fontSize: 16)),
         content: Text(
           '$sizeMb。\n'
-          '它和你正在用的这个版本是两个 App，不会覆盖；装完桌面上会多一个图标。',
+          '该版本与当前版本是两个独立应用，不会覆盖安装；安装后桌面会新增一个图标。',
           style: const TextStyle(fontSize: 13, height: 1.5),
         ),
         actions: <Widget>[
@@ -596,7 +596,7 @@ class _MainShellState extends State<MainShell> {
             for (final mirror in target.mirrors)
               LegacyChannel(label: Uri.parse(mirror).host, url: mirror),
             const LegacyChannel(
-              label: '打不开就去 release 页自己挑',
+              label: '如无法打开，请前往 Release 页面手动选择',
               url: LegacyV5Link.releasesUrl,
               note: '分机型的包更小',
             ),

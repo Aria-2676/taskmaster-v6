@@ -91,9 +91,9 @@ class HomeModePage extends StatelessWidget {
                   padding: const EdgeInsets.fromLTRB(16, 10, 16, 8),
                   child: Text(
                     '右侧开关控制这个模式进不进顶栏的快捷切换。专做首页的插件默认打开，'
-                    '其它插件（例如记账、使用说明）默认关闭 —— 想用就自己打开。\n'
+                    '其它插件（例如记账、使用说明）默认关闭，需要时可自行开启。\n'
                     '内置模式和当前模式始终进快捷切换：前者是插件出问题时的退路，'
-                    '后者让你点开列表就知道自己现在在哪儿。',
+                    '后者会在列表中标注当前所处位置。',
                     style: TextStyle(fontSize: 11, height: 1.45, color: scheme.outline),
                   ),
                 ),

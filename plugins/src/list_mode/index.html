@@ -150,7 +150,7 @@
 <div class="mask" id="mask"></div>
 <div class="sheet" id="sheet">
   <h2 id="sheetTitle">任务</h2>
-  <p class="sub" id="sheetSub">改到哪天，或者直接完成</p>
+  <p class="sub" id="sheetSub">调整日期或标记完成</p>
   <div class="grid">
     <button class="pick" id="toToday">今天</button>
     <button class="pick" id="toTomorrow">明天</button>
@@ -163,7 +163,7 @@
 <div class="mask" id="addMask"></div>
 <div class="sheet" id="addSheet">
   <h2>新建待办</h2>
-  <p class="sub">写个标题，选个截止日期</p>
+  <p class="sub">填写标题与截止日期</p>
   <div class="field">
     <label for="addTitle">做什么</label>
     <input class="input" id="addTitle" maxlength="60" placeholder="要做什么？" enterkeyhint="done">
@@ -300,9 +300,9 @@
     if (!items.length) {
       var empty = document.createElement('div');
       empty.className = 'empty';
-      empty.textContent = state.filter === 'done' ? '还没有完成的任务'
-        : state.filter === 'overdue' ? '没有逾期，挺好'
-        : '这里空了';
+      empty.textContent = state.filter === 'done' ? '暂无已完成的任务'
+        : state.filter === 'overdue' ? '暂无逾期任务'
+        : '当前筛选下没有任务';
       list.appendChild(empty);
       return;
     }
@@ -402,7 +402,7 @@
           tags: [],
         });
         render();
-        toast('加好了');
+        toast('已添加');
       })
       .catch(function (error) {
         toast('添加失败：' + (error.message || error.code));

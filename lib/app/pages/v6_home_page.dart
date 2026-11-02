@@ -183,7 +183,7 @@ class V6HomePage extends StatelessWidget {
         Padding(
           padding: const EdgeInsets.fromLTRB(4, 0, 4, 12),
           child: Text(
-            '另有 $rest 条更早的逾期任务，先完成上面这几条就好',
+            '另有 $rest 条更早的逾期任务',
             style: TextStyle(fontSize: 11, color: scheme.outline),
           ),
         ),

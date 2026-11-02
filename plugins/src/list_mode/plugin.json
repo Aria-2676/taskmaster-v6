@@ -1,7 +1,7 @@
 {
   "id": "list_mode",
   "name": "待办清单",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "contract": 1,
   "entry": "index.html",
   "description": "所有待办拉平，逾期排最前。",

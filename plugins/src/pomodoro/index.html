@@ -152,7 +152,7 @@
 <div class="mask" id="durMask"></div>
 <div class="sheet" id="durSheet">
   <h2>专注时长</h2>
-  <p class="sub" id="durSub">休息按 5:1 配好，开始之后这一轮不能改</p>
+  <p class="sub" id="durSub">休息时长随专注时长联动</p>
   <div class="grid" id="durGrid"></div>
 </div>
 
@@ -253,7 +253,7 @@
 
     // 没有通知权限时说清楚，别让用户以为到点一定会响
     document.getElementById('hint').innerHTML = s.canNotify === false
-      ? '<span class="warn">系统没给通知权限</span><br>到点不会响，去系统设置里允许「任务管家6」发通知'
+      ? '<span class="warn">通知权限未开启</span><br>到点提醒不会显示。请在系统设置中允许「任务管家6」发送通知'
       : '';
   }
 
@@ -277,7 +277,7 @@
       if (error && error.code === 'unavailable') {
         STATE.bridgeOk = false;
         document.getElementById('hint').innerHTML =
-          '<span class="warn">这版 App 没有计时能力</span><br>需要 6.1.0 或更新的版本';
+          '<span class="warn">当前版本不支持计时功能</span><br>需要 6.1.0 或更高版本';
       }
     }
   }
@@ -374,8 +374,8 @@
     }).join('');
     var cur = breaksFor(STATE.focusMinutes);
     document.getElementById('durSub').textContent =
-      '休息按 5:1 配好：短休 ' + cur.short + ' 分钟 · 长休 ' + cur.long +
-      ' 分钟。开始之后这一轮不能改。';
+      '短休 ' + cur.short + ' 分钟 · 长休 ' + cur.long +
+      ' 分钟，随专注时长联动。本轮开始后的修改于下一轮生效。';
   }
 
   function openDur() {
@@ -405,7 +405,7 @@
         // 不这么做的话，中途改时长等于给这一轮凭空加减时间。
         render(); // 先重画（render 会重置 hint），再压一条临时提示
         var b = breaksFor(minutes);
-        flashHint('已改为 ' + minutes + ' 分钟（休息 ' + b.short + ' 分），下一轮生效');
+        flashHint('已设为 ' + minutes + ' 分钟，短休 ' + b.short + ' 分钟，下一轮生效');
       } else {
         STATE.session = res && res.session ? res.session : STATE.session;
         render();
@@ -415,7 +415,7 @@
       window.host.call('store.set', { key: 'focusMinutes', value: String(minutes) })
         .catch(function () { /* 存不上不影响这一轮，下次回到 25 分钟而已 */ });
     } catch (error) {
-      document.getElementById('hint').textContent = '改时长失败：' + (error.message || error.code);
+      document.getElementById('hint').textContent = '设置失败：' + (error.message || error.code);
     }
   }
 
@@ -456,7 +456,7 @@
     tries = tries || 0;
     if (window.host) return callback();
     if (tries > 100) {
-      document.getElementById('hint').textContent = '宿主通道没起来';
+      document.getElementById('hint').textContent = '无法连接应用，请重新打开';
       return;
     }
     setTimeout(function () { whenHostReady(callback, tries + 1); }, 30);

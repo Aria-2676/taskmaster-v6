@@ -41,7 +41,10 @@ void main() {
   test('内置索引可读、能解析、至少有一个插件', () async {
     final index = await loadIndex();
     expect(index.plugins, isNotEmpty);
-    expect(index.plugins.map((p) => p.id), contains('demo_help'));
+    // `demo_help` 是安装链路的验证插件（会往用户任务里写测试数据），
+    // 只给开发者用：源码留在 plugins/src/，但不进市场索引。
+    // 这条断言守的就是"别把它顺手放回市场"。
+    expect(index.plugins.map((p) => p.id), isNot(contains('demo_help')));
     // 插件 id 会成为目录名与表前缀，格式必须在入口就挡住
     for (final entry in index.plugins) {
       expect(RegExp(r'^[a-z][a-z0-9_]{1,31}$').hasMatch(entry.id), isTrue,

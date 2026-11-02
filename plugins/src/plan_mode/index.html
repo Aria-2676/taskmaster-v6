@@ -167,7 +167,7 @@
 <div class="mask" id="mask"></div>
 <div class="sheet" id="sheet">
   <h2 id="sheetTitle">任务</h2>
-  <p class="sub" id="sheetSub">选一天，就挪到那天</p>
+  <p class="sub" id="sheetSub">选择要移动到的日期</p>
   <div class="grid" id="picks"></div>
   <div class="row">
     <button class="btn" id="toggleDone">标记完成</button>
@@ -176,7 +176,7 @@
 </div>
 <div class="mask" id="addMask"></div>
 <div class="sheet" id="addSheet">
-  <h2>加一条</h2>
+  <h2>新建任务</h2>
   <p class="sub" id="addSub">今天</p>
   <input id="addInput" class="input" placeholder="要做什么？" maxlength="60" enterkeyhint="done">
   <div class="row">
@@ -403,7 +403,7 @@
     document.getElementById('sheetTitle').textContent = task.title;
     document.getElementById('sheetSub').textContent = task.isDone
       ? '已完成 · 选一天可以挪过去'
-      : '选一天，就挪到那天';
+      : '选择要移动到的日期';
 
     var picks = document.getElementById('picks');
     picks.innerHTML = '';

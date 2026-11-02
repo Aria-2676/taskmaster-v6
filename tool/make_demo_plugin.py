@@ -51,6 +51,13 @@ REPO_DIR = os.path.join(ROOT, "plugins", "packages")
 # 装的时候再联网下载。所以这里收的是"谁例外"，不是"谁走仓库"。
 REPO_ONLY = {"demo_help", "energy_currency", "plan_mode", "list_mode", "pomodoro"}
 
+# 只在开发时用的插件：**不进市场索引，也不打包**。
+#
+# `demo_help` 是安装链路的验证插件，会往用户的任务里写测试数据 ——
+# 用户在市场上看到它、装上一个"使用说明"，本身就是噪音（用户 2026-11-02 指出）。
+# 源码留在 plugins/src/ 下，需要它时把这里清空再跑一次脚本即可。
+DEBUG_ONLY = {"demo_help"}
+
 FIXED_TIME = (1980, 1, 1, 0, 0, 0)
 
 
@@ -139,6 +146,13 @@ def main() -> None:
         plugin_dir = os.path.join(SRC_ROOT, plugin_id)
         manifest_path = os.path.join(plugin_dir, "plugin.json")
         if not os.path.isfile(manifest_path):
+            continue
+        if plugin_id in DEBUG_ONLY:
+            # 顺手清掉以前打出来的包，避免它还躺在 plugins/packages/ 里
+            # 被误当成"在分发的东西"
+            for stale in glob.glob(os.path.join(REPO_DIR, f"{plugin_id}_v*.zip")):
+                os.remove(stale)
+                print(f"removed debug-only {stale}")
             continue
 
         with open(manifest_path, encoding="utf-8") as handle:

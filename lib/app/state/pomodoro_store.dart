@@ -205,12 +205,17 @@ class PomodoroStore extends ChangeNotifier {
 
     _stopTicker();
     _settledSessionId = null;
-    // **重置必须换 sessionId**：重置 = 放弃这一段，后面再跑是新会话。
-    // 不换的话，`resume()` 会复用旧 id，而历史按 sessionId 去重 ——
-    // 这一轮永远记不上（2026-11-02 在模拟器上丢过一整轮，查了很久）。
-    _session = current
-        .reset(running: false)
-        .copyWith(sessionId: _newSessionId());
+    // **重置 = 用当前节奏重来一遍**，所以 planned 也要跟着 plan 走，
+    // 不能只清秒数：改过时长或者换了版本（会话里存的是旧 planned）之后，
+    // 「重置」如果还按旧时长，用户看到的就是一个改不掉的数字。
+    // 同时换 sessionId —— 重置是放弃这一段，历史按 id 去重，不换就永远记不上
+    // （2026-11-02 在模拟器上丢过一整轮，查了很久）。
+    _session = current.copyWith(
+      elapsed: Duration.zero,
+      running: false,
+      planned: _plan.durationOf(current.phase),
+      sessionId: _newSessionId(),
+    );
     _runningSince = null;
     await _cancelNotification();
     await _persist();

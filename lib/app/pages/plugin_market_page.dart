@@ -320,7 +320,7 @@ class _PluginMarketPageState extends State<PluginMarketPage> {
       // 具体门槛写进 tooltip，卡片上只留一句短的。
       return Tooltip(
         message: blocked == '与当前app版本不匹配'
-            ? '这个插件要求的接口版本比你这版 App 新，装上会跑不起来'
+            ? '该插件要求的接口版本高于当前应用版本，安装后无法运行'
             : '这个插件要求更新的 App：$blocked',
         child: SizedBox(
           width: 78,
@@ -447,7 +447,7 @@ class _PluginMarketPageState extends State<PluginMarketPage> {
               if (hasDestructive) ...<Widget>[
                 const SizedBox(height: 6),
                 Text(
-                  '删除不可逆；如果你开着回收站，被删的任务仍然会先进回收站。',
+                  '删除不可撤销。若已开启回收站，被删任务会先进入回收站。',
                   style: TextStyle(fontSize: 11.5, height: 1.4, color: scheme.outline),
                 ),
               ],

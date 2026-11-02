@@ -488,6 +488,21 @@ void main() {
       expect(store.session!.planned, const Duration(minutes: 45));
     });
 
+    test('重置后按当前节奏重建（旧会话的时长不能赖着）', () async {
+      final store = build();
+      await store.start(focusMinutes: 20);
+      expect(store.session!.planned, const Duration(minutes: 20));
+
+      // 换成 45 分钟，再重置
+      await store.configure(focusMinutes: 45);
+      await store.start();
+      await store.reset();
+
+      expect(store.session!.planned, const Duration(minutes: 45),
+          reason: '重置要用当前节奏，不是会话里那个旧数字');
+      expect(store.session!.elapsed, Duration.zero);
+    });
+
     test('专注和休息一起改（联动）', () async {
       final store = build();
       await store.configure(

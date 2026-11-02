@@ -290,7 +290,7 @@ class _BackupPageState extends State<BackupPage> {
         title: const Text('删除较早的备份？', style: TextStyle(fontSize: 16)),
         content: Text(
           '将删除 ${over.length} 份，最早的一份是 ${oldest.timeLabel}。\n'
-          '删掉之后找不回来 —— 想留着就先点那一行的「分享」存到别处。',
+          '删除后无法恢复。如需保留，请先通过「分享」保存到其它位置。',
           style: const TextStyle(fontSize: 13),
         ),
         actions: <Widget>[
@@ -336,7 +336,7 @@ class _BackupPageState extends State<BackupPage> {
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('删除这份备份？', style: TextStyle(fontSize: 16)),
-        content: Text('${file.timeLabel} · ${file.manifest.summary}\n删掉之后找不回来。',
+        content: Text('${file.timeLabel} · ${file.manifest.summary}\n删除后无法恢复。',
             style: const TextStyle(fontSize: 13)),
         actions: <Widget>[
           TextButton(onPressed: () => Navigator.of(ctx).pop(false), child: const Text('取消')),
@@ -396,7 +396,7 @@ class _BackupPageState extends State<BackupPage> {
                   _Card(children: <Widget>[
                     Text(
                       '已有 ${_files.length} 份备份，超过 $BackupRepository.keepLimit 份了。'
-                      '建议删掉较早的 —— 或者分享出去存到别处。',
+                      '建议删除较早的备份，或通过「分享」保存到其它位置。',
                       style: TextStyle(fontSize: 12.5, color: scheme.onSurfaceVariant, height: 1.4),
                     ),
                     Align(
@@ -410,9 +410,8 @@ class _BackupPageState extends State<BackupPage> {
                   ]),
                 _Card(children: <Widget>[
                   Text(
-                    '备份是一个文件，里面有任务、标签和设置。'
-                    '想放到别处就点某一份的「分享」——它和普通文件一样，'
-                    '能存网盘、发给自己。',
+                    '备份是一个文件，包含任务、标签和设置。'
+                    '点击某一项的「分享」可保存到网盘或发送到其它设备。',
                     style: TextStyle(fontSize: 12.5, color: scheme.onSurfaceVariant, height: 1.45),
                   ),
                 ]),
@@ -497,7 +496,7 @@ class _BackupTile extends StatelessWidget {
               if (value == 'delete') onDelete();
             },
             itemBuilder: (_) => const <PopupMenuEntry<String>>[
-              PopupMenuItem<String>(value: 'share', child: Text('分享 / 存到别处', style: TextStyle(fontSize: 13))),
+              PopupMenuItem<String>(value: 'share', child: Text('分享 / 导出', style: TextStyle(fontSize: 13))),
               PopupMenuItem<String>(
                 value: 'download',
                 child: Text('存到「下载」', style: TextStyle(fontSize: 13)),

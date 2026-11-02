@@ -66,7 +66,7 @@
 </head>
 <body>
   <h1>使用说明</h1>
-  <p class="sub">这是安装链路的验证插件，不是正式功能</p>
+  <p class="sub">安装流程验证插件，不属于正式功能</p>
 
   <!-- 版本号由宿主经 system.info 给出，写死的话升级后这里还是旧版本。
        契约版本（contract）不回显：它对用户没有可操作含义，排查时看市场页那行。 -->
@@ -75,19 +75,19 @@
   <div class="card">
     <div class="row">
       <div class="dot"></div>
-      <p><strong>它验证了安装</strong>包从索引下载、校验 sha256、解压落盘</p>
+      <p><strong>安装</strong>从索引下载安装包，校验 sha256 后解压到本地</p>
     </div>
     <div class="row">
       <div class="dot"></div>
-      <p><strong>它验证了入口</strong>装完之后，侧边栏多出这一项</p>
+      <p><strong>入口</strong>安装完成后，侧边栏会出现对应条目</p>
     </div>
     <div class="row">
       <div class="dot"></div>
-      <p><strong>它验证了离线</strong>现在看到的这一页来自本地文件，断网也能打开</p>
+      <p><strong>离线</strong>本页读取本地文件，断开网络仍可打开</p>
     </div>
     <div class="row">
       <div class="dot"></div>
-      <p><strong>它验证了卸载</strong>回插件市场点卸载，入口和目录一起消失</p>
+      <p><strong>卸载</strong>在插件市场卸载后，入口与本地目录一并移除</p>
     </div>
   </div>
 
@@ -95,44 +95,44 @@
     <div class="row">
       <div class="dot"></div>
       <p>
-        <strong>它读到了宿主的数据</strong>
-        <span id="live" class="live">正在读取…</span>
+        <strong>读取数据</strong>
+        <span id="live" class="live">正在读取</span>
       </p>
     </div>
     <div class="row">
       <div class="dot"></div>
       <p>
-        <strong>它还能写</strong>
-        <span id="write" class="live">点下面的按钮，往今天就加一条任务</span>
+        <strong>写入数据</strong>
+        <span id="write" class="live">点击下方按钮，为今天新增一条任务</span>
       </p>
     </div>
     <div class="row">
       <div class="dot"></div>
       <p>
-        <strong>它在听宿主的事件</strong>
-        <span id="event" class="live">去首页勾完一条任务，这里会立刻出现</span>
+        <strong>事件订阅</strong>
+        <span id="event" class="live">在首页完成一条任务后，此处会立即显示</span>
       </p>
     </div>
     <div class="row">
       <div class="dot"></div>
       <p>
-        <strong>它有自己的表</strong>
-        <span id="db" class="live">正在写…</span>
+        <strong>独立数据表</strong>
+        <span id="db" class="live">正在写入</span>
       </p>
     </div>
-    <button id="addTask" class="btn">加一条「来自插件的任务」</button>
-    <button id="doneFirst" class="btn">把今天第一条标记完成（会触发事件）</button>
+    <button id="addTask" class="btn">新增一条测试任务（来自插件）</button>
+    <button id="doneFirst" class="btn">完成今天的第一条任务（触发事件）</button>
   </div>
 
   <p class="note">
-    看得见这个页面，说明整条链路是通的。真正的插件（统计、番茄钟）只是换一个包而已。
+    本页可正常显示，说明插件安装与运行链路完整。
   </p>
   <script>
     function whenHostReady(callback, tries) {
       tries = tries || 0;
       if (window.host) return callback();
       if (tries > 100) {
-        document.getElementById('live').textContent = '宿主通道没起来';
+        document.getElementById('live').textContent = '无法连接应用';
         return;
       }
       setTimeout(function () { whenHostReady(callback, tries + 1); }, 30);
@@ -191,7 +191,7 @@
         })
         .then(function (rows) {
           var n = rows && rows[0] ? rows[0].n : 0;
-          document.getElementById('db').textContent = 'plg_demo_help_visits 里已有 ' + n + ' 行';
+          document.getElementById('db').textContent = '本地数据表已有 ' + n + ' 行';
         })
         .catch(function (error) {
           document.getElementById('db').textContent =
@@ -210,7 +210,7 @@
 
     document.getElementById('addTask').addEventListener('click', function () {
       var label = document.getElementById('write');
-      label.textContent = '写入中…';
+      label.textContent = '写入中';
       window.host.call('task.create', {
         title: '来自插件的任务',
         date: today(),
@@ -218,7 +218,7 @@
         estimatedMinutes: 15,
       })
         .then(function (result) {
-          label.textContent = '写入成功，任务 id = ' + result.id + '；退出插件回首页就能看到';
+          label.textContent = '写入成功，任务 ID ' + result.id + '。返回首页可见。';
         })
         .catch(function (error) {
           // 没声明 task:write 时这里会收到 permission_denied，把原文显示出来
@@ -227,7 +227,7 @@
     });
     document.getElementById('doneFirst').addEventListener('click', function () {
       var label = document.getElementById('write');
-      label.textContent = '标记完成中…';
+      label.textContent = '正在标记完成';
       window.host.call('task.list', { from: today(), to: today(), limit: 1 })
         .then(function (list) {
           if (!list || !list.length) throw { code: 'empty', message: '今天还没有任务' };
@@ -236,7 +236,7 @@
         .then(function () {
           // 这里的文字不改，等宿主把 task.completed 推回来再改 ——
           // 改了就分不清"事件真的来了"和"我自己写了一句"
-          label.textContent = '已标记完成，等待事件…';
+          label.textContent = '已标记完成，等待事件返回';
         })
         .catch(function (error) {
           label.textContent = '失败：' + (error.message || error.code);

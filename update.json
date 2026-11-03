@@ -8,7 +8,7 @@
                      "minSupported 决定强制更新：低于它的客户端只能升级、不能跳过。留空表示不强制。"
                  ],
     "schemaVersion":  1,
-    "updatedAt":  "2026-11-02T15:28:44Z",
+    "updatedAt":  "2026-11-03T03:44:30Z",
     "minSupported":  "6.0.0",
     "latest":  {
                    "version":  "6.1.2",
@@ -21,6 +21,7 @@
                                      "android-arm64-v8a":  {
                                                                "url":  "https://github.com/Aria-2676/taskmaster-v6/releases/download/v6.1.2/app-arm64-v8a-release.apk",
                                                                "mirrors":  [
+                                                                               "https://gitee.com/yaozhenqian/taskmaster-release/releases/download/v6.1.2/app-arm64-v8a-release.apk",
                                                                                "https://ghfast.top/https://github.com/Aria-2676/taskmaster-v6/releases/download/v6.1.2/app-arm64-v8a-release.apk",
                                                                                "https://gh-proxy.com/https://github.com/Aria-2676/taskmaster-v6/releases/download/v6.1.2/app-arm64-v8a-release.apk"
                                                                            ],
@@ -30,6 +31,7 @@
                                      "android-armeabi-v7a":  {
                                                                  "url":  "https://github.com/Aria-2676/taskmaster-v6/releases/download/v6.1.2/app-armeabi-v7a-release.apk",
                                                                  "mirrors":  [
+                                                                                 "https://gitee.com/yaozhenqian/taskmaster-release/releases/download/v6.1.2/app-armeabi-v7a-release.apk",
                                                                                  "https://ghfast.top/https://github.com/Aria-2676/taskmaster-v6/releases/download/v6.1.2/app-armeabi-v7a-release.apk",
                                                                                  "https://gh-proxy.com/https://github.com/Aria-2676/taskmaster-v6/releases/download/v6.1.2/app-armeabi-v7a-release.apk"
                                                                              ],
@@ -46,13 +48,14 @@
                                                             "sizeBytes":  23409350
                                                         },
                                      "android":  {
-                                                     "url":  "https://github.com/Aria-2676/taskmaster-v6/releases/download/v6.1.2/app-release.apk",
+                                                     "url":  "https://github.com/Aria-2676/taskmaster-v6/releases/download/v6.1.2/app-arm64-v8a-release.apk",
                                                      "mirrors":  [
-                                                                     "https://ghfast.top/https://github.com/Aria-2676/taskmaster-v6/releases/download/v6.1.2/app-release.apk",
-                                                                     "https://gh-proxy.com/https://github.com/Aria-2676/taskmaster-v6/releases/download/v6.1.2/app-release.apk"
+                                                                     "https://gitee.com/yaozhenqian/taskmaster-release/releases/download/v6.1.2/app-arm64-v8a-release.apk",
+                                                                     "https://ghfast.top/https://github.com/Aria-2676/taskmaster-v6/releases/download/v6.1.2/app-arm64-v8a-release.apk",
+                                                                     "https://gh-proxy.com/https://github.com/Aria-2676/taskmaster-v6/releases/download/v6.1.2/app-arm64-v8a-release.apk"
                                                                  ],
-                                                     "sha256":  "910b204ad048ef11aa96041d4404581610ec80dd31982ed0aec2086b8cbc7670",
-                                                     "sizeBytes":  62043440
+                                                     "sha256":  "1fe88de6717a386ca0e67cb3ed887038091a76e98e68976a50706427e0522e6e",
+                                                     "sizeBytes":  21925578
                                                  }
                                  }
                }

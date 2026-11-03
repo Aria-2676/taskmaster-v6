@@ -149,6 +149,7 @@ class PluginManifest {
     required this.version,
     required this.contract,
     required this.entry,
+    this.queryEntry,
     this.description,
     this.icon,
     this.slots = const <SlotId>{},
@@ -186,6 +187,10 @@ class PluginManifest {
     if (entry is! String || !_isSafeEntry(entry)) {
       throw PluginFormatException('entry 必须是包内相对 .html 路径：$entry');
     }
+    final queryEntry = json['queryEntry'];
+    if (queryEntry != null && (queryEntry is! String || !_isSafeEntry(queryEntry))) {
+      throw PluginFormatException('queryEntry 必须是包内相对 .html 路径：$queryEntry');
+    }
 
     return PluginManifest(
       id: id,
@@ -193,6 +198,7 @@ class PluginManifest {
       version: version,
       contract: contract,
       entry: entry,
+      queryEntry: queryEntry as String?,
       description: json['description'] is String ? json['description']! as String : null,
       icon: json['icon'] is String ? json['icon']! as String : null,
       slots: _parseSlots(json['slots']),
@@ -216,6 +222,13 @@ class PluginManifest {
 
   /// 包内入口 HTML（相对 zip 根）
   final String entry;
+
+  /// 离屏查询入口（可选）。声明了就意味着"页面没打开时也能被主包查"。
+  ///
+  /// 它应该是一个**不渲染 UI** 的极简 HTML：只调 `host.onQuery` 注册处理器。
+  /// 主包用不挂 widget 的 WebView 加载它（已验证可行，见
+  /// `docs/ai/work/2026-11-03-data-query.md`）。不声明就只能"页面开着时才查得到"。
+  final String? queryEntry;
 
   final String? description;
 

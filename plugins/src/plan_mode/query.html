@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>plan query</title>
+</head>
+<body>
+<script>
+// 离屏查询入口：**不渲染任何 UI**，只注册"主包能问我什么"。
+//
+// 存在的理由：插件数据在 WebView 里，页面一关 JS 环境就没了。主包（今日页、
+// 全局搜索）需要在没打开计划模式的情况下也能问到"这几天有什么安排"，于是用
+// 一个不显示的 WebView 加载本文件 —— 只要注册处理器，不需要画界面。
+//
+// 这里调 host.call 是允许的：离屏宿主会把请求转发给 PluginBridge，和正常页面一致。
+(function () {
+  function register() {
+    if (!window.host || typeof window.host.onQuery !== 'function') {
+      // 桥接脚本由主包在页面加载后注入，早于它就绪是正常的
+      setTimeout(register, 50);
+      return;
+    }
+
+    window.host.onQuery('plan.list', function (params) {
+      var from = params && params.from;
+      var to = params && params.to;
+      if (!from || !to) {
+        return Promise.resolve({ total: 0, days: [] });
+      }
+      return window.host.call('task.list', { from: from, to: to, limit: 200 })
+        .then(function (list) {
+          var tasks = list || [];
+          var byDay = {};
+          tasks.forEach(function (task) {
+            var raw = task.date || '';
+            var key = raw.slice(0, 10);
+            if (!key) return;
+            (byDay[key] = byDay[key] || []).push({
+              id: task.id,
+              title: task.title,
+              done: !!task.done
+            });
+          });
+          var days = Object.keys(byDay).sort().map(function (key) {
+            var items = byDay[key];
+            return {
+              date: key,
+              count: items.length,
+              // 只给前几条：今日页只要"概览"，全量拉回主包没意义
+              tasks: items.slice(0, 5)
+            };
+          });
+          return { total: tasks.length, days: days };
+        });
+    });
+  }
+  register();
+})();
+</script>
+</body>
+</html>

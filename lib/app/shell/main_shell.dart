@@ -892,8 +892,18 @@ class _MainShellState extends State<MainShell> {
               ),
             ),
             title: _headerTitle(),
-            // 右侧是货币徽章插槽：没有生效货币时**什么都不显示**（见 docs/main-package.md §4.5）
-            actions: <Widget>[?_badge],
+            // 右侧：货币徽章 + 新建。
+            // `+` 从底栏挪到这里（2026-11-03）：底栏改成「首页·今日·我的」三项等分，
+            // 中间不再放按钮。插件模式下仍然不画（主包不知道插件里"新建"是什么）。
+            actions: <Widget>[
+              ?_badge,
+              if (_modeAllowsAdd)
+                IconButton(
+                  icon: const Icon(Icons.add),
+                  tooltip: '新建任务',
+                  onPressed: _addTask,
+                ),
+            ],
           ),
           drawer: Drawer(
             width: MediaQuery.sizeOf(context).width * 0.58,
@@ -917,7 +927,7 @@ class _MainShellState extends State<MainShell> {
             onSelect: (i) => setState(() => _tab = i),
             // 插件模式下不给 `+`：主包不知道插件里「新建」是什么（写日记？记一笔？），
             // 留一个 `+` 去建任务，用户会以为"新加的东西没存上"。
-            onAdd: _modeAllowsAdd ? _addTask : null,
+
           ),
         );
       },
@@ -941,9 +951,16 @@ class _MainShellState extends State<MainShell> {
   /// 双击回今天只保留在内置模式：插件模式下日历条根本不可见，
   /// 回"今天"没有任何可看的东西，留着只会让人以为切坏了。
   Widget _headerTitle() {
+    const style = TextStyle(fontSize: 15, fontWeight: FontWeight.w600);
+
+    // 今日页是聚合页，标题固定为「今天」：首页那个日期切换器在这里点了
+    // 也不会切日期，留着只会让人以为能切。
+    if (_tab == 1) {
+      return const Text('今天', style: style);
+    }
+
     final home = widget.homeStore;
     final isBuiltin = home == null || home.mode.isBuiltin;
-    const style = TextStyle(fontSize: 15, fontWeight: FontWeight.w600);
 
     if (isBuiltin) {
       return Row(
@@ -1085,6 +1102,93 @@ class _MainShellState extends State<MainShell> {
     return _CurrencyBadge(value: slot.value);
   }
 
+  /// 今日页：主包内嵌的聚合页（`docs/decisions.md` 2026-11-03）。
+  ///
+  /// **不装任何插件也要有内容** —— 所以先渲染主包自己能拿到的部分。
+  /// 插件块（今日计划、置顶备忘）要等数据交互层接进来，那时按块懒加载。
+  ///
+  /// 当前是 6.3 的骨架：日期取 `_store.day`（首页正在看的那天），
+  /// 块标题写明文日期，不假装"永远是今天"——用户切到明天时不会看到错的标签。
+  Widget _todayView() {
+    final scheme = Theme.of(context).colorScheme;
+    final day = _store.day;
+    final overdue = _store.overdue;
+    final visible = _store.visible;
+
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(16, 14, 16, 28),
+      children: <Widget>[
+        Text(
+          '${day.month} 月 ${day.day} 日',
+          style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+        ),
+        const SizedBox(height: 2),
+        Text(
+          '逾期 ${overdue.length} · 这天 ${visible.length}',
+          style: TextStyle(fontSize: 12, color: scheme.onSurfaceVariant),
+        ),
+        const SizedBox(height: 16),
+        if (overdue.isNotEmpty) ...<Widget>[
+          _todayBlock('逾期', overdue, scheme),
+          const SizedBox(height: 14),
+        ],
+        _todayBlock('这天的安排', visible, scheme),
+      ],
+    );
+  }
+
+  Widget _todayBlock(String title, List<Task> tasks, ColorScheme scheme) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        Text(
+          title,
+          style: TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w600,
+            color: scheme.onSurfaceVariant,
+          ),
+        ),
+        const SizedBox(height: 6),
+        if (tasks.isEmpty)
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 10),
+            child: Text(
+              '没有任务',
+              style: TextStyle(fontSize: 12, color: scheme.onSurfaceVariant),
+            ),
+          )
+        else
+          for (final task in tasks)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 7),
+              child: Row(
+                children: <Widget>[
+                  Icon(
+                    task.isDone ? Icons.check_circle : Icons.circle_outlined,
+                    size: 16,
+                    color: task.isDone ? scheme.primary : scheme.outline,
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      task.title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 13.5,
+                        decoration: task.isDone ? TextDecoration.lineThrough : null,
+                        color: task.isDone ? scheme.onSurfaceVariant : scheme.onSurface,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+      ],
+    );
+  }
+
   Widget _buildBody() {
     // 只在**首次**还没拿到数据时显示全屏加载。
     // 用 `loading` 判断会让切日期也换掉整棵树，日历条随之销毁重建、滚动位置跳回。
@@ -1098,6 +1202,7 @@ class _MainShellState extends State<MainShell> {
         // 首页可以被插件整页替换，但**外壳还是这一层**：
         // 顶栏、底栏、添加按钮都在外面，插件崩了用户总能切回「我的」。
         _homeView(),
+        _todayView(),
         // 开关全搬去设置页了，这里只剩身份与入口
         ProfileStubPage(
           currency: _currency,
@@ -1147,14 +1252,10 @@ class _CurrencyBadge extends StatelessWidget {
 }
 
 class _BottomBar extends StatelessWidget {
-  const _BottomBar({required this.index, required this.onSelect, this.onAdd});
+  const _BottomBar({required this.index, required this.onSelect});
 
   final int index;
   final ValueChanged<int> onSelect;
-
-  /// 为 null 时**不画**中间那个添加按钮（插件模式）。
-  /// 隐藏而不是禁用：灰掉的按钮看着像"哪里没配置对"，还会一直被点。
-  final VoidCallback? onAdd;
 
   @override
   Widget build(BuildContext context) {
@@ -1164,47 +1265,22 @@ class _BottomBar extends StatelessWidget {
       top: false,
       child: SizedBox(
         height: 58,
-        child: Stack(
-          clipBehavior: Clip.none,
-          children: <Widget>[
-            Positioned.fill(
-              child: DecoratedBox(
-                decoration: BoxDecoration(
-                  color: scheme.surface,
-                  border: Border(top: BorderSide(color: scheme.outlineVariant.withValues(alpha: 0.6))),
-                ),
-                child: Row(
-                  children: <Widget>[
-                    Expanded(child: _item('首页', 0)),
-                    const SizedBox(width: 64),
-                    Expanded(child: _item('我的', 1)),
-                  ],
-                ),
-              ),
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            color: scheme.surface,
+            border: Border(
+              top: BorderSide(color: scheme.outlineVariant.withValues(alpha: 0.6)),
             ),
-            if (onAdd != null)
-              Positioned(
-                top: -12,
-                left: 0,
-                right: 0,
-                child: Center(
-                  child: Material(
-                    color: scheme.primary,
-                    shape: const CircleBorder(),
-                    elevation: 2,
-                    child: InkWell(
-                      customBorder: const CircleBorder(),
-                      onTap: onAdd,
-                      child: SizedBox(
-                        width: 46,
-                        height: 46,
-                        child: Icon(Icons.add, color: scheme.onPrimary, size: 24),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-          ],
+          ),
+          // 三项等分。`+` 已挪到顶栏，中间不再是按钮 ——
+          // 底栏放"去哪"，顶栏放"做什么"。
+          child: Row(
+            children: <Widget>[
+              Expanded(child: _item('首页', 0)),
+              Expanded(child: _item('今日', 1)),
+              Expanded(child: _item('我的', 2)),
+            ],
+          ),
         ),
       ),
     );

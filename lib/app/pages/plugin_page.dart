@@ -7,6 +7,8 @@ import 'package:webview_flutter_android/webview_flutter_android.dart';
 
 import '../../core/extension/extension_hook.dart';
 import '../../core/plugin/plugin_hook_channel.dart';
+import '../../core/plugin/plugin_bootstrap.dart';
+import '../../core/plugin/plugin_query_registry.dart';
 import '../data/plugin_bridge.dart';
 
 /// 启动一个插件所需的全部材料。
@@ -64,6 +66,14 @@ class _PluginViewState extends State<PluginView> {
   late final PluginHookChannel _channel;
   bool _reported = false;
 
+  /// 入站查询：callId → 等待插件回包的 Completer。
+  int _querySeq = 0;
+  final Map<int, Completer<QueryResult>> _queryPending =
+      <int, Completer<QueryResult>>{};
+
+  /// 单次查询的等待上限。超时就当"这个插件没结果"，绝不让调用方一直转圈。
+  static const Duration _queryTimeout = Duration(seconds: 2);
+
   @override
   void initState() {
     super.initState();
@@ -72,6 +82,9 @@ class _PluginViewState extends State<PluginView> {
       hooks: widget.hooks,
       send: _sendEvent,
     );
+    // 页面存活期间，主包可以按 pluginId 向它发起查询（今日页/全局搜索用）。
+    // 同一插件开两个页面时后者覆盖前者：最小版先这样，等真的需要并发再按实例区分。
+    PluginQueryRegistry.instance.register(widget.bridge.pluginId, query);
     if (widget.hooks.isNotEmpty) {
       HookBus.instance.register(_channel);
     }
@@ -136,6 +149,12 @@ class _PluginViewState extends State<PluginView> {
   void dispose() {
     // 按实例移除而不是按 pluginId：同一插件可能同时开着两个页面
     HookBus.instance.removeListener(_channel);
+    PluginQueryRegistry.instance.unregister(widget.bridge.pluginId);
+    // 页面没了，等着的查询永远等不到回包 —— 立刻结束，别让调用方卡到超时
+    for (final pending in _queryPending.values) {
+      if (!pending.isCompleted) pending.complete(const QueryResult.unavailable());
+    }
+    _queryPending.clear();
     super.dispose();
   }
 
@@ -145,6 +164,36 @@ class _PluginViewState extends State<PluginView> {
     ));
   }
 
+  /// 向插件发起一条查询。结果用 [QueryResult] 区分"没实现/超时/失败" ——
+  /// 失败记忆需要这个区别，否则会把"本来就不支持"的插件永久跳过。
+  ///
+  /// 不抛异常：调用方（今日页、全局搜索）要的是"有就显示、没有就降级"，
+  /// 一个插件答不上来不该让整页报错。
+  Future<QueryResult> query(
+    String method, [
+    Map<String, Object?> params = const <String, Object?>{},
+  ]) async {
+    final id = ++_querySeq;
+    final pending = Completer<QueryResult>();
+    _queryPending[id] = pending;
+    try {
+      await _controller.runJavaScript(
+        'window.__hostQuery && window.__hostQuery($id, ${jsonEncode(method)}, ${jsonEncode(params)});',
+      );
+    } catch (error) {
+      _queryPending.remove(id);
+      debugPrint('[plugin:${widget.bridge.pluginId}] 查询注入失败 $method: $error');
+      return const QueryResult.failed();
+    }
+    try {
+      return await pending.future.timeout(_queryTimeout);
+    } on TimeoutException {
+      _queryPending.remove(id);
+      debugPrint('[plugin:${widget.bridge.pluginId}] 查询超时 $method');
+      return const QueryResult.timeout();
+    }
+  }
+
   Future<void> _onHostMessage(JavaScriptMessage message) async {
     final Map<String, Object?> payload;
     try {
@@ -152,6 +201,27 @@ class _PluginViewState extends State<PluginView> {
       if (decoded is! Map) return;
       payload = Map<String, Object?>.from(decoded);
     } catch (_) {
+      return;
+    }
+
+    // 入站查询的回包：先认它，再走原来的 host.call 分支
+    final replyId = payload['queryReply'];
+    if (replyId is int) {
+      final pending = _queryPending.remove(replyId);
+      if (pending != null && !pending.isCompleted) {
+        final result = payload['result'];
+        final error = payload['error'];
+        final code = error is Map ? error['code'] : null;
+        pending.complete(
+          payload['ok'] == true
+              ? (result is Map
+                  ? QueryResult.ok(Map<String, Object?>.from(result))
+                  : const QueryResult.failed())
+              : (code == 'unsupported'
+                  ? const QueryResult.unsupported()
+                  : const QueryResult.failed()),
+        );
+      }
       return;
     }
 
@@ -172,55 +242,9 @@ class _PluginViewState extends State<PluginView> {
   @override
   Widget build(BuildContext context) => WebViewWidget(controller: _controller);
 
-  /// 注入到插件页面的桥接脚本。**幂等**：重复执行只会 return。
-  static const String _bootstrap = r'''
-(function () {
-  if (window.host) return;
-  var seq = 0;
-  var pending = {};
-  window.__hostResolve = function (id, payload) {
-    var entry = pending[id];
-    if (!entry) return;
-    delete pending[id];
-    if (payload && payload.ok) {
-      entry.resolve(payload.result);
-    } else {
-      var error = (payload && payload.error) || {};
-      entry.reject({ code: error.code || 'unknown', message: error.message || '调用失败' });
-    }
-  };
-  var handlers = {};
-  window.host = {
-    call: function (method, params) {
-      return new Promise(function (resolve, reject) {
-        var id = ++seq;
-        pending[id] = { resolve: resolve, reject: reject };
-        HostBridge.postMessage(JSON.stringify({ id: id, method: method, params: params || {} }));
-      });
-    },
-    // 事件订阅。宿主只推 manifest 里声明过的钩子；
-    // 这里再挡一层：同一个事件可以挂多个处理函数，各自 try/catch ——
-    // 一个处理函数抛异常不该让后面的收不到。
-    on: function (name, fn) {
-      if (typeof fn !== 'function') return;
-      (handlers[name] = handlers[name] || []).push(fn);
-    },
-    off: function (name, fn) {
-      var list = handlers[name];
-      if (!list) return;
-      var at = list.indexOf(fn);
-      if (at >= 0) list.splice(at, 1);
-    }
-  };
-  window.__hostEvent = function (name, payload) {
-    var list = handlers[name];
-    if (!list) return;
-    for (var i = 0; i < list.length; i++) {
-      try { list[i](payload); } catch (e) { /* 单个订阅者出错不影响其他 */ }
-    }
-  };
-})();
-''';
+  /// 注入到插件页面的桥接脚本。内容在 core 层，离屏查询宿主共用同一份。
+  static const String _bootstrap = pluginBootstrapScript;
+
 }
 
 /// 独立打开的插件页（带标题栏）。

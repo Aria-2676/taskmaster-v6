@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "publishedAt": "2026-11-02T15:22:33Z",
+  "publishedAt": "2026-11-03T12:39:19Z",
   "plugins": [
     {
       "id": "energy_currency",
@@ -45,7 +45,7 @@
     {
       "id": "plan_mode",
       "name": "周计划",
-      "version": "1.2.3",
+      "version": "1.3.0",
       "contract": 1,
       "description": "把未来七天铺开，一件事挪到哪天就是哪天。",
       "icon": "calendar_view_week",
@@ -59,9 +59,9 @@
         "order": 10
       },
       "package": {
-        "path": "plugins/packages/plan_mode_v1.2.3.zip",
-        "sha256": "a4b6088d641e1dac50cc44021d58039ac311fa771fd90749170548e439643afb",
-        "sizeBytes": 6299
+        "path": "plugins/packages/plan_mode_v1.3.0.zip",
+        "sha256": "e1698a2135cfae0c1265000fc4bdd453734121f0173ba9c77bb92445d2ef5651",
+        "sizeBytes": 7543
       }
     },
     {

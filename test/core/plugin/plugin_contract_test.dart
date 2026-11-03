@@ -21,6 +21,7 @@ Map<String, Object?> _manifestJson({
   int contract = 1,
   String entry = 'index.html',
   Object? slots,
+  Object? queryEntry,
 }) =>
     <String, Object?>{
       'id': id,
@@ -28,6 +29,7 @@ Map<String, Object?> _manifestJson({
       'version': version,
       'contract': contract,
       'entry': entry,
+      'queryEntry': ?queryEntry,
       'description': '专注计时',
       'icon': 'timer',
       'slots': ?slots,
@@ -101,6 +103,27 @@ void main() {
       );
       expect(
         () => PluginManifest.parse(_manifestJson(contract: 0)),
+        throwsA(isA<PluginFormatException>()),
+      );
+    });
+
+    test('queryEntry 可选：不写就是 null（不参与离屏查询）', () {
+      final m = PluginManifest.parse(_manifestJson());
+      expect(m.queryEntry, isNull);
+    });
+
+    test('queryEntry 是合法相对路径时能解析', () {
+      final m = PluginManifest.parse(_manifestJson(queryEntry: 'query.html'));
+      expect(m.queryEntry, 'query.html');
+    });
+
+    test('queryEntry 同样不许跳出包目录', () {
+      expect(
+        () => PluginManifest.parse(_manifestJson(queryEntry: '../evil.html')),
+        throwsA(isA<PluginFormatException>()),
+      );
+      expect(
+        () => PluginManifest.parse(_manifestJson(queryEntry: '/abs.html')),
         throwsA(isA<PluginFormatException>()),
       );
     });

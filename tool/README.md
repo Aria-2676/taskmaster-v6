@@ -20,6 +20,10 @@
 
 ## 部件：被上面的脚本调用，正常情况下不用单独跑
 
+- `publish_gitee.ps1` —— 把两个 ABI 包传到 Gitee Release（幂等）。
+  `publish_release.ps1 -Gitee` 会自动调用；也可以单独跑它补传。
+  说明见 `docs/gitee-release.md`。
+
 | 脚本 | 被谁调 | 单独跑的场景 |
 |---|---|---|
 | `push_via_api.ps1` | `publish_release`、`publish_plugin` | 本网络 `git push` 被限速到不可用时，直接推一次 |
@@ -50,7 +54,7 @@ python test/plugin_packaging/test_make_demo_plugin.py
 | 文件 | 用途 |
 |---|---|
 | `github_token.txt` | GitHub PAT，`publish_release.ps1` / `push_via_api.ps1` 读 |
-| `gitee_token.txt` | Gitee token，**当前没有脚本读它**；留给将来把"传四个包"自动化，说明见 `docs/gitee-release.md` |
+| `gitee_token.txt` | Gitee token，`publish_gitee.ps1` 用它传附件；`publish_release.ps1` 用它查已有哪些附件（决定要不要写镜像地址） |
 
 两个都在 `.gitignore` 里。写法：一行，不带引号、不带 `Bearer ` 前缀。
 

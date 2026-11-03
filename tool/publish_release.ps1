@@ -53,6 +53,13 @@ param(
     # 公共代理退成备选。传空表示不启用。
     [string]$AltBase = '',
 
+    # Gitee 仓库（只放 Release 附件）。用于"发版后自动传包"和"查实际有哪些附件"。
+    [string]$GiteeRepo = 'yaozhenqian/taskmaster-release',
+
+    # 发版时顺手把两个 ABI 包传到 Gitee（等价于跑 tool\publish_gitee.ps1）。
+    # 不传也能发版 —— 但那样 AltBase 不会生效，因为 Gitee 上没有包。
+    [switch]$Gitee,
+
     [switch]$SkipPurge,
     [switch]$SkipManifestCommit,
 
@@ -94,12 +101,39 @@ if (-not $AssetDir) {
     $AssetDir = Join-Path $repoRoot 'build\app\outputs\flutter-apk'
 }
 
+# 只发三个 ABI 分包。**fat 包（app-release.apk）不发布**（2026-11-03 定案）：
+# 客户端更新按 ABI 自动选分包，fat 只服务"手动下载安装"，却要占 62MB ——
+# GitHub 每个版本省 62MB，Gitee 的 1GB 附件配额也省一半。
+# 它的唯一用途是 versionName 校验，构建时仍然会产出。
 $apkFiles = @(
-    'app-release.apk',
     'app-arm64-v8a-release.apk',
     'app-armeabi-v7a-release.apk',
     'app-x86_64-release.apk'
 )
+
+# 读 Gitee 上某个 tag 的附件名。读不到就返回空集 —— 调用方按"没有"处理，
+# 也就是不写镜像地址。宁可不写，也不要写一个 404 的地址让用户白跑一次失败。
+function Get-GiteeAttachedNames {
+    param([string]$Tag)
+
+    $token = $env:GITEE_TOKEN
+    if ([string]::IsNullOrWhiteSpace($token)) {
+        $f = Join-Path $PSScriptRoot 'gitee_token.txt'
+        if (Test-Path $f) { $token = (Get-Content -LiteralPath $f -Raw).Trim() }
+    }
+    if ([string]::IsNullOrWhiteSpace($token)) { return @() }
+
+    try {
+        $list = Invoke-RestMethod -Method Get -Uri "https://gitee.com/api/v5/repos/$GiteeRepo/releases?access_token=$token&per_page=100"
+        $rel = @($list) | Where-Object { $_.tag_name -eq $Tag } | Select-Object -First 1
+        if ($null -eq $rel) { return @() }
+        $detail = Invoke-RestMethod -Method Get -Uri "https://gitee.com/api/v5/repos/$GiteeRepo/releases/$($rel.id)?access_token=$token"
+        return @($detail.assets | ForEach-Object { $_.name })
+    } catch {
+        Write-Host "  [warn] 读取 Gitee 附件失败：$($_.Exception.Message)"
+        return @()
+    }
+}
 
 function Invoke-Retry {
     param(
@@ -222,7 +256,7 @@ foreach ($bt in @(
     }
 }
 if ($aapt2 -and (Test-Path $aapt2)) {
-    $dump = & $aapt2 dump badging $apkInfo['app-release.apk'].path 2>$null
+    $dump = & $aapt2 dump badging $apkInfo['app-arm64-v8a-release.apk'].path 2>$null
     $m = $dump | Select-String -Pattern "versionName='([^']+)'" | Select-Object -First 1
     $vn = $m.Matches.Groups[1].Value
     if ($vn -and $vn -ne $Version) {
@@ -338,6 +372,21 @@ foreach ($name in $apkFiles) {
 if (-not $allOk) { throw '资产校验未通过，请检查日志后重试。' }
 Log '  全部资产校验通过'
 
+# 步骤 4.5：Gitee 附件
+# 顺序很关键：**先传包，再写清单**。清单里 Gitee 是用户第一顺位，
+# 地址先上线而包还没到，用户点下去就是 404 —— 他不会试第二次。
+if ($Gitee) {
+    Log '步骤 4.5：上传 Gitee 附件'
+    $giteeScript = Join-Path $PSScriptRoot 'publish_gitee.ps1'
+    # 用 try/catch 而不是 $LASTEXITCODE：被调脚本是用 throw 报错的，
+    # 而 $LASTEXITCODE 只反映**外部程序**的退出码，残留值会误判。
+    try {
+        & $giteeScript -Version $Version -AssetDir $AssetDir
+    } catch {
+        throw "Gitee 附件上传失败，已中止（清单未改）：$($_.Exception.Message)"
+    }
+}
+
 # 步骤 5：更新 update.json
 Log '步骤 5：更新 update.json'
 # 结构必须与 lib/core/updater/models/app_update_manifest.dart 对齐：
@@ -363,19 +412,38 @@ if (-not $notes) { $notes = Get-Field $prevLatest 'notes' }
 $level = Get-Field $prevLatest 'level'
 $publishedAt = Get-Field $prevLatest 'publishedAt'
 
-# APK 文件名 -> 清单 downloads 键（含泛化 android 兜底）
+# APK 文件名 -> 清单 downloads 键
 $abiKeys = [ordered]@{
     'app-arm64-v8a-release.apk'   = 'android-arm64-v8a'
     'app-armeabi-v7a-release.apk' = 'android-armeabi-v7a'
     'app-x86_64-release.apk'      = 'android-x86_64'
-    'app-release.apk'             = 'android'
 }
+
+# 兼容垫片：`android` 这个泛化键**必须留着**。
+# `resolveTarget` 是 6.0.1 才引入的，6.0.0 及更早的客户端只会用 `'android'` 查；
+# 没有这个键时 supportsPlatform 返回 false，决策降级为"无更新"而且**不报错** ——
+# 那批用户会静默失联，永远收不到更新。
+# fat 包不发了，所以让它指向 arm64 包（6.0.0 用户的设备基本都是 arm64）。
+$compatKey = 'android'
+$compatFrom = 'android-arm64-v8a'
+# Gitee 上实际传了哪些附件。AltBase 只对**真的有包**的那些生效。
+$giteeNames = @()
+if (-not [string]::IsNullOrWhiteSpace($AltBase)) {
+    $giteeNames = Get-GiteeAttachedNames -Tag $tag
+    if ($giteeNames.Count -eq 0) {
+        Write-Host '  [warn] Gitee 上找不到该版本的附件，AltBase 不会写入清单'
+    } else {
+        Write-Host "  Gitee 已有附件：$($giteeNames -join ', ')"
+    }
+}
+
 $downloads = [ordered]@{}
 foreach ($key in $abiKeys.Keys) {
     $info = $apkInfo[$key]
     $url = "https://github.com/$OwnerRepo/releases/download/$tag/$key"
     $mirrorUrls = @()
-    if (-not [string]::IsNullOrWhiteSpace($AltBase)) {
+    # 只在 Gitee 真有这个包时才写它的地址
+    if (-not [string]::IsNullOrWhiteSpace($AltBase) -and ($giteeNames -contains $key)) {
         $mirrorUrls += ($AltBase.TrimEnd('/') + "/$tag/$key")
     }
     foreach ($prefix in $MirrorPrefixes) { $mirrorUrls += "$prefix/$url" }
@@ -385,6 +453,11 @@ foreach ($key in $abiKeys.Keys) {
         sha256    = $info.sha256
         sizeBytes = $info.size
     }
+}
+
+# 老客户端兜底键：内容与 arm64 完全相同（不额外占任何体积，只是一个别名）。
+if ($downloads.Contains($compatFrom)) {
+    $downloads[$compatKey] = $downloads[$compatFrom]
 }
 
 $latestObj = [ordered]@{ version = $Version }

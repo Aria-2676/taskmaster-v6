@@ -54,7 +54,7 @@ V6 读到 5                →  以为自己也应用过，静默跳过 build 5 
 
 ```powershell
 $notes = @('这次改了什么1', '这次改了什么2')
-& .\tool\publish_release.ps1 -Version 6.0.4 `
+tool\publish_release.ps1 -Version 6.1.3 -Gitee `
   -AltBase 'https://gitee.com/yaozhenqian/taskmaster-release/releases/download' `
   -Notes $notes
 ```
@@ -71,9 +71,11 @@ $notes = @('这次改了什么1', '这次改了什么2')
 **不需要先跑 `build_apk.ps1`**：那个脚本只产包 + 出摘要、不发布，用于"想单独看看包"。
 发版这一条内部自己会构建。
 
-**脚本不管的一步**：Gitee 那边要手动传四个包 —— `-AltBase` 只是把地址写进清单，
-不会帮你传文件。漏了这步国内用户第一顺位会 404，然后退到 GitHub 代理。
-具体步骤、校验方法和密钥位置见 **`docs/gitee-release.md`**。
+**Gitee 那一步**：带 `-Gitee` 就自动传（`publish_gitee.ps1`），只传 arm64 与
+armeabi 两个包 —— 附件配额是 1GB **总量**，四个包全传只够放 8 个版本。
+`-AltBase` 只对 Gitee 上**真的有**的包生效，缺的走 GitHub 代理。
+
+细节（配额账、补传、密钥位置、排错）见 **`docs/gitee-release.md`**。
 
 **顺序不能反**：先改清单后传包，用户点下去就是死链，而且不会点第二次。
 `downloads` 留空是安全的中间态——客户端判定为"无更新"，不报错。

@@ -35,6 +35,7 @@
 | `docs/main-package.md` | 主包清单、数据库切分、扩展位、插件依赖 | 动手前必读 | 已定稿 |
 | `docs/plugin-contract.md` | 包格式、契约版本、数据 API、插槽钩子、分发 | 写插件/写运行时 | 骨架，待细化 |
 | `docs/update-channels.md` | 更新清单：一个仓库一份 + 本地状态隔离 + 发版流程 | 改 updater / 发版之前 | 已实现 |
+| `docs/gitee-release.md` | Gitee 国内下载源：地址约定、发版顺序、校验、密钥位置 | 每次发版之后 / 改分发链路 | 维护中 |
 | `docs/two-way-channel.md` | V5 ↔ V6 双向引流：入口读对方清单、被引用的版本冻结、维护纪律 | 动引流入口之前 | 已实现 |
 | `docs/acceptance/` | **正在进行的**验收清单；签收后移入 `archive/acceptance/` | 交付与验收时 | 维护中 |
 | `docs/conventions/` | 协作/架构/编码/交付/验收模板的唯一源 | 每次动手前 | 维护中 |

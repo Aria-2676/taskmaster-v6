@@ -45,6 +45,15 @@ python test/plugin_packaging/test_make_demo_plugin.py
 
 **签名材料丢了就再也发不出可以覆盖安装的包**（用户必须卸载重装，数据全丢）。这三个脚本存在的意义就是这个，别删。
 
+## 密钥文件（不入库）
+
+| 文件 | 用途 |
+|---|---|
+| `github_token.txt` | GitHub PAT，`publish_release.ps1` / `push_via_api.ps1` 读 |
+| `gitee_token.txt` | Gitee token，**当前没有脚本读它**；留给将来把"传四个包"自动化，说明见 `docs/gitee-release.md` |
+
+两个都在 `.gitignore` 里。写法：一行，不带引号、不带 `Bearer ` 前缀。
+
 ## 不是脚本
 
 - `github_token.txt` —— GitHub 凭证，已在 `.gitignore` 里，**永远不要提交**

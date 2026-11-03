@@ -62,6 +62,7 @@ key.properties
 .widget_preview/
 
 tool/github_token.txt
+tool/gitee_token.txt
 
 # 本机数据文件：绝不入库
 #

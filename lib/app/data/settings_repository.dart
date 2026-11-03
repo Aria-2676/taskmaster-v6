@@ -9,6 +9,12 @@ class SettingsKeys {
   /// 删除前是否弹确认框（默认开）
   static const String confirmBeforeDelete = 'ui.confirm_before_delete';
 
+  /// 竖屏锁定（默认开）：固定竖屏显示，不随手机旋转。
+  ///
+  /// 锁定时 `SystemChrome.setPreferredOrientations([portraitUp])`，
+  /// 关闭时恢复跟随系统（全部方向）。
+  static const String lockPortrait = 'ui.lock_portrait';
+
   /// 删除后是否先进回收站（**默认关**：默认直接删掉，不留垃圾）
   static const String recycleBinEnabled = 'ui.recycle_bin_enabled';
 

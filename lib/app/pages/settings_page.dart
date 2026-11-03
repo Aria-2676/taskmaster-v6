@@ -25,6 +25,8 @@ class SettingsPage extends StatelessWidget {
     this.onOpenBackup,
     this.onDownloadLegacy,
     this.onOpenSidebarEntries,
+    this.lockPortrait = true,
+    this.onLockPortraitChanged,
   });
 
   final TaskStore store;
@@ -52,6 +54,12 @@ class SettingsPage extends StatelessWidget {
   /// 侧边栏入口管理。为 null 时（没有插件基础设施）整行不显示 ——
   /// 不放点不动的入口。
   final VoidCallback? onOpenSidebarEntries;
+
+  /// 竖屏锁定当前值（由应用层维护，切换即时生效）。
+  final bool lockPortrait;
+
+  /// 切换竖屏锁定。为 null 时整行不显示（测试注入 store 时没有应用层）。
+  final ValueChanged<bool>? onLockPortraitChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -87,6 +95,20 @@ class SettingsPage extends StatelessWidget {
               labelOf: (form) => form.label,
               onChanged: store.setEditorForm,
             ),
+            if (onLockPortraitChanged != null) ...<Widget>[
+              const Divider(height: 20),
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                dense: true,
+                title: const Text('竖屏锁定', style: TextStyle(fontSize: 14)),
+                subtitle: Text(
+                  lockPortrait ? '固定竖屏显示，不随手机旋转' : '跟随手机方向旋转',
+                  style: TextStyle(fontSize: 12, color: scheme.onSurfaceVariant),
+                ),
+                value: lockPortrait,
+                onChanged: onLockPortraitChanged,
+              ),
+            ],
           ]),
 
           _SectionLabel('任务'),

@@ -48,6 +48,8 @@ class MainShell extends StatefulWidget {
     this.fieldStore,
     this.homeStore,
     this.currencyStore,
+    this.lockPortrait = true,
+    this.onLockPortraitChanged,
   });
 
   final TaskStore store;
@@ -79,6 +81,12 @@ class MainShell extends StatefulWidget {
 
   /// 当前货币（余额镜像 + 提供者）。为 null 时顶栏不显示徽章。
   final CurrencyStore? currencyStore;
+
+  /// 竖屏锁定是否开启（设置页开关的当前值，由应用层维护）。
+  final bool lockPortrait;
+
+  /// 切换竖屏锁定（应用层即时生效 + 持久化）。
+  final ValueChanged<bool>? onLockPortraitChanged;
 
   @override
   State<MainShell> createState() => _MainShellState();
@@ -740,6 +748,8 @@ class _MainShellState extends State<MainShell> {
                               SidebarEntriesPage(store: widget.marketStore!),
                         ),
                       ),
+              lockPortrait: widget.lockPortrait,
+              onLockPortraitChanged: widget.onLockPortraitChanged,
             ),
           ),
         );

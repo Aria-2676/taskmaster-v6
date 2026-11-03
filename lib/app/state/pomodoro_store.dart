@@ -34,6 +34,10 @@ class PomodoroStore extends ChangeNotifier {
   /// 通知 id。避开更新器的 0x7605 / 0x7606，出问题好一眼区分。
   static const int notificationId = 0x7071;
 
+  /// 常驻倒计时通知的 id。**必须和 [notificationId] 分开**：
+  /// 到点提醒是"响一声"，倒计时是"一直挂着"，同 id 会互相覆盖。
+  static const int ongoingNotificationId = 0x7072;
+
   final SettingsRepository _settings;
   final HookBus _hooks;
   final NotificationSink? _notifications;
@@ -54,6 +58,14 @@ class PomodoroStore extends ChangeNotifier {
   /// 通知权限：`null` = 还没问过。Android 13+ 必须显式申请，
   /// 不申请的话通知会被系统直接丢掉（importance=NONE），而且一点错都不报。
   bool? _canNotify;
+
+  /// 倒计时通知多久兜底重发一次。`ongoing` 理论上划不掉，但用户实测
+  /// 能划掉（2026-11-03 模拟器上点出来的）——通知只在状态切换时发一次，
+  /// 划掉就再也回不来，而计时还在跑。定期重发是"即使原因仍在也兜得住"那层保险。
+  static const Duration ongoingRefresh = Duration(seconds: 7);
+
+  /// 上次发倒计时通知的时间，用来做 30 秒一次的重发节流。
+  DateTime? _lastOngoingShown;
 
   /// 已经为哪个 session 派发过结束事件。**同一个会话只发一次** ——
   /// tick、冷启动恢复、用户手动 skip 三条路都可能走到结算，去重必须靠它，
@@ -177,6 +189,7 @@ class PomodoroStore extends ChangeNotifier {
     _runningSince = null;
     _stopTicker();
     await _cancelNotification();
+    await _cancelOngoing();
     await _persist();
     notifyListeners();
   }
@@ -218,6 +231,7 @@ class PomodoroStore extends ChangeNotifier {
     );
     _runningSince = null;
     await _cancelNotification();
+    await _cancelOngoing();
     await _persist();
     notifyListeners();
   }
@@ -248,6 +262,7 @@ class PomodoroStore extends ChangeNotifier {
     _settledSessionId = null;
     _stopTicker();
     await _cancelNotification();
+    await _cancelOngoing();
     await _persist();
     notifyListeners();
   }
@@ -386,13 +401,29 @@ class PomodoroStore extends ChangeNotifier {
     final current = _session;
     if (current == null || !current.running) return;
     final next = _accumulate();
-    if (identical(next, current)) return;
+    if (identical(next, current)) {
+      // 秒没变（tick 间隔内没有新增时长），但倒计时通知可能被用户划掉了 ——
+      // 每 30 秒兜底重发一次，让它自己回来。
+      await _maybeRefreshOngoing();
+      return;
+    }
     _session = next;
     if (next.finished) {
       await _settle();
     } else {
+      await _maybeRefreshOngoing();
       notifyListeners();
     }
+  }
+
+  /// 倒计时通知被划掉后不会自己回来，这里每 30 秒重发一次兜底。
+  /// 节流靠 [_lastOngoingShown]：只在超过 [ongoingRefresh] 时才真正发。
+  Future<void> _maybeRefreshOngoing() async {
+    final current = _session;
+    if (current == null || !current.running) return;
+    final last = _lastOngoingShown;
+    if (last != null && _now().difference(last) < ongoingRefresh) return;
+    await _showOngoing(current);
   }
 
   /// 测试用：立刻走一次 tick，不依赖真实定时器与事件循环等待。
@@ -416,6 +447,9 @@ class PomodoroStore extends ChangeNotifier {
     _stopTicker();
     _runningSince = null;
     _session = current.copyWith(running: false);
+    // 倒计时通知**无论自然到点还是提前结束都要撤**：计时停了，挂着没意义。
+    // 到点提醒则相反：自然到点不能撤（那条就是刚弹出来的提醒本身）。
+    await _cancelOngoing();
     if (cancelReminder) await _cancelNotification();
     await _persist();
 
@@ -488,10 +522,34 @@ class PomodoroStore extends ChangeNotifier {
       // 到点不响是用户能感知的失败，必须留痕（界面以后要出提示）。
       debugPrint('[pomodoro] 提醒排期失败：$result');
     }
+
+    // 常驻倒计时：和到点提醒是两条独立通知。
+    await _showOngoing(current);
+  }
+
+  /// 通知栏的常驻倒计时。只在状态切换时调一次，chronometer 由系统自维护。
+  Future<void> _showOngoing(PomodoroTimer current) async {
+    final notifications = _notifications;
+    if (notifications == null) return;
+    try {
+      await notifications.showCountdown(
+        id: ongoingNotificationId,
+        title: current.isFocus ? '专注中' : '休息中',
+        body: current.isFocus ? '到点会提醒你休息' : '休息完会提醒你继续',
+        endsAt: _now().add(current.remaining),
+      );
+      _lastOngoingShown = _now();
+    } catch (error) {
+      debugPrint('[pomodoro] 倒计时通知失败：$error');
+    }
   }
 
   Future<void> _cancelNotification() async {
     await _notifications?.cancel(notificationId);
+  }
+
+  Future<void> _cancelOngoing() async {
+    await _notifications?.cancel(ongoingNotificationId);
   }
 
   /// 读一次历史（惰性，只读一次）。读不懂就当空，不让一条坏数据卡住计时。

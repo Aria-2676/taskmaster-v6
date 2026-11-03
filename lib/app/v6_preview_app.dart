@@ -4,7 +4,8 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
-import 'package:flutter/services.dart' show rootBundle;
+import 'package:flutter/services.dart'
+    show DeviceOrientation, SystemChrome, rootBundle;
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:provider/provider.dart';
@@ -101,6 +102,12 @@ class _V6PreviewAppState extends State<V6PreviewApp> {
   AppUpdateProvider? _update;
   Object? _error;
 
+  /// 设置仓库的引用：竖屏锁定切换后要写回。
+  SettingsRepository? _settings;
+
+  /// 是否锁定竖屏。启动时从设置读，切换时即时生效。
+  bool _lockPortrait = true;
+
   @override
   void initState() {
     super.initState();
@@ -130,6 +137,26 @@ class _V6PreviewAppState extends State<V6PreviewApp> {
     );
     _update = provider;
     unawaited(provider.initialize().then((_) => provider.checkIfDue()));
+  }
+
+  /// 应用竖屏锁定。锁 = 只许竖屏；不锁 = 跟随系统。
+  /// 失败不致命：方向锁定是锦上添花，不该因为平台异常让 App 起不来。
+  Future<void> _applyOrientation(bool lock) async {
+    _lockPortrait = lock;
+    if (mounted) setState(() {});
+    try {
+      await SystemChrome.setPreferredOrientations(
+        lock ? <DeviceOrientation>[DeviceOrientation.portraitUp] : DeviceOrientation.values,
+      );
+    } catch (error) {
+      AppLogger.warn('orientation', '设置屏幕方向失败', error);
+    }
+  }
+
+  /// 设置页切换「竖屏锁定」时调用：即时生效 + 写回设置。
+  Future<void> _setLockPortrait(bool value) async {
+    await _applyOrientation(value);
+    await _settings?.setBool(SettingsKeys.lockPortrait, value);
   }
 
   @override
@@ -166,11 +193,22 @@ class _V6PreviewAppState extends State<V6PreviewApp> {
 
       // 回收站到期清理：没有后台服务，每次启动扫一遍就够了
       final settings = SettingsRepository(db);
+      _settings = settings;
       final retentionDays = await settings.getInt(
         SettingsKeys.recycleRetentionDays,
         fallback: SettingsKeys.defaultRetentionDays,
       );
       await repo.purgeRecycleOlderThan(Duration(days: retentionDays));
+
+      // 竖屏锁定：启动时按用户上次的选择应用一次方向。
+      // 放这里而不是 main()：那时候数据库还没开，读不到设置。
+      final lockPortrait = await settings.getBool(
+        SettingsKeys.lockPortrait,
+        fallback: true,
+      );
+      if (mounted) {
+        await _applyOrientation(lockPortrait);
+      }
 
       // 字段偏好与首页形态：都必须在**第一帧之前**读好，
       // 否则首页会先画内置、再跳成插件，用户看到的是闪一下
@@ -524,6 +562,8 @@ class _V6PreviewAppState extends State<V6PreviewApp> {
       fieldStore: _fields,
       homeStore: _home,
       currencyStore: _currency,
+      lockPortrait: _lockPortrait,
+      onLockPortraitChanged: _setLockPortrait,
     );
   }
 }

@@ -30,8 +30,12 @@ class _Recorder implements HookListener {
 class _FakeSink implements NotificationSink {
   final List<String> calls = <String>[];
   final List<DateTime> scheduledAt = <DateTime>[];
+  final List<int> cancelledIds = <int>[];
+  // 只数"到点提醒"的取消次数：倒计时通知是另一条，别混进来。
   int cancelCount = 0;
   bool permissionGranted = true;
+  int countdownCount = 0;
+  DateTime? countdownEndsAt;
 
   @override
   Future<bool> requestPermission() async {
@@ -65,9 +69,22 @@ class _FakeSink implements NotificationSink {
   }
 
   @override
+  Future<void> showCountdown({
+    required int id,
+    required String title,
+    required String body,
+    required DateTime endsAt,
+  }) async {
+    calls.add('countdown');
+    countdownCount++;
+    countdownEndsAt = endsAt;
+  }
+
+  @override
   Future<void> cancel(int id) async {
     calls.add('cancel');
-    cancelCount++;
+    cancelledIds.add(id);
+    if (id == PomodoroStore.notificationId) cancelCount++;
   }
 }
 
@@ -325,6 +342,56 @@ void main() {
     await store.skip();
 
     expect(sink.cancelCount, before + 1);
+  });
+
+  group('通知栏倒计时（常驻通知）', () {
+    test('开始后发一条倒计时通知，结束时间 = now + remaining', () async {
+      final store = build();
+      await store.start();
+
+      expect(sink.countdownCount, 1);
+      final expected = fakeNow.add(store.session!.remaining);
+      expect(sink.countdownEndsAt, expected);
+    });
+
+    test('暂停取消倒计时，继续重发', () async {
+      final store = build();
+      await store.start();
+      final before = sink.countdownCount;
+
+      await store.pause();
+      expect(sink.cancelledIds, contains(PomodoroStore.ongoingNotificationId),
+          reason: '暂停了倒计时通知还挂着，就是在骗人');
+
+      await store.resume();
+      expect(sink.countdownCount, before + 1, reason: '继续之后要重新挂倒计时');
+    });
+
+    test('倒计时通知被划掉后，7 秒内自动重发', () async {
+      final store = build();
+      await store.start();
+      expect(sink.countdownCount, 1);
+
+      // 用户划掉通知 → 时间走过 8 秒 → tick 兜底重发
+      fakeNow = fakeNow.add(const Duration(seconds: 8));
+      await store.debugPump();
+
+      expect(sink.countdownCount, 2, reason: '划掉了要能自己回来，不能靠用户再开 App');
+    });
+
+    test('自然到点：倒计时撤掉，到点提醒留着', () async {
+      final store = build();
+      await store.start();
+      sink.cancelledIds.clear();
+
+      fakeNow = fakeNow.add(store.session!.planned);
+      await store.debugPump();
+
+      expect(sink.cancelledIds, contains(PomodoroStore.ongoingNotificationId),
+          reason: '计时停了，倒计时通知要撤');
+      expect(sink.cancelledIds, isNot(contains(PomodoroStore.notificationId)),
+          reason: '到点提醒不能撤，那条就是刚弹出来的提醒');
+    });
   });
 
   test('没有通知权限时：不排提醒，并把 canNotify=false 交给界面', () async {

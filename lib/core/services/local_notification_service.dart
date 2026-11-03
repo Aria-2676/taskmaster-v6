@@ -46,6 +46,21 @@ abstract class NotificationSink {
     String channelId,
   });
 
+  /// 显示/更新一条**常驻倒计时**通知（番茄钟运行时挂在通知栏）。
+  ///
+  /// 用系统 chronometer 倒计时（[endsAt] 是结束时刻），App 不用每秒刷新 ——
+  /// 只在开始 / 暂停 / 恢复时调一次。到点会由另一条提醒通知兜底。
+  ///
+  /// **固定走静默渠道**，不接受 channelId：倒计时通知会被兜底重发（每 30 秒）
+  /// 和划掉后重发，若允许调用方传高重要性渠道，每次重发都会再响一声。
+  /// 响铃是"到点提醒"的专属。
+  Future<void> showCountdown({
+    required int id,
+    required String title,
+    required String body,
+    required DateTime endsAt,
+  });
+
   Future<void> cancel(int id);
 }
 
@@ -63,6 +78,17 @@ class LocalNotificationService implements NotificationSink {
 
   /// 番茄钟渠道：到点了要能叫醒人，重要性高、带声音。
   static const String channelPomodoro = 'pomodoro';
+
+  /// 番茄钟**倒计时**渠道：静默常驻，不响铃、不震动，只显示状态栏图标和倒计时。
+  ///
+  /// 必须和 [channelPomodoro] 分开：倒计时通知每 30 秒兜底重发一次，
+  /// 如果复用那个高重要性渠道，每次重发都会响一声 —— 划掉再重发就更响。
+  /// 响铃是"到点提醒"的事，倒计时只负责"安静地显示还剩多久"。
+  static const String channelPomodoroCountdown = 'pomodoro_progress';
+
+  // 注意：这个 id 曾经是 'pomodoro_countdown'。Android 的渠道声音在**首次创建时
+  // 锁定**，改 playSound 不会覆盖已创建渠道的声音 —— 之前误用 default importance
+  // （其实带声音）创建了旧渠道，只能换一个新 id 才能拿到"静音"这个初始状态。
 
   /// 插件渠道：默认低打扰，可被系统折叠。
   static const String channelPlugin = 'plugin';
@@ -175,6 +201,48 @@ class LocalNotificationService implements NotificationSink {
     } catch (error, stack) {
       AppLogger.warn('LocalNotification', '排期异常 id=$id', error, stack);
       return NotificationScheduleResult.failed;
+    }
+  }
+
+  @override
+  Future<void> showCountdown({
+    required int id,
+    required String title,
+    required String body,
+    required DateTime endsAt,
+  }) async {
+    await _ensureInitialized();
+    // 常驻通知：低打扰、不响铃（already onlyAlertOnce），用户下拉通知栏
+    // 就能看到系统自维护的倒计时。App 不刷秒，省电也不触发通知频率限制。
+    final details = NotificationDetails(
+      android: AndroidNotificationDetails(
+        // 用**独立静默渠道**，不用调用方传进来的高重要性渠道：
+        // default importance 不响铃、不震动，但保留状态栏图标（用户能看到
+        // 有个倒计时在跑）。这样 30 秒一次的兜底重发、划掉后的重发，都不会
+        // 再冒一次音效 —— 响铃是"到点提醒"那条通知的专属。
+        channelPomodoroCountdown,
+        '番茄钟倒计时',
+        channelDescription: '运行中的专注/休息倒计时',
+        // default importance 才有状态栏图标，但它**默认带声音**（这是之前
+        // "每 30 秒响一次"的根因）。要"可见但静音"，得显式关掉声音和震动。
+        importance: Importance.defaultImportance,
+        priority: Priority.defaultPriority,
+        playSound: false,
+        enableVibration: false,
+        ongoing: true,
+        showWhen: true,
+        when: endsAt.millisecondsSinceEpoch,
+        usesChronometer: true,
+        chronometerCountDown: true,
+        category: AndroidNotificationCategory.progress,
+      ),
+      iOS: DarwinNotificationDetails(),
+    );
+    try {
+      await _plugin.show(id, title, body, details);
+    } catch (error, stack) {
+      // 倒计时通知发不出去不该阻断计时，但必须留痕。
+      AppLogger.warn('LocalNotification', '倒计时通知失败 id=$id', error, stack);
     }
   }
 

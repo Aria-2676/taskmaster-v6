@@ -1,0 +1,35 @@
+{
+  "id": "memo",
+  "name": "备忘",
+  "version": "1.0.0",
+  "contract": 1,
+  "entry": "index.html",
+  "queryEntry": "query.html",
+  "description": "随手记一句，稍后再整理。",
+  "icon": "sticky_note_2",
+  "home": {
+    "label": "备忘",
+    "hint": "随手记一句，稍后整理",
+    "order": 20
+  },
+  "permissions": [
+    "task:write"
+  ],
+  "storage": {
+    "version": 1,
+    "tables": [
+      {
+        "name": "entries",
+        "columns": [
+          { "name": "content", "type": "text" },
+          { "name": "pinned", "type": "integer" },
+          { "name": "at", "type": "text" }
+        ],
+        "indexes": [
+          ["pinned"],
+          ["at"]
+        ]
+      }
+    ]
+  }
+}

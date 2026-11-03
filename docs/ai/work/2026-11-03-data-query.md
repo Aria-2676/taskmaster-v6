@@ -79,3 +79,57 @@
 
 按 D 补：`plugin.json` 的 `queryEntry` 字段 + 主包侧离屏管理器
 （按需创建 / 加载 queryEntry / 空闲销毁）。
+
+
+---
+
+## 2026-11-03 21:40 已解决：今日页计划块
+
+定位过程（按日志逐段切分，两个真因）：
+
+1. **`installDir` 是相对路径**（`plan_mode/1.3.0`），拿去 `File()` 找不到清单。
+   改用 `PluginInstaller.directoryOf(plugin)` 取绝对路径。
+2. **清单文件名是 `plugin.json`，不是 `manifest.json`** —— 我按后者写的，
+   文件不存在 → 解析返回 null → `queryEntry` 永远读到 null。
+3. 顺带修：**就绪判定不能靠"onPageFinished 到了"**。bootstrap 注入是异步的，
+   注入完插件还要自己把 handler 挂上。改成主包轮询 `typeof window.host`
+   确认注入成功，再多等一拍；插件侧也主动上报 `{queryReady:true}` 作为双保险。
+
+**结果**：模拟器上全链路通
+
+```
+清单=plan_mode queryEntry=query.html
+loadFile 返回 → bootstrap 注入成功 → 已就绪
+acquire 返回 true → 开始查询 plan.list
+```
+
+今日页出现「未来七天」块，空数据显示「这周还没有安排」（正确）。
+
+**未验证**：有任务时的日期芯片渲染（清过数据，没有任务可测）。
+
+## 2026-11-03 21:20 记录（已解决，保留过程）
+
+**现象**：进今日页，日志只有两行
+
+```
+[today] 加载计划块：plan_mode v1.3.0
+[today] 加载计划块：plan_mode v1.3.0
+```
+
+之后**没有任何输出**（无异常、无超时、无 `[query-host]`）。界面上"未来七天"块不出现
+（连"读取中…"也没有）。
+
+**已排除**：
+- 不是 ready 超时 —— 超时会打 `[query-host] ... 没在 6s 内就绪`，没有。
+- 不是查询超时 —— 查询超时会打 `[query-host] ... 查询超时`，没有。
+- 插件确实装了（市场显示 plan_mode v1.3.0），`query.html` 在包里。
+
+**怀疑卡在**：
+1. `widget.pluginLauncher(plugin)` —— 构造 `PluginBridge` 时可能有异步步骤没回来；
+2. `WebViewController.loadFile()` —— 离屏实例首次 loadFile 挂起（探针用的是
+   `loadHtmlString`，不是 `loadFile`，两者的路径不同）。
+
+**下一步**：在这两处各加一条 `debugPrint` + `try/catch` 包裹，先定位卡点；
+`loadFile` 若真挂起，改用 `loadHtmlString` + 手动读文件内容（探针验证过这条路可行）。
+
+**影响**：块不显示时今日页本身正常（主包部分照常渲染），所以**不影响已发的 6.1.4**。

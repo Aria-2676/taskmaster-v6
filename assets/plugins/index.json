@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "publishedAt": "2026-11-03T12:39:19Z",
+  "publishedAt": "2026-11-03T13:39:10Z",
   "plugins": [
     {
       "id": "energy_currency",
@@ -43,9 +43,30 @@
       }
     },
     {
+      "id": "memo",
+      "name": "备忘",
+      "version": "1.0.0",
+      "contract": 1,
+      "description": "随手记一句，稍后再整理。",
+      "icon": "sticky_note_2",
+      "permissions": [
+        "task:write"
+      ],
+      "home": {
+        "label": "备忘",
+        "hint": "随手记一句，稍后整理",
+        "order": 20
+      },
+      "package": {
+        "path": "plugins/packages/memo_v1.0.0.zip",
+        "sha256": "170351737df346e9456c99ebd41ad9e9812e50f1a078b8b18536e2cd995f051c",
+        "sizeBytes": 3944
+      }
+    },
+    {
       "id": "plan_mode",
       "name": "周计划",
-      "version": "1.3.0",
+      "version": "1.3.1",
       "contract": 1,
       "description": "把未来七天铺开，一件事挪到哪天就是哪天。",
       "icon": "calendar_view_week",
@@ -59,9 +80,9 @@
         "order": 10
       },
       "package": {
-        "path": "plugins/packages/plan_mode_v1.3.0.zip",
-        "sha256": "e1698a2135cfae0c1265000fc4bdd453734121f0173ba9c77bb92445d2ef5651",
-        "sizeBytes": 7543
+        "path": "plugins/packages/plan_mode_v1.3.1.zip",
+        "sha256": "14ff5d503ed4edc212176b9a93b894b3adc21d32f9cb246519dfee29015a03b0",
+        "sizeBytes": 7825
       }
     },
     {

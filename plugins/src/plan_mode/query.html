@@ -53,6 +53,14 @@
           return { total: tasks.length, days: days };
         });
     });
+
+    // 注册完成才通知主包"可以问了"。
+    // 主包在 onPageFinished 后注入 bootstrap，而本文件的脚本是在那之前执行的，
+    // 所以必须由这里主动上报 —— 否则主包会在 handler 还没挂上时就发查询，
+    // 拿到的是 unsupported（2026-11-03 在模拟器上就是这么错的）。
+    if (typeof HostBridge !== 'undefined' && HostBridge.postMessage) {
+      HostBridge.postMessage(JSON.stringify({ queryReady: true }));
+    }
   }
   register();
 })();

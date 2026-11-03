@@ -49,7 +49,7 @@ REPO_DIR = os.path.join(ROOT, "plugins", "packages")
 # 随包只该有一种理由：断网时**必须**可用，且没有它 App 就没法用。
 # 现在一个都不满足 —— 索引随包（`assets/plugins/index.json`），货架永远是满的，
 # 装的时候再联网下载。所以这里收的是"谁例外"，不是"谁走仓库"。
-REPO_ONLY = {"demo_help", "energy_currency", "plan_mode", "list_mode", "pomodoro"}
+REPO_ONLY = {"demo_help", "energy_currency", "plan_mode", "list_mode", "pomodoro", "memo"}
 
 # 只在开发时用的插件：**不进市场索引，也不打包**。
 #

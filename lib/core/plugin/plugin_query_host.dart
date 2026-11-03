@@ -35,10 +35,20 @@ class PluginQueryHost {
 
   final Map<String, _OffscreenPlugin> _plugins = <String, _OffscreenPlugin>{};
 
-  /// 就绪/查询的等待上限。和前台查询保持一致，避免"前台 2 秒、离屏 5 秒"这种分裂。
+  /// 单次查询的等待上限。和前台查询保持一致。
   static const Duration timeout = Duration(seconds: 2);
 
+  /// **离屏页面首次加载**的等待上限。比查询宽松得多：
+  /// 新建一个 WebView 实例 + 从文件加载，冷启动要 2 秒以上很常见。
+  /// 一开始和查询共用 2 秒，结果页面还没准备好就被判失败、块静默消失
+  /// （2026-11-03 在模拟器上撞到）。
+  static const Duration readyTimeout = Duration(seconds: 6);
+
   /// 为插件准备离屏查询环境。
+  ///
+  /// [installDir] 必须是**绝对路径**（用 `PluginInstaller.directoryOf` 拿），
+  /// 不是 `InstalledPlugin.installDir` 那个相对值 —— 传错的话清单读不出来，
+  /// 表现为"插件明明装了却查不到"（2026-11-03 踩过）。
   ///
   /// 返回 `false` 表示这个插件**不参与**离屏查询（没声明 `queryEntry`，或清单读不出来）
   /// —— 这不是错误，调用方按"这块没有"处理。
@@ -50,7 +60,9 @@ class PluginQueryHost {
     final existing = _plugins[pluginId];
     if (existing != null) return existing.ready.isCompleted;
 
+    debugPrint('[query-host] 读清单 $installDir');
     final manifest = await _readManifest(installDir);
+    debugPrint('[query-host] 清单=${manifest?.id} queryEntry=${manifest?.queryEntry}');
     final entry = manifest?.queryEntry;
     if (entry == null) return false;
 
@@ -58,6 +70,8 @@ class PluginQueryHost {
     _plugins[pluginId] = host;
     final ok = await host.load(p.join(installDir, entry));
     if (!ok) {
+      debugPrint('[query-host] $pluginId 离屏页面没在 ${readyTimeout.inSeconds}s 内就绪，'
+          '这一轮不参与查询');
       _plugins.remove(pluginId);
       return false;
     }
@@ -83,7 +97,9 @@ class PluginQueryHost {
 
   Future<PluginManifest?> _readManifest(String installDir) async {
     try {
-      final file = File(p.join(installDir, 'manifest.json'));
+      // 包内清单是 `plugin.json`（和 PluginInstaller 读同一份），
+      // 不是 "manifest.json" —— 写错的话文件不存在，插件明明装了却查不到。
+      final file = File(p.join(installDir, 'plugin.json'));
       if (!await file.exists()) return null;
       final decoded = jsonDecode(await file.readAsString());
       if (decoded is! Map) return null;
@@ -116,15 +132,38 @@ class _OffscreenPlugin {
       );
       _controller.setNavigationDelegate(
         NavigationDelegate(
-          onPageFinished: (_) {
-            // 页面加载完才注入桥接脚本：早于这个时刻执行会被丢弃
-            _controller.runJavaScript(pluginBootstrapScript);
+          onPageFinished: (_) async {
+            // 页面加载完才注入桥接脚本（早于这个时刻会丢）。
+            // 注入是异步的，跑完还要等插件那边把 handler 挂上 —— 它用
+            // setTimeout 轮询 `window.host`。所以这里**主动确认**而不是假设：
+            // 轮询 `typeof window.host` 直到变成 object，再多等一拍给注册。
+            await _controller.runJavaScript(pluginBootstrapScript);
+            var injected = false;
+            for (var i = 0; i < 20; i++) {
+              try {
+                final probe = await _controller
+                    .runJavaScriptReturningResult('typeof window.host');
+                if ('$probe'.contains('object')) {
+                  injected = true;
+                  break;
+                }
+              } catch (_) {
+                // 页面还没就绪，等下一轮
+              }
+              await Future<void>.delayed(const Duration(milliseconds: 50));
+            }
+            debugPrint('[query-host] bootstrap 注入${injected ? "成功" : "失败"}');
+            if (!injected) return; // 让 ready 超时，别假装就绪
+            await Future<void>.delayed(const Duration(milliseconds: 120));
             if (!ready.isCompleted) ready.complete();
           },
         ),
       );
+      debugPrint('[query-host] $pluginId 开始 loadFile $absolutePath');
       await _controller.loadFile(absolutePath);
-      await ready.future.timeout(PluginQueryHost.timeout);
+      debugPrint('[query-host] $pluginId loadFile 返回，等 onPageFinished');
+      await ready.future.timeout(PluginQueryHost.readyTimeout);
+      debugPrint('[query-host] $pluginId 已就绪');
       return true;
     } catch (error) {
       debugPrint('[query-host] $pluginId 离屏加载失败：$error');
@@ -167,6 +206,12 @@ class _OffscreenPlugin {
     } catch (_) {
       return;
     }
+    // 插件注册完 handler 后的就绪信号
+    if (payload['queryReady'] == true) {
+      if (!ready.isCompleted) ready.complete();
+      return;
+    }
+
     final replyId = payload['queryReply'];
     if (replyId is int) {
       final pending = _pending.remove(replyId);

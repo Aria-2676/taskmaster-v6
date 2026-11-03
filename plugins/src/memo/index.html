@@ -1,0 +1,219 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>备忘</title>
+<style>
+  :root {
+    --bg: #faf8fd;
+    --card: #ffffff;
+    --line: #e6e0ee;
+    --text: #1d1b20;
+    --muted: #79747e;
+    --accent: #6750a4;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #141218; --card: #211f26; --line: #332f3a;
+      --text: #e6e0e9; --muted: #938f99; --accent: #d0bcff;
+    }
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  body {
+    margin: 0; padding: 12px 14px 28px;
+    background: var(--bg); color: var(--text);
+    font-family: -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+    font-size: 14px;
+  }
+  .composer {
+    background: var(--card); border: 1px solid var(--line); border-radius: 12px;
+    padding: 10px; margin-bottom: 14px;
+  }
+  textarea {
+    width: 100%; border: 0; outline: 0; resize: none;
+    background: transparent; color: var(--text);
+    font: inherit; line-height: 1.5; min-height: 52px;
+  }
+  .composer-foot { display: flex; justify-content: space-between; align-items: center; }
+  .hint { color: var(--muted); font-size: 11.5px; }
+  button {
+    font: inherit; border: 0; border-radius: 9px; cursor: pointer;
+    background: var(--accent); color: #fff; padding: 7px 14px;
+  }
+  button:disabled { opacity: .45; }
+  .section { margin: 4px 0 8px; color: var(--muted); font-size: 12px; font-weight: 600; }
+  .item {
+    background: var(--card); border: 1px solid var(--line); border-radius: 12px;
+    padding: 10px 12px; margin-bottom: 8px;
+  }
+  .item.pinned { border-color: var(--accent); }
+  .content { white-space: pre-wrap; line-height: 1.5; word-break: break-word; }
+  .meta { display: flex; gap: 10px; margin-top: 8px; align-items: center; }
+  .meta .time { color: var(--muted); font-size: 11.5px; margin-right: auto; }
+  .link {
+    color: var(--accent); font-size: 12px; cursor: pointer; background: none;
+    padding: 2px 0; border-radius: 0;
+  }
+  .danger { color: #b3261e; }
+  .empty { color: var(--muted); font-size: 12.5px; padding: 14px 2px; }
+</style>
+</head>
+<body>
+  <div class="composer">
+    <textarea id="input" placeholder="记点什么…（Ctrl/Cmd + Enter 保存）"></textarea>
+    <div class="composer-foot">
+      <span class="hint">先记下来，稍后再整理</span>
+      <button id="save" disabled>记下</button>
+    </div>
+  </div>
+
+  <div class="section" id="pinTitle" hidden>置顶</div>
+  <div id="pinned"></div>
+  <div class="section">最近</div>
+  <div id="recent"></div>
+  <div class="empty" id="empty" hidden>还没有备忘，先记一条</div>
+
+<script>
+(function () {
+  var input = document.getElementById('input');
+  var save = document.getElementById('save');
+  var pinnedBox = document.getElementById('pinned');
+  var recentBox = document.getElementById('recent');
+  var pinTitle = document.getElementById('pinTitle');
+  var empty = document.getElementById('empty');
+  var rows = [];
+
+  function whenHostReady(fn, tries) {
+    tries = tries || 0;
+    if (window.host) return fn();
+    if (tries > 100) return;
+    setTimeout(function () { whenHostReady(fn, tries + 1); }, 50);
+  }
+
+  function nowIso() { return new Date().toISOString(); }
+
+  function fmt(iso) {
+    var d = new Date(iso);
+    if (isNaN(d.getTime())) return '';
+    var pad = function (n) { return (n < 10 ? '0' : '') + n; };
+    return (d.getMonth() + 1) + '月' + d.getDate() + '日 ' + pad(d.getHours()) + ':' + pad(d.getMinutes());
+  }
+
+  function el(tag, cls, text) {
+    var node = document.createElement(tag);
+    if (cls) node.className = cls;
+    if (text != null) node.textContent = text;
+    return node;
+  }
+
+  function renderOne(row) {
+    var wrap = el('div', 'item' + (row.pinned ? ' pinned' : ''));
+    wrap.appendChild(el('div', 'content', row.content));
+
+    var meta = el('div', 'meta');
+    meta.appendChild(el('span', 'time', fmt(row.at)));
+
+    var pin = el('span', 'link', row.pinned ? '取消置顶' : '置顶');
+    pin.onclick = function () { togglePin(row); };
+    meta.appendChild(pin);
+
+    var toTask = el('span', 'link', '转任务');
+    toTask.onclick = function () { convert(row); };
+    meta.appendChild(toTask);
+
+    var del = el('span', 'link danger', '删除');
+    del.onclick = function () { remove(row); };
+    meta.appendChild(del);
+
+    wrap.appendChild(meta);
+    return wrap;
+  }
+
+  function render() {
+    pinnedBox.innerHTML = '';
+    recentBox.innerHTML = '';
+    var pinned = rows.filter(function (r) { return r.pinned; });
+    var recent = rows.filter(function (r) { return !r.pinned; });
+
+    pinTitle.hidden = pinned.length === 0;
+    pinned.forEach(function (r) { pinnedBox.appendChild(renderOne(r)); });
+    recent.forEach(function (r) { recentBox.appendChild(renderOne(r)); });
+    empty.hidden = rows.length !== 0;
+  }
+
+  async function reload() {
+    rows = (await window.host.call('db.select', {
+      table: 'entries',
+      orderBy: [{ column: 'at', desc: true }],
+      limit: 200
+    })) || [];
+    render();
+  }
+
+  async function add() {
+    var text = input.value.trim();
+    if (!text) return;
+    save.disabled = true;
+    try {
+      await window.host.call('db.insert', {
+        table: 'entries',
+        values: { content: text, pinned: 0, at: nowIso() }
+      });
+      input.value = '';
+      await reload();
+    } catch (e) {
+      alert('保存失败：' + ((e && e.message) || e));
+    } finally {
+      save.disabled = input.value.trim().length === 0;
+    }
+  }
+
+  async function togglePin(row) {
+    await window.host.call('db.update', {
+      table: 'entries',
+      values: { pinned: row.pinned ? 0 : 1 },
+      where: [{ column: 'id', value: row.id }]
+    });
+    await reload();
+  }
+
+  async function remove(row) {
+    if (!confirm('删掉这条备忘？')) return;
+    await window.host.call('db.delete', {
+      table: 'entries',
+      where: [{ column: 'id', value: row.id }]
+    });
+    await reload();
+  }
+
+  async function convert(row) {
+    try {
+      await window.host.call('task.create', { title: row.content.slice(0, 80) });
+      // 转过去就取消置顶，避免今日页一直挂着已经变成任务的东西
+      if (row.pinned) {
+        await window.host.call('db.update', {
+          table: 'entries',
+          values: { pinned: 0 },
+          where: [{ column: 'id', value: row.id }]
+        });
+      }
+      await reload();
+    } catch (e) {
+      alert('转任务失败：' + ((e && e.message) || e));
+    }
+  }
+
+  input.addEventListener('input', function () {
+    save.disabled = input.value.trim().length === 0;
+  });
+  input.addEventListener('keydown', function (e) {
+    if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') add();
+  });
+  save.addEventListener('click', add);
+
+  whenHostReady(reload);
+})();
+</script>
+</body>
+</html>

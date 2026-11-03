@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="zh-CN">
+<head><meta charset="utf-8"><title>memo query</title></head>
+<body>
+<script>
+// 离屏查询入口：不渲染 UI，只回答"置顶的备忘有哪些"。
+// 今日页用它在不动用主包的情况下显示「置顶备忘」块。
+(function () {
+  function register() {
+    if (!window.host || typeof window.host.onQuery !== 'function') {
+      setTimeout(register, 50);
+      return;
+    }
+
+    window.host.onQuery('memo.pinned', function () {
+      return window.host.call('db.select', {
+        table: 'entries',
+        where: [{ column: 'pinned', value: 1 }],
+        orderBy: [{ column: 'at', desc: true }],
+        limit: 5
+      }).then(function (rows) {
+        var list = rows || [];
+        return {
+          count: list.length,
+          items: list.map(function (row) {
+            return {
+              id: row.id,
+              content: String(row.content || '').slice(0, 40)
+            };
+          })
+        };
+      });
+    });
+
+    // 注册完上报，主包据此判定"可以问了"
+    if (typeof HostBridge !== 'undefined' && HostBridge.postMessage) {
+      HostBridge.postMessage(JSON.stringify({ queryReady: true }));
+    }
+  }
+  register();
+})();
+</script>
+</body>
+</html>

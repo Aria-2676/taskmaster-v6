@@ -17,6 +17,7 @@ import '../../core/updater/providers/app_update_provider.dart';
 import '../../core/updater/services/legacy_v5_service.dart';
 import '../../core/updater/services/app_update_launcher.dart';
 import '../pages/settings_page.dart';
+import '../pages/today_page.dart';
 import '../pages/sidebar_entries_page.dart';
 import '../pages/plugin_page.dart';
 import '../pages/tag_manager_page.dart';
@@ -1102,93 +1103,6 @@ class _MainShellState extends State<MainShell> {
     return _CurrencyBadge(value: slot.value);
   }
 
-  /// 今日页：主包内嵌的聚合页（`docs/decisions.md` 2026-11-03）。
-  ///
-  /// **不装任何插件也要有内容** —— 所以先渲染主包自己能拿到的部分。
-  /// 插件块（今日计划、置顶备忘）要等数据交互层接进来，那时按块懒加载。
-  ///
-  /// 当前是 6.3 的骨架：日期取 `_store.day`（首页正在看的那天），
-  /// 块标题写明文日期，不假装"永远是今天"——用户切到明天时不会看到错的标签。
-  Widget _todayView() {
-    final scheme = Theme.of(context).colorScheme;
-    final day = _store.day;
-    final overdue = _store.overdue;
-    final visible = _store.visible;
-
-    return ListView(
-      padding: const EdgeInsets.fromLTRB(16, 14, 16, 28),
-      children: <Widget>[
-        Text(
-          '${day.month} 月 ${day.day} 日',
-          style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
-        ),
-        const SizedBox(height: 2),
-        Text(
-          '逾期 ${overdue.length} · 这天 ${visible.length}',
-          style: TextStyle(fontSize: 12, color: scheme.onSurfaceVariant),
-        ),
-        const SizedBox(height: 16),
-        if (overdue.isNotEmpty) ...<Widget>[
-          _todayBlock('逾期', overdue, scheme),
-          const SizedBox(height: 14),
-        ],
-        _todayBlock('这天的安排', visible, scheme),
-      ],
-    );
-  }
-
-  Widget _todayBlock(String title, List<Task> tasks, ColorScheme scheme) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: <Widget>[
-        Text(
-          title,
-          style: TextStyle(
-            fontSize: 12,
-            fontWeight: FontWeight.w600,
-            color: scheme.onSurfaceVariant,
-          ),
-        ),
-        const SizedBox(height: 6),
-        if (tasks.isEmpty)
-          Padding(
-            padding: const EdgeInsets.symmetric(vertical: 10),
-            child: Text(
-              '没有任务',
-              style: TextStyle(fontSize: 12, color: scheme.onSurfaceVariant),
-            ),
-          )
-        else
-          for (final task in tasks)
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 7),
-              child: Row(
-                children: <Widget>[
-                  Icon(
-                    task.isDone ? Icons.check_circle : Icons.circle_outlined,
-                    size: 16,
-                    color: task.isDone ? scheme.primary : scheme.outline,
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Text(
-                      task.title,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        fontSize: 13.5,
-                        decoration: task.isDone ? TextDecoration.lineThrough : null,
-                        color: task.isDone ? scheme.onSurfaceVariant : scheme.onSurface,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-      ],
-    );
-  }
-
   Widget _buildBody() {
     // 只在**首次**还没拿到数据时显示全屏加载。
     // 用 `loading` 判断会让切日期也换掉整棵树，日历条随之销毁重建、滚动位置跳回。
@@ -1202,7 +1116,11 @@ class _MainShellState extends State<MainShell> {
         // 首页可以被插件整页替换，但**外壳还是这一层**：
         // 顶栏、底栏、添加按钮都在外面，插件崩了用户总能切回「我的」。
         _homeView(),
-        _todayView(),
+        TodayPage(
+          store: _store,
+          marketStore: widget.marketStore,
+          pluginLauncher: widget.pluginLauncher,
+        ),
         // 开关全搬去设置页了，这里只剩身份与入口
         ProfileStubPage(
           currency: _currency,

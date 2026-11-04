@@ -32,11 +32,16 @@ class PomodoroStore extends ChangeNotifier {
         _tickInterval = tickInterval;
 
   /// 通知 id。避开更新器的 0x7605 / 0x7606，出问题好一眼区分。
+  /// 番茄钟**唯一**的通知 id：倒计时和到点提醒共用一个。
+  ///
+  /// 为什么合并（2026-11-04，用户真机反馈后改）：
+  /// 早先分了两个 id，"响一声"和"一直挂着"各用各的。但**进程被杀时没人执行
+  /// cancel** —— 到点闹钟弹出的是另一个 id 的通知，顶不掉那条倒计时，于是
+  /// 用户看到"专注结束"和"专注中 -00:32"并存，负向时间一直挂着。
+  ///
+  /// 合并后，到点闹钟用同一个 id 弹通知，直接**顶替**掉倒计时那条；
+  /// 进程活着时 `_settle` 也不必再 cancel（那条就是要留着的到点提醒）。
   static const int notificationId = 0x7071;
-
-  /// 常驻倒计时通知的 id。**必须和 [notificationId] 分开**：
-  /// 到点提醒是"响一声"，倒计时是"一直挂着"，同 id 会互相覆盖。
-  static const int ongoingNotificationId = 0x7072;
 
   final SettingsRepository _settings;
   final HookBus _hooks;
@@ -118,6 +123,11 @@ class PomodoroStore extends ChangeNotifier {
     _session = restored;
     _settledSessionId = _settledSessionId; // 保持原值（首次为 null）
 
+    // 这次冷启动距离"本该结束的时刻"过了多久。用来区分：
+    // 刚被闹钟唤醒（几十秒内）→ 那条通知是刚弹的提醒，不能清；
+    // 过了很久才打开（几分钟以上）→ 那是上一轮残留的旧通知，必须清。
+    Duration? overrun;
+
     final sinceRaw = json['runningSince'];
     if (restored.running && sinceRaw is String) {
       final since = DateTime.tryParse(sinceRaw);
@@ -125,6 +135,7 @@ class PomodoroStore extends ChangeNotifier {
         _runningSince = since;
         final away = _now().difference(since);
         if (away > Duration.zero) {
+          overrun = away - (restored.planned - restored.elapsed);
           _session = restored.tick(away);
         }
       } else {
@@ -135,6 +146,15 @@ class PomodoroStore extends ChangeNotifier {
 
     if (_session!.finished) {
       await _settle();
+      // 只有**过期很久**的遗留通知才清。
+      //
+      // 不能无条件清：App 被到点闹钟唤醒时也会走这里，那条通知就是刚弹的
+      // 到点提醒，清了等于"到点什么都不响"（`decisions.md` 记过这个坑）。
+      // 判据用"过了多久"：刚过点（几十秒）不动它；几分钟后才打开，那必然是
+      // 上一轮残留的负向倒计时。
+      if ((overrun ?? Duration.zero) > const Duration(seconds: 60)) {
+        await _cancelNotification();
+      }
     } else {
       if (_session!.running) {
         _startTicker();
@@ -189,7 +209,6 @@ class PomodoroStore extends ChangeNotifier {
     _runningSince = null;
     _stopTicker();
     await _cancelNotification();
-    await _cancelOngoing();
     await _persist();
     notifyListeners();
   }
@@ -228,10 +247,12 @@ class PomodoroStore extends ChangeNotifier {
       running: false,
       planned: _plan.durationOf(current.phase),
       sessionId: _newSessionId(),
+      // 轮次也归零：重置是"这一轮从头开始"，不是"重新计时但记得你做了几轮"。
+      // 不归零的话，界面上的轮次点（四个小点）不会清空（用户 2026-11-04 报的）。
+      round: 0,
     );
     _runningSince = null;
     await _cancelNotification();
-    await _cancelOngoing();
     await _persist();
     notifyListeners();
   }
@@ -262,7 +283,6 @@ class PomodoroStore extends ChangeNotifier {
     _settledSessionId = null;
     _stopTicker();
     await _cancelNotification();
-    await _cancelOngoing();
     await _persist();
     notifyListeners();
   }
@@ -447,9 +467,9 @@ class PomodoroStore extends ChangeNotifier {
     _stopTicker();
     _runningSince = null;
     _session = current.copyWith(running: false);
-    // 倒计时通知**无论自然到点还是提前结束都要撤**：计时停了，挂着没意义。
-    // 到点提醒则相反：自然到点不能撤（那条就是刚弹出来的提醒本身）。
-    await _cancelOngoing();
+    // **自然到点不 cancel**：那条通知就是要留着的到点提醒本身
+    // （`decisions.md` 记过这个坑：顺手 cancel 会把闹钟刚弹的通知一起抹掉）。
+    // 提前结束（skip / 重置）才撤 —— 那时没有提醒要留。
     if (cancelReminder) await _cancelNotification();
     await _persist();
 
@@ -533,7 +553,7 @@ class PomodoroStore extends ChangeNotifier {
     if (notifications == null) return;
     try {
       await notifications.showCountdown(
-        id: ongoingNotificationId,
+        id: notificationId,
         title: current.isFocus ? '专注中' : '休息中',
         body: current.isFocus ? '到点会提醒你休息' : '休息完会提醒你继续',
         endsAt: _now().add(current.remaining),
@@ -548,9 +568,6 @@ class PomodoroStore extends ChangeNotifier {
     await _notifications?.cancel(notificationId);
   }
 
-  Future<void> _cancelOngoing() async {
-    await _notifications?.cancel(ongoingNotificationId);
-  }
 
   /// 读一次历史（惰性，只读一次）。读不懂就当空，不让一条坏数据卡住计时。
   Future<void> _ensureHistory() async {

@@ -84,11 +84,12 @@ class LocalNotificationService implements NotificationSink {
   /// 必须和 [channelPomodoro] 分开：倒计时通知每 30 秒兜底重发一次，
   /// 如果复用那个高重要性渠道，每次重发都会响一声 —— 划掉再重发就更响。
   /// 响铃是"到点提醒"的事，倒计时只负责"安静地显示还剩多久"。
-  static const String channelPomodoroCountdown = 'pomodoro_progress';
+  static const String channelPomodoroCountdown = 'pomodoro_quiet';
 
-  // 注意：这个 id 曾经是 'pomodoro_countdown'。Android 的渠道声音在**首次创建时
-  // 锁定**，改 playSound 不会覆盖已创建渠道的声音 —— 之前误用 default importance
-  // （其实带声音）创建了旧渠道，只能换一个新 id 才能拿到"静音"这个初始状态。
+  // 这个 id 换过两次：'pomodoro_countdown' → 'pomodoro_progress' → 'pomodoro_quiet'。
+  // Android 的渠道声音/重要性在**首次创建时锁定**，改参数不会覆盖已存在的渠道 ——
+  // 前两版分别以"有声音"和"default importance（在部分 OEM 上仍会响）"创建过，
+  // 只能继续换 id 才能拿到"绝对静音"这个初始状态。
 
   /// 插件渠道：默认低打扰，可被系统折叠。
   static const String channelPlugin = 'plugin';
@@ -223,12 +224,16 @@ class LocalNotificationService implements NotificationSink {
         channelPomodoroCountdown,
         '番茄钟倒计时',
         channelDescription: '运行中的专注/休息倒计时',
-        // default importance 才有状态栏图标，但它**默认带声音**（这是之前
-        // "每 30 秒响一次"的根因）。要"可见但静音"，得显式关掉声音和震动。
-        importance: Importance.defaultImportance,
-        priority: Priority.defaultPriority,
+        // **low 才绝对静音**：default 在部分 OEM 上即使 playSound=false 仍会响，
+        // 用户真机上就撞到过（每 7 秒一次兜底重发 = 每 7 秒一声）。
+        // 代价是状态栏没有小图标，只在通知抽屉里可见 —— 用户确认可以接受。
+        importance: Importance.low,
+        priority: Priority.low,
         playSound: false,
         enableVibration: false,
+        // 兜底重发是同 id 更新：没有这个标志，每次更新都会再提醒一次。
+        // 上一版改静音时把它漏掉了，注释却还写着"already onlyAlertOnce"。
+        onlyAlertOnce: true,
         ongoing: true,
         showWhen: true,
         when: endsAt.millisecondsSinceEpoch,

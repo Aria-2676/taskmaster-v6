@@ -360,7 +360,8 @@ void main() {
       final before = sink.countdownCount;
 
       await store.pause();
-      expect(sink.cancelledIds, contains(PomodoroStore.ongoingNotificationId),
+      // 倒计时和到点提醒共用一个 id，取消一次就够
+      expect(sink.cancelledIds, contains(PomodoroStore.notificationId),
           reason: '暂停了倒计时通知还挂着，就是在骗人');
 
       await store.resume();
@@ -379,7 +380,7 @@ void main() {
       expect(sink.countdownCount, 2, reason: '划掉了要能自己回来，不能靠用户再开 App');
     });
 
-    test('自然到点：倒计时撤掉，到点提醒留着', () async {
+    test('自然到点**不** cancel：靠同 id 的到点提醒顶替倒计时', () async {
       final store = build();
       await store.start();
       sink.cancelledIds.clear();
@@ -387,11 +388,74 @@ void main() {
       fakeNow = fakeNow.add(store.session!.planned);
       await store.debugPump();
 
-      expect(sink.cancelledIds, contains(PomodoroStore.ongoingNotificationId),
-          reason: '计时停了，倒计时通知要撤');
-      expect(sink.cancelledIds, isNot(contains(PomodoroStore.notificationId)),
-          reason: '到点提醒不能撤，那条就是刚弹出来的提醒');
+      expect(store.session!.finished, isTrue);
+      // 两条通知共用 id：闹钟到点用同一 id 弹"专注结束"，直接顶掉倒计时那条。
+      // 如果这里 cancel，会把刚弹出来的提醒一起抹掉（decisions.md 记过这个坑）。
+      expect(sink.cancelledIds, isEmpty,
+          reason: '自然到点不 cancel，否则会把到点提醒本身抹掉');
     });
+  });
+
+  test('重置把轮次归零（界面那四个小点要清空）', () async {
+    final store = build();
+    await store.start();
+    await store.next(); // 进休息，轮次 +1
+    expect(store.session!.round, greaterThan(0));
+
+    await store.reset();
+
+    expect(store.session!.round, 0, reason: '重置是这一轮从头再来，不是换个计时器');
+  });
+
+  test('冷启动：过期很久才打开，清掉遗留的倒计时通知', () async {
+    // 模拟"进程被杀 → 早就过点了 → 用户几分钟后才开 app"
+    await settings.set(
+      SettingsKeys.pomodoroSession,
+      jsonEncode(<String, Object?>{
+        'phase': 'focus',
+        'plannedSeconds': 60,
+        'elapsedSeconds': 0,
+        'runningSince':
+            fakeNow.subtract(const Duration(minutes: 5)).toUtc().toIso8601String(),
+        'running': true,
+        'sessionId': 'stale',
+        'round': 0,
+      }),
+    );
+
+    final store = build();
+    await store.load();
+
+    expect(store.session!.finished, isTrue);
+    expect(
+      sink.cancelledIds,
+      contains(PomodoroStore.notificationId),
+      reason: '那是上一轮残留的负向倒计时，闹钟早响过，必须清',
+    );
+  });
+
+  test('冷启动：刚过点就打开（闹钟唤醒），不清通知', () async {
+    // 刚过点 1 秒：这条通知就是闹钟刚弹的到点提醒，清了等于"到点什么都不响"
+    await settings.set(
+      SettingsKeys.pomodoroSession,
+      jsonEncode(<String, Object?>{
+        'phase': 'focus',
+        'plannedSeconds': 60,
+        'elapsedSeconds': 0,
+        'runningSince':
+            fakeNow.subtract(const Duration(seconds: 61)).toUtc().toIso8601String(),
+        'running': true,
+        'sessionId': 'just-finished',
+        'round': 0,
+      }),
+    );
+
+    final store = build();
+    await store.load();
+
+    expect(store.session!.finished, isTrue);
+    expect(sink.cancelledIds, isEmpty,
+        reason: '刚弹出来的到点提醒不能清，那会把提醒本身抹掉');
   });
 
   test('没有通知权限时：不排提醒，并把 canNotify=false 交给界面', () async {

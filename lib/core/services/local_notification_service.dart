@@ -109,6 +109,29 @@ class LocalNotificationService implements NotificationSink {
       ),
     );
     _initialized = true;
+    await _cleanupLegacyChannels();
+  }
+
+  /// 删掉"换 id 求静音"时留下的废弃渠道。
+  ///
+  /// 渠道一旦创建，声音/重要性就锁死了，改代码参数覆盖不掉，换 id 是唯一办法；
+  /// 但旧渠道不会自己消失，会一直挂在系统通知设置里。用户 2026-11-05 看到
+  /// 三条"番茄钟"权限，实际只有两条在用（`pomodoro` + `pomodoro_quiet`）。
+  Future<void> _cleanupLegacyChannels() async {
+    final android = _plugin.resolvePlatformSpecificImplementation<
+        AndroidFlutterLocalNotificationsPlugin>();
+    if (android == null) return;
+    for (final legacy in const <String>[
+      'pomodoro_countdown',
+      'pomodoro_progress',
+    ]) {
+      try {
+        await android.deleteNotificationChannel(legacy);
+      } catch (error) {
+        // 删不掉不影响任何功能，下次启动再试
+        debugPrint('[notify] 清理旧渠道失败 $legacy：$error');
+      }
+    }
   }
 
   /// 申请通知权限（Android 13+ 需要）。已经授权过时直接返回 true。
@@ -161,6 +184,7 @@ class LocalNotificationService implements NotificationSink {
     if (delay <= Duration.zero) {
       // 已经过点了：立刻发，别排一个永远不会响的闹钟。
       await show(id: id, title: title, body: body, channelId: channelId);
+      debugPrint('[notify] 排期 id=$id：已过点，立刻发');
       return NotificationScheduleResult.exact;
     }
 
@@ -180,6 +204,9 @@ class LocalNotificationService implements NotificationSink {
         uiLocalNotificationDateInterpretation:
             UILocalNotificationDateInterpretation.absoluteTime,
       );
+      // **每次都记**，不只记失败：用户报"两轮一轮响一轮不响"，这种间歇问题
+      // 只能靠"这一轮到底排成了 exact 还是 inexact"来定位。
+      debugPrint('[notify] 排期 id=$id 结果=exact at=$when');
       return NotificationScheduleResult.exact;
     } on PlatformException catch (error, stack) {
       AppLogger.warn('LocalNotification', '精确闹钟排期失败，降级为不精确 id=$id', error, stack);
@@ -194,6 +221,7 @@ class LocalNotificationService implements NotificationSink {
           uiLocalNotificationDateInterpretation:
               UILocalNotificationDateInterpretation.absoluteTime,
         );
+        debugPrint('[notify] 排期 id=$id 结果=inexact（系统拒了精确闹钟，可能延迟）');
         return NotificationScheduleResult.inexact;
       } catch (again, stackAgain) {
         AppLogger.warn('LocalNotification', '不精确闹钟也排不上 id=$id', again, stackAgain);

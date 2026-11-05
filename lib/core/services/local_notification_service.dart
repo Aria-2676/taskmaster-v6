@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
@@ -76,8 +78,12 @@ class LocalNotificationService implements NotificationSink {
 
   static final LocalNotificationService instance = LocalNotificationService._();
 
-  /// 番茄钟渠道：到点了要能叫醒人，重要性高、带声音。
-  static const String channelPomodoro = 'pomodoro';
+  /// 番茄钟渠道：到点了要能叫醒人，重要性高、带声音**和震动**。
+  ///
+  /// id 从 `pomodoro` 换成 `pomodoro_alarm`（2026-11-05）：用户多次实测
+  /// 「权限都给了就是不震」。原因是渠道**首次创建时没显式声明震动**，
+  /// 之后改代码覆盖不掉 —— 和静音那次是同一个坑，只能换 id 重建。
+  static const String channelPomodoro = 'pomodoro_alarm';
 
   /// 番茄钟**倒计时**渠道：静默常驻，不响铃、不震动，只显示状态栏图标和倒计时。
   ///
@@ -122,6 +128,9 @@ class LocalNotificationService implements NotificationSink {
         AndroidFlutterLocalNotificationsPlugin>();
     if (android == null) return;
     for (final legacy in const <String>[
+      // 换震动时废弃的旧到点渠道（它天生不带震动，留着只会误导用户）
+      'pomodoro',
+      // 换静音时废弃的两代倒计时渠道
       'pomodoro_countdown',
       'pomodoro_progress',
     ]) {
@@ -291,7 +300,8 @@ class LocalNotificationService implements NotificationSink {
   NotificationDetails _detailsFor(String channelId) {
     switch (channelId) {
       case channelPomodoro:
-        return const NotificationDetails(
+        // 不能 const：vibrationPattern 是运行时构造的
+        return NotificationDetails(
           android: AndroidNotificationDetails(
             channelPomodoro,
             '番茄钟',
@@ -299,6 +309,12 @@ class LocalNotificationService implements NotificationSink {
             importance: Importance.high,
             priority: Priority.high,
             category: AndroidNotificationCategory.alarm,
+            // **显式声明**，不靠默认值：默认虽然是 true，但渠道创建时如果
+            // 系统/OEM 没落到震动上，后面就再也改不了。到点提醒必须震，
+            // 否则静音/口袋场景等于没提醒。
+            enableVibration: true,
+            // 两短震：够明显，又不至于像来电那样持续轰鸣
+            vibrationPattern: Int64List.fromList(<int>[0, 220, 160, 220]),
           ),
           iOS: DarwinNotificationDetails(),
         );

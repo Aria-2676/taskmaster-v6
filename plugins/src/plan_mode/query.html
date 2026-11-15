@@ -17,18 +17,22 @@
 
     window.host.onQuery('plan.list', function () {
       return Promise.all([
+        // 不在 SQL 层过滤 status：实测 where 传整数值 0 时结果为空
+        // （2026-11-16），改在前端过滤，稳一点
         window.host.call('db.select', {
           table: 'plans',
-          where: [{ column: 'status', value: 0 }],
           orderBy: [{ column: 'created_at', desc: true }],
-          limit: 20
+          limit: 50
         }),
         window.host.call('db.select', { table: 'stages', limit: 500 }),
         window.host.call('db.select', { table: 'milestones', limit: 500 }),
         window.host.call('db.select', { table: 'plan_tasks', limit: 500 }),
         window.host.call('task.list', { from: '2000-01-01', to: '2100-01-01', limit: 500 })
       ]).then(function (r) {
-        var plans = r[0] || [];
+        var plans = (r[0] || []).filter(function (p) { return !p.status; });
+        console.log('[plan-query] plans=' + (r[0] || []).length +
+          ' active=' + plans.length +
+          ' tasks=' + ((r[4] || []).length));
         var stages = r[1] || [];
         var milestones = r[2] || [];
         var links = r[3] || [];

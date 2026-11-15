@@ -1,0 +1,322 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>日记</title>
+<style>
+  :root {
+    --bg: #faf8fd; --card: #ffffff; --line: #e6e0ee;
+    --text: #1d1b20; --muted: #79747e; --accent: #6750a4; --danger: #b3261e;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #141218; --card: #211f26; --line: #332f3a;
+      --text: #e6e0e9; --muted: #938f99; --accent: #d0bcff; --danger: #f2b8b5;
+    }
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font-family: -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+    font-size: 14px;
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+  .view { display: none; }
+  .view.on { display: block; }
+  header {
+    display: flex; align-items: center; gap: 10px;
+    padding: 12px 14px 10px; position: sticky; top: 0;
+    background: var(--bg); z-index: 2;
+  }
+  h1 { font-size: 17px; font-weight: 600; margin: 0; flex: 1; }
+  button {
+    font: inherit; border: 0; border-radius: 9px; cursor: pointer;
+    background: var(--accent); color: #fff; padding: 7px 13px;
+  }
+  button.ghost { background: transparent; color: var(--accent); padding: 6px 8px; }
+  button.danger { background: transparent; color: var(--danger); }
+  button:disabled { opacity: .4; }
+  .dayGroup { padding: 12px 14px 4px; }
+  .dayTitle {
+    font-size: 12px; font-weight: 600; color: var(--muted);
+    display: flex; align-items: baseline; gap: 8px;
+  }
+  .dayTitle .n { font-weight: 400; font-size: 11px; }
+  .entry {
+    background: var(--card); border: 1px solid var(--line);
+    border-radius: 12px; padding: 11px 12px; margin: 8px 0 0;
+  }
+  .entry .row1 { display: flex; align-items: center; gap: 8px; }
+  .entry .mood { font-size: 16px; line-height: 1; }
+  .entry .time { font-size: 11px; color: var(--muted); margin-left: auto; }
+  .entry .body {
+    margin-top: 6px; line-height: 1.55; white-space: pre-wrap;
+    word-break: break-word;
+  }
+  .entry .acts { margin-top: 8px; display: flex; gap: 10px; justify-content: flex-end; }
+  .entry .acts span { font-size: 11.5px; color: var(--accent); cursor: pointer; }
+  .entry .acts span.del { color: var(--danger); }
+  .empty { color: var(--muted); font-size: 12.5px; padding: 16px 14px; }
+
+  textarea {
+    font: inherit; color: var(--text); width: 100%;
+    background: var(--card); border: 1px solid var(--line);
+    border-radius: 12px; padding: 12px; outline: 0; resize: none;
+    min-height: 180px; line-height: 1.6;
+  }
+  .moods { display: flex; gap: 10px; padding: 4px 0 10px; }
+  .moodPick {
+    width: 42px; height: 42px; border-radius: 12px; font-size: 22px;
+    display: flex; align-items: center; justify-content: center;
+    border: 1.5px solid var(--line); background: var(--card); cursor: pointer;
+  }
+  .moodPick.on { border-color: var(--accent); background: rgba(103,80,164,.12); }
+  .label { font-size: 12px; color: var(--muted); padding: 8px 0 2px; }
+  .doneTasks {
+    background: var(--card); border: 1px solid var(--line);
+    border-radius: 12px; padding: 10px 12px; margin-top: 10px;
+    font-size: 12px; color: var(--muted); line-height: 1.6;
+  }
+  .footer { display: flex; gap: 8px; padding: 14px; }
+  .footer button { flex: 1; }
+  #compose { padding: 0 14px; }
+</style>
+</head>
+<body>
+
+<!-- 日记流 -->
+<div class="view on" id="feed">
+  <header>
+    <h1>日记</h1>
+    <button id="writeBtn">写</button>
+  </header>
+  <div id="groups"></div>
+  <div class="empty" id="emptyFeed" hidden>还没有日记。点右上角「写」记下今天。</div>
+</div>
+
+<!-- 写 -->
+<div class="view" id="compose">
+  <header>
+    <button class="ghost" id="cancelBtn">取消</button>
+    <h1 style="font-size:15px">写日记</h1>
+    <button id="saveBtn" disabled>保存</button>
+  </header>
+  <div class="label">今天感觉怎么样</div>
+  <div class="moods" id="moods"></div>
+  <textarea id="content" placeholder="发生了什么…"></textarea>
+  <div class="doneTasks" id="doneTasks" hidden></div>
+  <div class="footer"></div>
+</div>
+
+<script>
+(function () {
+  var MOODS = ['😞', '😕', '😐', '🙂', '😄'];
+  var state = { entries: [], mood: 2, editingId: null };
+
+  function pad(n) { return (n < 10 ? '0' : '') + n; }
+  function todayKey() {
+    var d = new Date();
+    return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate());
+  }
+  function nowIso() { return new Date().toISOString(); }
+
+  function whenText(day, iso) {
+    var t = new Date(iso);
+    var hh = isNaN(t.getTime()) ? '' : (pad(t.getHours()) + ':' + pad(t.getMinutes()));
+    if (day === todayKey()) return hh ? ('今天 ' + hh) : '今天';
+    var parts = day.split('-');
+    return parts[1] + ' 月 ' + parts[2] + ' 日' + (hh ? ' ' + hh : '');
+  }
+
+  function el(tag, cls, text) {
+    var node = document.createElement(tag);
+    if (cls) node.className = cls;
+    if (text != null) node.textContent = text;
+    return node;
+  }
+
+  function toast(text) {
+    var box = document.getElementById('toast');
+    if (!box) {
+      box = el('div');
+      box.id = 'toast';
+      box.style.cssText = 'position:fixed;left:50%;bottom:28px;transform:translateX(-50%);' +
+        'background:rgba(0,0,0,.82);color:#fff;font-size:12.5px;padding:8px 14px;' +
+        'border-radius:20px;z-index:99;transition:opacity .2s;pointer-events:none';
+      document.body.appendChild(box);
+    }
+    box.textContent = text;
+    box.style.opacity = '1';
+    clearTimeout(toast._t);
+    toast._t = setTimeout(function () { box.style.opacity = '0'; }, 1400);
+  }
+
+  function whenHostReady(fn, tries) {
+    tries = tries || 0;
+    if (window.host) return fn();
+    if (tries > 100) return;
+    setTimeout(function () { whenHostReady(fn, tries + 1); }, 50);
+  }
+
+  // ---- 读 ----
+
+  async function reload() {
+    state.entries = (await window.host.call('db.select', {
+      table: 'entries',
+      orderBy: [{ column: 'created_at', desc: true }],
+      limit: 300
+    })) || [];
+    renderFeed();
+  }
+
+  function renderFeed() {
+    var box = document.getElementById('groups');
+    box.innerHTML = '';
+
+    var byDay = {};
+    var order = [];
+    state.entries.forEach(function (e) {
+      if (!byDay[e.day]) { byDay[e.day] = []; order.push(e.day); }
+      byDay[e.day].push(e);
+    });
+
+    order.forEach(function (day) {
+      var group = el('div', 'dayGroup');
+      var title = el('div', 'dayTitle');
+      title.appendChild(el('span', null, day === todayKey() ? '今天' : day));
+      title.appendChild(el('span', 'n', byDay[day].length + ' 篇'));
+      group.appendChild(title);
+
+      byDay[day].forEach(function (e) {
+        group.appendChild(entryCard(e));
+      });
+      box.appendChild(group);
+    });
+
+    document.getElementById('emptyFeed').hidden = state.entries.length !== 0;
+  }
+
+  function entryCard(e) {
+    var card = el('div', 'entry');
+    var row = el('div', 'row1');
+    row.appendChild(el('span', 'mood', MOODS[e.mood] || ''));
+    row.appendChild(el('span', 'time', whenText(e.day, e.created_at)));
+    card.appendChild(row);
+    card.appendChild(el('div', 'body', e.content));
+
+    var acts = el('div', 'acts');
+    var edit = el('span', null, '改');
+    edit.onclick = function () { startEdit(e); };
+    acts.appendChild(edit);
+    var del = el('span', 'del', '删');
+    del.onclick = function () { remove(e); };
+    acts.appendChild(del);
+    card.appendChild(acts);
+    return card;
+  }
+
+  // ---- 写 ----
+
+  function renderMoods() {
+    var box = document.getElementById('moods');
+    box.innerHTML = '';
+    MOODS.forEach(function (m, i) {
+      var pick = el('div', 'moodPick' + (state.mood === i ? ' on' : ''), m);
+      pick.onclick = function () {
+        state.mood = i;
+        renderMoods();
+      };
+      box.appendChild(pick);
+    });
+  }
+
+  function openCompose() {
+    state.editingId = null;
+    state.mood = 2;
+    document.getElementById('content').value = '';
+    document.getElementById('content').placeholder = '发生了什么…';
+    document.getElementById('saveBtn').disabled = true;
+    document.getElementById('feed').classList.remove('on');
+    document.getElementById('compose').classList.add('on');
+    renderMoods();
+    loadDoneTasks();
+  }
+
+  function startEdit(e) {
+    state.editingId = e.id;
+    state.mood = e.mood || 2;
+    document.getElementById('content').value = e.content;
+    document.getElementById('saveBtn').disabled = false;
+    document.getElementById('feed').classList.remove('on');
+    document.getElementById('compose').classList.add('on');
+    renderMoods();
+    document.getElementById('doneTasks').hidden = true;
+  }
+
+  /// 当天完成的任务：只读展示，给"今天做了什么"当提示，不复制进日记
+  async function loadDoneTasks() {
+    var box = document.getElementById('doneTasks');
+    box.hidden = true;
+    try {
+      var list = (await window.host.call('task.list', {
+        from: todayKey(), to: todayKey(), limit: 50
+      })) || [];
+      var done = list.filter(function (t) { return t.done; });
+      if (done.length === 0) return;
+      box.textContent = '今天完成：' + done.map(function (t) { return t.title; }).join('、');
+      box.hidden = false;
+    } catch (e) {
+      // 拿不到就不显示，不打扰写日记
+    }
+  }
+
+  async function save() {
+    var text = document.getElementById('content').value.trim();
+    if (!text) return;
+
+    if (state.editingId != null) {
+      await window.host.call('db.update', {
+        table: 'entries',
+        values: { content: text, mood: state.mood },
+        where: [{ column: 'id', value: state.editingId }]
+      });
+    } else {
+      await window.host.call('db.insert', {
+        table: 'entries',
+        values: { day: todayKey(), content: text, mood: state.mood, created_at: nowIso() }
+      });
+    }
+    back();
+    toast(state.editingId != null ? '已更新' : '已记下');
+  }
+
+  async function remove(e) {
+    if (!confirm('删掉这篇日记？')) return;
+    await window.host.call('db.delete', {
+      table: 'entries', where: [{ column: 'id', value: e.id }]
+    });
+    await reload();
+  }
+
+  function back() {
+    document.getElementById('compose').classList.remove('on');
+    document.getElementById('feed').classList.add('on');
+    reload();
+  }
+
+  // ---- 事件 ----
+
+  document.getElementById('writeBtn').onclick = openCompose;
+  document.getElementById('cancelBtn').onclick = back;
+  document.getElementById('saveBtn').onclick = save;
+  document.getElementById('content').addEventListener('input', function () {
+    document.getElementById('saveBtn').disabled =
+      document.getElementById('content').value.trim().length === 0;
+  });
+
+  whenHostReady(reload);
+})();
+</script>
+</body>
+</html>

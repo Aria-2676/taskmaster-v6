@@ -1,0 +1,36 @@
+{
+  "id": "journal",
+  "name": "日记",
+  "version": "1.0.0",
+  "contract": 1,
+  "entry": "index.html",
+  "queryEntry": "query.html",
+  "description": "按天记，心情和发生了什么。",
+  "icon": "menu_book",
+  "home": {
+    "label": "日记模式",
+    "hint": "按天记，心情和发生了什么",
+    "order": 30
+  },
+  "permissions": [
+    "task:read"
+  ],
+  "storage": {
+    "version": 1,
+    "tables": [
+      {
+        "name": "entries",
+        "columns": [
+          { "name": "day", "type": "text" },
+          { "name": "content", "type": "text" },
+          { "name": "mood", "type": "integer" },
+          { "name": "created_at", "type": "text" }
+        ],
+        "indexes": [
+          ["day"],
+          ["created_at"]
+        ]
+      }
+    ]
+  }
+}

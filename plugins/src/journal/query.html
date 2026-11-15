@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="zh-CN">
+<head><meta charset="utf-8"><title>journal query</title></head>
+<body>
+<script>
+// 离屏查询入口：不渲染 UI，只回答"今天写了没有"。
+// 今日页用它决定要不要提示「今天还没写」。
+(function () {
+  function register() {
+    if (!window.host || typeof window.host.onQuery !== 'function') {
+      setTimeout(register, 50);
+      return;
+    }
+
+    window.host.onQuery('journal.today', function () {
+      var d = new Date();
+      var pad = function (n) { return (n < 10 ? '0' : '') + n; };
+      var key = d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate());
+      // 不在 SQL 层按 day 过滤：计划插件上实测过 where 传值查不到（2026-11-16），
+      // 这里统一在前端筛，稳。
+      return window.host.call('db.select', {
+        table: 'entries',
+        limit: 300
+      }).then(function (rows) {
+        var today = (rows || []).filter(function (r) { return r.day === key; });
+        return { count: today.length };
+      });
+    });
+
+    if (typeof HostBridge !== 'undefined' && HostBridge.postMessage) {
+      HostBridge.postMessage(JSON.stringify({ queryReady: true }));
+    }
+  }
+  register();
+})();
+</script>
+</body>
+</html>

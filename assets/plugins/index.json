@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "publishedAt": "2026-11-15T16:38:23Z",
+  "publishedAt": "2026-11-15T16:40:15Z",
   "plugins": [
     {
       "id": "energy_currency",
@@ -18,6 +18,27 @@
         "path": "plugins/packages/energy_currency_v1.0.1.zip",
         "sha256": "a93180f5530dafb31eb0ba60174940e83cd4db39a4c7fac441f1308584fb2e4a",
         "sizeBytes": 4339
+      }
+    },
+    {
+      "id": "journal",
+      "name": "日记",
+      "version": "1.0.0",
+      "contract": 1,
+      "description": "按天记，心情和发生了什么。",
+      "icon": "menu_book",
+      "permissions": [
+        "task:read"
+      ],
+      "home": {
+        "label": "日记模式",
+        "hint": "按天记，心情和发生了什么",
+        "order": 30
+      },
+      "package": {
+        "path": "plugins/packages/journal_v1.0.0.zip",
+        "sha256": "8461b31289c97e8fcbe21235b3c6d2148a10fd3b661b9e6bd48521dc37ec72eb",
+        "sizeBytes": 5131
       }
     },
     {

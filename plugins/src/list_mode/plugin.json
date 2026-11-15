@@ -1,7 +1,7 @@
 {
   "id": "list_mode",
   "name": "待办清单",
-  "version": "2.0.0",
+  "version": "2.0.1",
   "contract": 1,
   "entry": "index.html",
   "queryEntry": "query.html",
@@ -21,27 +21,59 @@
       {
         "name": "lists",
         "columns": [
-          { "name": "name", "type": "text" },
-          { "name": "is_template", "type": "integer" },
-          { "name": "created_at", "type": "text" },
-          { "name": "used_at", "type": "text" }
+          {
+            "name": "name",
+            "type": "text"
+          },
+          {
+            "name": "is_template",
+            "type": "integer"
+          },
+          {
+            "name": "created_at",
+            "type": "text"
+          },
+          {
+            "name": "used_at",
+            "type": "text"
+          }
         ],
         "indexes": [
-          ["is_template"],
-          ["used_at"]
+          [
+            "is_template"
+          ],
+          [
+            "used_at"
+          ]
         ]
       },
       {
         "name": "items",
         "columns": [
-          { "name": "list_id", "type": "integer" },
-          { "name": "content", "type": "text" },
-          { "name": "done", "type": "integer" },
-          { "name": "sort_order", "type": "integer" }
+          {
+            "name": "list_id",
+            "type": "integer"
+          },
+          {
+            "name": "content",
+            "type": "text"
+          },
+          {
+            "name": "done",
+            "type": "integer"
+          },
+          {
+            "name": "sort_order",
+            "type": "integer"
+          }
         ],
         "indexes": [
-          ["list_id"],
-          ["done"]
+          [
+            "list_id"
+          ],
+          [
+            "done"
+          ]
         ]
       }
     ]

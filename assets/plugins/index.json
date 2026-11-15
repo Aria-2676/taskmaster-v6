@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "publishedAt": "2026-11-15T16:05:57Z",
+  "publishedAt": "2026-11-15T16:19:43Z",
   "plugins": [
     {
       "id": "energy_currency",
@@ -23,7 +23,7 @@
     {
       "id": "list_mode",
       "name": "待办清单",
-      "version": "2.0.0",
+      "version": "2.0.1",
       "contract": 1,
       "description": "购物、打包、流程核对——可以反复用的清单。",
       "icon": "checklist",
@@ -36,9 +36,9 @@
         "order": 20
       },
       "package": {
-        "path": "plugins/packages/list_mode_v2.0.0.zip",
-        "sha256": "6da121143a7f5a04abbd885f1e306b3c03ed1d7cfe635709709656eb3aa84f41",
-        "sizeBytes": 5769
+        "path": "plugins/packages/list_mode_v2.0.1.zip",
+        "sha256": "4414c61688d243a92b0053541a136d0c43832bca9411955f3f2f8e2caacd3ab5",
+        "sizeBytes": 6387
       }
     },
     {

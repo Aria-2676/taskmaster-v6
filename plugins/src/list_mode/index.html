@@ -75,6 +75,19 @@
   }
   .footer { display: flex; flex-wrap: wrap; gap: 6px; padding: 14px; }
   .empty { color: var(--muted); font-size: 12.5px; padding: 14px; }
+  .mask {
+    position: fixed; inset: 0; background: rgba(0,0,0,.42);
+    display: flex; align-items: center; justify-content: center;
+    padding: 24px; z-index: 50;
+  }
+  .mask[hidden] { display: none; }
+  .ask {
+    background: var(--card); border-radius: 16px; padding: 18px;
+    width: 100%; max-width: 320px;
+  }
+  .askTitle { font-size: 15px; font-weight: 600; margin-bottom: 12px; }
+  .ask input { width: 100%; }
+  .askActions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; }
 </style>
 </head>
 <body>
@@ -111,6 +124,17 @@
     <button class="ghost" id="clearDone">清空已完成</button>
     <button class="ghost" id="saveTemplate">存为模板</button>
     <button class="danger" id="deleteList">删除清单</button>
+  </div>
+</div>
+
+<div class="mask" id="askMask" hidden>
+  <div class="ask">
+    <div class="askTitle" id="askTitle"></div>
+    <input id="askInput" autocomplete="off">
+    <div class="askActions">
+      <button class="ghost" id="askCancel">取消</button>
+      <button id="askOk">确定</button>
+    </div>
   </div>
 </div>
 
@@ -154,6 +178,36 @@
     box.style.opacity = '1';
     clearTimeout(toast._t);
     toast._t = setTimeout(function () { box.style.opacity = '0'; }, 1400);
+  }
+
+  /// 页面内的文本输入弹层。
+  ///
+  /// 不用 `window.prompt`：它会弹出 Android 原生灰色对话框，标题还是
+  /// "The page at file:// says:"，和 App 的观感完全割裂（2026-11-16 模拟器实测）。
+  function askText(title, defaultValue) {
+    return new Promise(function (resolve) {
+      var mask = document.getElementById('askMask');
+      var input = document.getElementById('askInput');
+      document.getElementById('askTitle').textContent = title;
+      input.value = defaultValue || '';
+      mask.hidden = false;
+      input.focus();
+      input.select();
+
+      function done(ok) {
+        mask.hidden = true;
+        document.getElementById('askOk').onclick = null;
+        document.getElementById('askCancel').onclick = null;
+        input.onkeydown = null;
+        resolve(ok ? input.value : null);
+      }
+      document.getElementById('askOk').onclick = function () { done(true); };
+      document.getElementById('askCancel').onclick = function () { done(false); };
+      input.onkeydown = function (event) {
+        if (event.key === 'Enter') done(true);
+        if (event.key === 'Escape') done(false);
+      };
+    });
   }
 
   // ---- 读 ----
@@ -291,7 +345,7 @@
 
   async function createFromTemplate(template) {
     var d = new Date();
-    var name = prompt('新清单的名字', template.name + ' ' + (d.getMonth() + 1) + '/' + d.getDate());
+    var name = await askText('新清单的名字', template.name + ' ' + (d.getMonth() + 1) + '/' + d.getDate());
     if (name == null) return;
     await createList(name, template.id);
   }
@@ -385,7 +439,7 @@
 
   async function saveAsTemplate() {
     if (state.currentId == null) return;
-    var name = prompt('模板名字', state.currentName);
+    var name = await askText('模板名字', state.currentName);
     if (name == null || !name.trim()) return;
 
     var inserted = await window.host.call('db.insert', {
@@ -416,8 +470,8 @@
 
   // ---- 事件 ----
 
-  document.getElementById('newList').onclick = function () {
-    var name = prompt('清单名字', '');
+  document.getElementById('newList').onclick = async function () {
+    var name = await askText('清单名字', '');
     if (name == null) return;
     createList(name);
   };

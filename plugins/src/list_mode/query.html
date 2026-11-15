@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="zh-CN">
+<head><meta charset="utf-8"><title>list query</title></head>
+<body>
+<script>
+// 离屏查询入口：不渲染 UI，只回答"还有多少条没勾"。
+// 今日页用它在不动用主包的情况下显示清单进度。
+(function () {
+  function register() {
+    if (!window.host || typeof window.host.onQuery !== 'function') {
+      setTimeout(register, 50);
+      return;
+    }
+
+    window.host.onQuery('list.pending', function () {
+      return window.host.call('db.select', {
+        table: 'items',
+        where: [{ column: 'done', value: 0 }],
+        limit: 500
+      }).then(function (rows) {
+        var list = rows || [];
+        return { pending: list.length };
+      });
+    });
+
+    if (typeof HostBridge !== 'undefined' && HostBridge.postMessage) {
+      HostBridge.postMessage(JSON.stringify({ queryReady: true }));
+    }
+  }
+  register();
+})();
+</script>
+</body>
+</html>

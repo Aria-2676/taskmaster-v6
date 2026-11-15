@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "publishedAt": "2026-11-03T13:39:10Z",
+  "publishedAt": "2026-11-15T16:05:57Z",
   "plugins": [
     {
       "id": "energy_currency",
@@ -23,23 +23,22 @@
     {
       "id": "list_mode",
       "name": "待办清单",
-      "version": "1.1.1",
+      "version": "2.0.0",
       "contract": 1,
-      "description": "所有待办拉平，逾期排最前。",
+      "description": "购物、打包、流程核对——可以反复用的清单。",
       "icon": "checklist",
       "permissions": [
-        "task:read",
         "task:write"
       ],
       "home": {
         "label": "清单模式",
-        "hint": "所有待办拉平，逾期排最前",
+        "hint": "可复用的核对清单",
         "order": 20
       },
       "package": {
-        "path": "plugins/packages/list_mode_v1.1.1.zip",
-        "sha256": "39be81642ebcebd4699163e085618b78b795cf8a99d48757aeacc5b37159f0cc",
-        "sizeBytes": 6289
+        "path": "plugins/packages/list_mode_v2.0.0.zip",
+        "sha256": "6da121143a7f5a04abbd885f1e306b3c03ed1d7cfe635709709656eb3aa84f41",
+        "sizeBytes": 5769
       }
     },
     {

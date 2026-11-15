@@ -1,500 +1,443 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="zh-CN">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>清单模式</title>
+<title>清单</title>
 <style>
   :root {
-    --bg: #ffffff;
-    --fg: #1b1b1f;
-    --muted: #5f5e6a;
-    --line: #e6e1ee;
-    --accent: #6750a4;
-    --chip: #eeedfe;
-    --done: #8e8b96;
-    --warn: #d64545;
-    --p-red: #d64545;
-    --p-orange: #e0891f;
-    --p-yellow: #d9b400;
-    --p-blue: #4a7fd4;
-    --p-white: #b9b5c2;
+    --bg: #faf8fd; --card: #ffffff; --line: #e6e0ee;
+    --text: #1d1b20; --muted: #79747e; --accent: #6750a4; --danger: #b3261e;
   }
   @media (prefers-color-scheme: dark) {
     :root {
-      --bg: #141218;
-      --fg: #e6e1e9;
-      --muted: #a8a4b3;
-      --line: #2b2830;
-      --accent: #cfbdfe;
-      --chip: #26215c;
-      --done: #77737f;
-      --warn: #ff8a8a;
-      --p-red: #ff8a8a;
-      --p-orange: #ffb862;
-      --p-yellow: #e8cf5a;
-      --p-blue: #8ab4ff;
-      --p-white: #56525e;
+      --bg: #141218; --card: #211f26; --line: #332f3a;
+      --text: #e6e0e9; --muted: #938f99; --accent: #d0bcff; --danger: #f2b8b5;
     }
   }
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
   body {
-    margin: 0; background: var(--bg); color: var(--fg);
-    font: 14px/1.5 -apple-system, "Segoe UI", "Noto Sans SC", system-ui, sans-serif;
-    -webkit-text-size-adjust: 100%;
+    margin: 0; background: var(--bg); color: var(--text);
+    font-family: -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+    font-size: 14px;
+    padding-bottom: env(safe-area-inset-bottom);
   }
-  .wrap { padding: 10px 12px 28px; }
-
-  .head { display: flex; align-items: baseline; gap: 8px; padding: 2px 2px 8px; }
-  .head h1 { font-size: 15px; font-weight: 600; margin: 0; }
-  .head .sum { color: var(--muted); font-size: 11.5px; margin-left: auto; }
-
-  /* 筛选条：横向一条，选中的实心。放在顶部是为了"换一组看待办"只要点一下。 */
-  .filters {
-    display: flex; gap: 6px; overflow-x: auto; padding: 0 2px 10px;
-    scrollbar-width: none;
+  .view { display: none; }
+  .view.on { display: block; }
+  header {
+    display: flex; align-items: center; gap: 10px;
+    padding: 12px 14px 10px; position: sticky; top: 0;
+    background: var(--bg); z-index: 2;
   }
-  .filters::-webkit-scrollbar { display: none; }
-  .chip {
-    flex: none; padding: 5px 11px; border-radius: 999px;
-    border: 1px solid var(--line); background: transparent; color: var(--muted);
-    font: inherit; font-size: 12px;
+  h1 { font-size: 17px; font-weight: 600; margin: 0; flex: 1; }
+  .sub { font-size: 11.5px; color: var(--muted); margin-top: 2px; }
+  button {
+    font: inherit; border: 0; border-radius: 9px; cursor: pointer;
+    background: var(--accent); color: #fff; padding: 7px 13px;
   }
-  .chip.on { background: var(--chip); color: var(--accent); border-color: transparent; }
-
-  .item {
-    display: flex; align-items: flex-start; gap: 10px;
-    padding: 9px 10px; margin-bottom: 6px;
-    border: 1px solid var(--line); border-radius: 10px;
+  button.ghost { background: transparent; color: var(--accent); padding: 6px 8px; }
+  button.danger { background: transparent; color: var(--danger); }
+  button:disabled { opacity: .4; }
+  .section {
+    font-size: 12px; font-weight: 600; color: var(--muted);
+    padding: 10px 14px 6px;
   }
-  .item:active { background: var(--chip); }
+  .row {
+    display: flex; align-items: center; gap: 10px;
+    background: var(--card); border: 1px solid var(--line);
+    border-radius: 12px; padding: 11px 12px; margin: 0 14px 8px;
+  }
+  .row .name { flex: 1; min-width: 0; }
+  .row .name b { font-weight: 500; display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .row .count { font-size: 11.5px; color: var(--muted); margin-top: 2px; }
+  .badge {
+    font-size: 10.5px; color: var(--accent);
+    border: 1px solid var(--accent); border-radius: 6px; padding: 1px 5px;
+  }
+  .item { display: flex; align-items: flex-start; gap: 10px; padding: 10px 14px; }
   .check {
-    width: 18px; height: 18px; flex: none; margin-top: 2px; padding: 0;
-    border: 1.5px solid var(--p-white); border-radius: 50%;
-    background: transparent; color: var(--accent);
-    font: inherit; font-size: 12px; line-height: 1;
+    width: 20px; height: 20px; border-radius: 6px; flex: none;
+    border: 1.5px solid var(--line); margin-top: 1px;
     display: flex; align-items: center; justify-content: center;
+    font-size: 13px; color: transparent;
   }
-  .check:active { background: var(--chip); }
-  .p-red .check { border-color: var(--p-red); }
-  .p-orange .check { border-color: var(--p-orange); }
-  .p-yellow .check { border-color: var(--p-yellow); }
-  .p-blue .check { border-color: var(--p-blue); }
-  .item.done .check { border-color: var(--done); color: var(--done); }
-
-  .body { min-width: 0; }
-  .title { font-size: 13.5px; line-height: 1.45; word-break: break-word; }
-  .item.done .title { color: var(--done); text-decoration: line-through; }
-  .meta { font-size: 11px; color: var(--muted); margin-top: 2px; }
-  .meta .late { color: var(--warn); }
-  .empty { color: var(--muted); font-size: 12px; text-align: center; padding: 34px 0; }
-
-  /* 新建入口放在标题行右侧：清单的第一屏本来就该全是待办，
-     单独占一行「＋ 新建」会把内容挤下去（计划模式那次已经吃过这个亏）。 */
-  .head-add {
-    width: 26px; height: 26px; flex: none; margin-left: 6px;
-    border: 1px dashed var(--line); border-radius: 8px;
-    background: transparent; color: var(--muted);
-    font: inherit; font-size: 15px; line-height: 1;
-    display: flex; align-items: center; justify-content: center; padding: 0;
+  .item.done .check { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .item .txt { flex: 1; line-height: 1.45; word-break: break-word; }
+  .item.done .txt { text-decoration: line-through; color: var(--muted); }
+  .item .acts { display: flex; gap: 8px; flex: none; }
+  .item .acts span { font-size: 11.5px; color: var(--accent); cursor: pointer; }
+  .item .acts span.del { color: var(--danger); }
+  .addRow { display: flex; gap: 8px; padding: 8px 14px 4px; }
+  input {
+    flex: 1; font: inherit; color: var(--text);
+    background: var(--card); border: 1px solid var(--line);
+    border-radius: 10px; padding: 9px 11px; outline: 0;
   }
-  .head-add:active { background: var(--chip); color: var(--accent); border-color: var(--accent); }
-  .field { display: flex; flex-direction: column; gap: 6px; margin-bottom: 10px; }
-  .field label { font-size: 11.5px; color: var(--muted); }
-  .input {
-    width: 100%; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px;
-    background: transparent; color: var(--fg); font: inherit; font-size: 14px;
-  }
-  .input:focus { outline: none; border-color: var(--accent); }
-  input[type="date"] { color-scheme: light dark; }
-
-  .mask { position: fixed; inset: 0; background: rgba(0,0,0,.32); display: none; z-index: 10; }
-  .mask.on { display: block; }
-  .sheet {
-    position: fixed; left: 0; right: 0; bottom: 0; z-index: 11;
-    background: var(--bg); border-radius: 16px 16px 0 0;
-    padding: 14px 16px calc(16px + env(safe-area-inset-bottom));
-    transform: translateY(100%); transition: transform .18s ease-out;
-  }
-  .sheet.on { transform: translateY(0); }
-  .sheet h2 { font-size: 13.5px; margin: 0 0 2px; font-weight: 600; word-break: break-word; }
-  .sheet .sub { color: var(--muted); font-size: 11.5px; margin: 0 0 12px; }
-  .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 7px; }
-  .pick {
-    border: 1px solid var(--line); border-radius: 9px; padding: 9px 0;
-    text-align: center; font-size: 12px; background: transparent;
-    color: var(--fg); font-family: inherit;
-  }
-  .pick:active { background: var(--chip); }
-  .pick.primary { border-color: var(--accent); color: var(--accent); }
-  .toast {
-    position: fixed; left: 50%; bottom: 84px; transform: translateX(-50%);
-    background: rgba(0,0,0,.8); color: #fff; font-size: 12px;
-    padding: 7px 12px; border-radius: 999px; opacity: 0;
-    transition: opacity .18s; pointer-events: none; z-index: 12;
-  }
-  .toast.on { opacity: 1; }
+  .footer { display: flex; flex-wrap: wrap; gap: 6px; padding: 14px; }
+  .empty { color: var(--muted); font-size: 12.5px; padding: 14px; }
 </style>
 </head>
 <body>
-<div class="wrap">
-  <div class="head">
+
+<!-- 清单库 -->
+<div class="view on" id="shelf">
+  <header>
     <h1>清单</h1>
-    <span class="sum" id="sum">读取中…</span>
-    <button class="head-add" id="addOpen" type="button" aria-label="新建待办">＋</button>
-  </div>
-  <div class="filters" id="filters"></div>
-  <div id="list"></div>
+    <button id="newList">新建</button>
+  </header>
+  <div class="section" id="tplTitle" hidden>模板</div>
+  <div id="templates"></div>
+  <div class="section">我的清单</div>
+  <div id="lists"></div>
+  <div class="empty" id="emptyShelf" hidden>还没有清单。新建一个，比如「露营打包」。</div>
 </div>
 
-<div class="mask" id="mask"></div>
-<div class="sheet" id="sheet">
-  <h2 id="sheetTitle">任务</h2>
-  <p class="sub" id="sheetSub">调整日期或标记完成</p>
-  <div class="grid">
-    <button class="pick" id="toToday">今天</button>
-    <button class="pick" id="toTomorrow">明天</button>
-    <button class="pick primary" id="toggleDone">标记完成</button>
+<!-- 清单内页 -->
+<div class="view" id="detail">
+  <header>
+    <button class="ghost" id="back">返回</button>
+    <div style="flex:1;min-width:0">
+      <h1 id="listName" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap"></h1>
+      <div class="sub" id="listProgress"></div>
+    </div>
+  </header>
+  <div id="items"></div>
+  <div class="empty" id="emptyItems" hidden>还没有条目，下面加一条。</div>
+  <div class="addRow">
+    <input id="itemInput" placeholder="加一条…" autocomplete="off">
+    <button id="addItem" disabled>加</button>
   </div>
-  <div class="grid" style="margin-top:7px; grid-template-columns: 1fr;">
-    <button class="pick" id="closeSheet">取消</button>
-  </div>
-</div>
-<div class="mask" id="addMask"></div>
-<div class="sheet" id="addSheet">
-  <h2>新建待办</h2>
-  <p class="sub">填写标题与截止日期</p>
-  <div class="field">
-    <label for="addTitle">做什么</label>
-    <input class="input" id="addTitle" maxlength="60" placeholder="要做什么？" enterkeyhint="done">
-  </div>
-  <div class="field">
-    <label for="addDate">截止日期</label>
-    <input class="input" id="addDate" type="date">
-  </div>
-  <div class="grid" style="grid-template-columns: 1fr 1fr;">
-    <button class="pick" id="addCancel">取消</button>
-    <button class="pick primary" id="addSubmit">添加</button>
+  <div class="footer">
+    <button class="ghost" id="clearDone">清空已完成</button>
+    <button class="ghost" id="saveTemplate">存为模板</button>
+    <button class="danger" id="deleteList">删除清单</button>
   </div>
 </div>
-<div class="toast" id="toast"></div>
 
 <script>
-  // 清单模式：所有待办拉平，逾期排最前。
-  //
-  // 和计划模式的分工：计划模式回答"这七天怎么安排"，清单模式回答"我还欠着什么"。
-  // 所以这里不铺日期分组、不做改期的七选一 —— 只有三个动作：
-  // 今天 / 明天 / 完成。逾期任务最常见的处理就是"挪到今天"。
-  //
-  // 拉取范围给到 2000~2099：清单要的是"全部"，而 task.list 只认日期区间。
-  // limit 上限 200，超了会被截断 —— 这是主包的约束，不在插件侧绕。
+(function () {
+  var state = { view: 'shelf', lists: [], items: [], currentId: null, currentName: '' };
 
-  var state = { tasks: [], filter: 'open' };
+  var shelf = document.getElementById('shelf');
+  var detail = document.getElementById('detail');
+  var templatesBox = document.getElementById('templates');
+  var listsBox = document.getElementById('lists');
+  var itemsBox = document.getElementById('items');
 
-  var FILTERS = [
-    { id: 'open', name: '待办' },
-    { id: 'overdue', name: '逾期' },
-    { id: 'today', name: '今天' },
-    { id: 'week', name: '本周' },
-    { id: 'done', name: '已完成' },
-  ];
+  function whenHostReady(fn, tries) {
+    tries = tries || 0;
+    if (window.host) return fn();
+    if (tries > 100) return;
+    setTimeout(function () { whenHostReady(fn, tries + 1); }, 50);
+  }
 
-  var WEIGHT = { red: 0, orange: 1, yellow: 2, blue: 3, white: 4 };
-  var WEEK = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
+  function nowIso() { return new Date().toISOString(); }
 
-  function pad(n) { return (n < 10 ? '0' : '') + n; }
-  function key(date) {
-    return date.getFullYear() + '-' + pad(date.getMonth() + 1) + '-' + pad(date.getDate());
-  }
-  function today() {
-    var now = new Date();
-    return new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  }
-  function parseDay(text) {
-    var parts = String(text).split('-');
-    return new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
-  }
-  function addDays(base, n) {
-    var d = new Date(base.getTime());
-    d.setDate(d.getDate() + n);
-    return d;
-  }
-  // 两个日期差几天（按日取整，避开时区/夏令时的零头）
-  function dayDiff(a, b) {
-    var ms = new Date(a.getFullYear(), a.getMonth(), a.getDate()) -
-             new Date(b.getFullYear(), b.getMonth(), b.getDate());
-    return Math.round(ms / 86400000);
+  function el(tag, cls, text) {
+    var node = document.createElement(tag);
+    if (cls) node.className = cls;
+    if (text != null) node.textContent = text;
+    return node;
   }
 
   function toast(text) {
-    var el = document.getElementById('toast');
-    el.textContent = text;
-    el.classList.add('on');
+    var box = document.getElementById('toast');
+    if (!box) {
+      box = el('div');
+      box.id = 'toast';
+      box.style.cssText = 'position:fixed;left:50%;bottom:28px;transform:translateX(-50%);' +
+        'background:rgba(0,0,0,.82);color:#fff;font-size:12.5px;padding:8px 14px;' +
+        'border-radius:20px;z-index:99;transition:opacity .2s;pointer-events:none';
+      document.body.appendChild(box);
+    }
+    box.textContent = text;
+    box.style.opacity = '1';
     clearTimeout(toast._t);
-    toast._t = setTimeout(function () { el.classList.remove('on'); }, 1400);
+    toast._t = setTimeout(function () { box.style.opacity = '0'; }, 1400);
   }
 
-  function whenText(dayKey, isDone) {
-    var day = parseDay(dayKey);
-    var diff = dayDiff(day, today());
-    if (isDone) return (day.getMonth() + 1) + '月' + day.getDate() + '日';
-    if (diff < 0) return { late: '逾期 ' + (-diff) + ' 天' };
-    if (diff === 0) return '今天';
-    if (diff === 1) return '明天';
-    if (diff < 7) return WEEK[day.getDay()] + ' · ' + (day.getMonth() + 1) + '/' + day.getDate();
-    return (day.getMonth() + 1) + '月' + day.getDate() + '日';
+  // ---- 读 ----
+
+  async function reloadLists() {
+    state.lists = (await window.host.call('db.select', {
+      table: 'lists',
+      orderBy: [{ column: 'used_at', desc: true }, { column: 'id', desc: true }],
+      limit: 200
+    })) || [];
+    renderShelf();
   }
 
-  function visibleTasks() {
-    var t = today();
-    var weekStart = addDays(t, -((t.getDay() + 6) % 7));
-    var weekEnd = addDays(weekStart, 6);
-
-    return state.tasks.filter(function (task) {
-      var day = parseDay(task.dueDate);
-      switch (state.filter) {
-        case 'overdue': return !task.isDone && dayDiff(day, t) < 0;
-        case 'today': return !task.isDone && dayDiff(day, t) === 0;
-        case 'week': return !task.isDone && day >= weekStart && day <= weekEnd;
-        case 'done': return task.isDone;
-        default: return !task.isDone;
-      }
-    }).sort(function (a, b) {
-      if (a.dueDate !== b.dueDate) return a.dueDate < b.dueDate ? -1 : 1;
-      return (WEIGHT[a.priority] || 4) - (WEIGHT[b.priority] || 4);
-    });
+  async function reloadItems() {
+    if (state.currentId == null) { state.items = []; return; }
+    state.items = (await window.host.call('db.select', {
+      table: 'items',
+      where: [{ column: 'list_id', value: state.currentId }],
+      orderBy: [{ column: 'sort_order' }, { column: 'id' }],
+      limit: 500
+    })) || [];
+    renderDetail();
   }
 
-  function renderFilters() {
-    var host = document.getElementById('filters');
-    host.innerHTML = '';
-    FILTERS.forEach(function (item) {
-      var chip = document.createElement('button');
-      chip.type = 'button';
-      chip.className = 'chip' + (state.filter === item.id ? ' on' : '');
-      chip.textContent = item.name;
-      chip.addEventListener('click', function () {
-        state.filter = item.id;
-        renderFilters();
-        render();
-      });
-      host.appendChild(chip);
-    });
+  // ---- 渲染 ----
+
+  function renderShelf() {
+    templatesBox.innerHTML = '';
+    listsBox.innerHTML = '';
+
+    var tpls = state.lists.filter(function (l) { return l.is_template; });
+    var normal = state.lists.filter(function (l) { return !l.is_template; });
+
+    document.getElementById('tplTitle').hidden = tpls.length === 0;
+    tpls.forEach(function (l) { templatesBox.appendChild(shelfRow(l, true)); });
+    normal.forEach(function (l) { listsBox.appendChild(shelfRow(l, false)); });
+
+    document.getElementById('emptyShelf').hidden = state.lists.length !== 0;
   }
 
-  function render() {
-    var list = document.getElementById('list');
-    list.innerHTML = '';
+  function shelfRow(list, isTemplate) {
+    var row = el('div', 'row');
+    var nameBox = el('div', 'name');
+    var title = el('b');
 
-    var open = 0;
-    var late = 0;
-    state.tasks.forEach(function (task) {
-      if (task.isDone) return;
-      open++;
-      if (dayDiff(parseDay(task.dueDate), today()) < 0) late++;
-    });
-    document.getElementById('sum').textContent =
-      open ? open + ' 条待办' + (late ? ' · ' + late + ' 条逾期' : '') : '清单是空的';
-
-    var items = visibleTasks();
-    if (!items.length) {
-      var empty = document.createElement('div');
-      empty.className = 'empty';
-      empty.textContent = state.filter === 'done' ? '暂无已完成的任务'
-        : state.filter === 'overdue' ? '暂无逾期任务'
-        : '当前筛选下没有任务';
-      list.appendChild(empty);
-      return;
+    title.appendChild(el('span', null, list.name));
+    if (isTemplate) {
+      var badge = el('span', 'badge', '模板');
+      badge.style.marginLeft = '6px';
+      title.appendChild(badge);
     }
+    nameBox.appendChild(title);
+    nameBox.appendChild(el('div', 'count', '点开查看'));
+    row.appendChild(nameBox);
+    row.onclick = function () { openList(list); };
 
-    items.forEach(function (task) {
-      var row = document.createElement('div');
-      row.className = 'item p-' + (task.priority || 'white') + (task.isDone ? ' done' : '');
-
-      var check = document.createElement('button');
-      check.type = 'button';
-      check.className = 'check';
-      check.textContent = task.isDone ? '✓' : '';
-      check.setAttribute('aria-label', task.isDone ? '取消完成' : '标记完成');
-      check.addEventListener('click', function (event) {
+    if (isTemplate) {
+      var use = el('span', 'badge', '用这个新建');
+      use.style.cursor = 'pointer';
+      use.onclick = function (event) {
         event.stopPropagation();
-        toggleDone(task);
-      });
-      row.appendChild(check);
-
-      var body = document.createElement('div');
-      body.className = 'body';
-      var title = document.createElement('div');
-      title.className = 'title';
-      title.textContent = task.title;
-      body.appendChild(title);
-
-      var when = whenText(task.dueDate, task.isDone);
-      var meta = document.createElement('div');
-      meta.className = 'meta';
-      if (when && when.late) {
-        var lateSpan = document.createElement('span');
-        lateSpan.className = 'late';
-        lateSpan.textContent = when.late;
-        meta.appendChild(lateSpan);
-      } else if (when) {
-        meta.textContent = when;
-      }
-      if (task.tags && task.tags.length) {
-        meta.appendChild(document.createTextNode((meta.textContent ? ' · ' : '') + task.tags.join(' · ')));
-      }
-      body.appendChild(meta);
-      row.appendChild(body);
-
-      row.addEventListener('click', function () { openSheet(task); });
-      list.appendChild(row);
-    });
-  }
-
-  function load() {
-    window.host.call('task.list', { from: '2000-01-01', to: '2099-12-31', limit: 200 })
-      .then(function (list) {
-        state.tasks = list || [];
-        render();
-      })
-      .catch(function (error) {
-        document.getElementById('sum').textContent =
-          '读取失败：' + (error.message || error.code);
-      });
-  }
-
-  // ---- 新建待办 ----
-
-  function openAdd() {
-    document.getElementById('addTitle').value = '';
-    // 默认今天：多数待办就是"今天要做的"，改日期是少数情况
-    document.getElementById('addDate').value = key(today());
-    document.getElementById('addMask').classList.add('on');
-    document.getElementById('addSheet').classList.add('on');
-    setTimeout(function () { document.getElementById('addTitle').focus(); }, 120);
-  }
-
-  function closeAdd() {
-    document.getElementById('addMask').classList.remove('on');
-    document.getElementById('addSheet').classList.remove('on');
-    document.getElementById('addTitle').blur();
-  }
-
-  function submitAdd() {
-    var titleInput = document.getElementById('addTitle');
-    var title = (titleInput.value || '').trim();
-    if (!title) { titleInput.focus(); return; }
-
-    var day = document.getElementById('addDate').value || key(today());
-    closeAdd();
-
-    window.host.call('task.create', { title: title, date: day })
-      .then(function (created) {
-        // 自己先插进本地列表：用户看到的"刚加的那条"立刻就在，
-        // 不用等一次整页重读。
-        state.tasks.push({
-          id: created && created.id != null ? created.id : 0,
-          title: title,
-          dueDate: day,
-          isDone: false,
-          priority: 'white',
-          estimatedMinutes: 0,
-          tags: [],
-        });
-        render();
-        toast('已添加');
-      })
-      .catch(function (error) {
-        toast('添加失败：' + (error.message || error.code));
-      });
-  }
-
-  // ---- 动作层 ----
-
-  var picked = null;
-
-  function openSheet(task) {
-    picked = task;
-    document.getElementById('sheetTitle').textContent = task.title;
-    document.getElementById('sheetSub').textContent = task.isDone
-      ? '已完成 · 可以改期或取消完成'
-      : '改到哪天，或者直接完成';
-    document.getElementById('toggleDone').textContent = task.isDone ? '取消完成' : '标记完成';
-    document.getElementById('mask').classList.add('on');
-    document.getElementById('sheet').classList.add('on');
-  }
-
-  function closeSheet() {
-    picked = null;
-    document.getElementById('mask').classList.remove('on');
-    document.getElementById('sheet').classList.remove('on');
-  }
-
-  function toggleDone(task) {
-    var next = !task.isDone;
-    window.host.call('task.setDone', { id: task.id, done: next })
-      .then(function () {
-        task.isDone = next;
-        render();
-        toast(next ? '完成了' : '已取消完成');
-      })
-      .catch(function (error) {
-        toast('操作失败：' + (error.message || error.code));
-      });
-  }
-
-  function moveTo(offset) {
-    var task = picked;
-    if (!task) return;
-    var target = key(addDays(today(), offset));
-    closeSheet();
-    window.host.call('task.update', { id: task.id, date: target })
-      .then(function () {
-        task.dueDate = target;
-        render();
-        toast(offset === 0 ? '挪到今天' : '挪到明天');
-      })
-      .catch(function (error) {
-        toast('改期失败：' + (error.message || error.code));
-      });
-  }
-
-  document.getElementById('toToday').addEventListener('click', function () { moveTo(0); });
-  document.getElementById('toTomorrow').addEventListener('click', function () { moveTo(1); });
-  document.getElementById('toggleDone').addEventListener('click', function () {
-    var task = picked;
-    if (!task) return;
-    closeSheet();
-    toggleDone(task);
-  });
-  document.getElementById('addOpen').addEventListener('click', openAdd);
-  document.getElementById('addCancel').addEventListener('click', closeAdd);
-  document.getElementById('addMask').addEventListener('click', closeAdd);
-  document.getElementById('addSubmit').addEventListener('click', submitAdd);
-  document.getElementById('addTitle').addEventListener('keydown', function (event) {
-    if (event.key === 'Enter') submitAdd();
-  });
-  document.getElementById('closeSheet').addEventListener('click', closeSheet);
-  document.getElementById('mask').addEventListener('click', closeSheet);
-
-  document.addEventListener('visibilitychange', function () {
-    if (!document.hidden && window.host) load();
-  });
-
-  function whenHostReady(callback, tries) {
-    tries = tries || 0;
-    if (window.host) return callback();
-    if (tries > 100) {
-      document.getElementById('sum').textContent = '宿主通道没起来';
-      return;
+        createFromTemplate(list);
+      };
+      row.appendChild(use);
     }
-    setTimeout(function () { whenHostReady(callback, tries + 1); }, 30);
+    return row;
   }
 
-  whenHostReady(function () {
-    renderFilters();
-    load();
+  function renderDetail() {
+    document.getElementById('listName').textContent = state.currentName;
+    var done = state.items.filter(function (i) { return i.done; }).length;
+    document.getElementById('listProgress').textContent =
+      state.items.length === 0 ? '还没有条目' : done + ' / ' + state.items.length + ' 已完成';
+
+    itemsBox.innerHTML = '';
+    state.items.forEach(function (item) { itemsBox.appendChild(itemRow(item)); });
+    document.getElementById('emptyItems').hidden = state.items.length !== 0;
+    document.getElementById('clearDone').disabled = done === 0;
+  }
+
+  function itemRow(item) {
+    var row = el('div', 'item' + (item.done ? ' done' : ''));
+
+    var check = el('div', 'check', '✓');
+    check.onclick = function () { toggleItem(item); };
+    row.appendChild(check);
+    row.appendChild(el('div', 'txt', item.content));
+
+    var acts = el('div', 'acts');
+    if (!item.done) {
+      var toTask = el('span', null, '转任务');
+      toTask.onclick = function () { convertToTask(item); };
+      acts.appendChild(toTask);
+    }
+    var del = el('span', 'del', '删');
+    del.onclick = function () { deleteItem(item); };
+    acts.appendChild(del);
+    row.appendChild(acts);
+    return row;
+  }
+
+  // ---- 写 ----
+
+  async function createList(name, templateId) {
+    var trimmed = String(name || '').trim();
+    if (!trimmed) return;
+
+    var inserted = await window.host.call('db.insert', {
+      table: 'lists',
+      values: { name: trimmed, is_template: 0, created_at: nowIso(), used_at: nowIso() }
+    });
+    var listId = inserted && inserted.id;
+
+    if (templateId != null && listId != null) {
+      var source = (await window.host.call('db.select', {
+        table: 'items',
+        where: [{ column: 'list_id', value: templateId }],
+        orderBy: [{ column: 'sort_order' }, { column: 'id' }],
+        limit: 500
+      })) || [];
+      for (var i = 0; i < source.length; i++) {
+        await window.host.call('db.insert', {
+          table: 'items',
+          values: { list_id: listId, content: source[i].content, done: 0, sort_order: i }
+        });
+      }
+    }
+
+    await reloadLists();
+    if (listId != null) {
+      var created = state.lists.filter(function (l) { return l.id === listId; })[0];
+      if (created) openList(created);
+    }
+  }
+
+  async function createFromTemplate(template) {
+    var d = new Date();
+    var name = prompt('新清单的名字', template.name + ' ' + (d.getMonth() + 1) + '/' + d.getDate());
+    if (name == null) return;
+    await createList(name, template.id);
+  }
+
+  function openList(list) {
+    state.currentId = list.id;
+    state.currentName = list.name;
+    state.view = 'list';
+    shelf.classList.remove('on');
+    detail.classList.add('on');
+    window.host.call('db.update', {
+      table: 'lists',
+      values: { used_at: nowIso() },
+      where: [{ column: 'id', value: list.id }]
+    });
+    reloadItems();
+  }
+
+  function backToShelf() {
+    state.view = 'shelf';
+    state.currentId = null;
+    state.currentName = '';
+    detail.classList.remove('on');
+    shelf.classList.add('on');
+    reloadLists();
+  }
+
+  async function addItem() {
+    var input = document.getElementById('itemInput');
+    var text = input.value.trim();
+    if (!text || state.currentId == null) return;
+    input.value = '';
+    document.getElementById('addItem').disabled = true;
+
+    var max = state.items.reduce(function (acc, it) {
+      return Math.max(acc, it.sort_order || 0);
+    }, 0);
+
+    await window.host.call('db.insert', {
+      table: 'items',
+      values: { list_id: state.currentId, content: text, done: 0, sort_order: max + 1 }
+    });
+    await reloadItems();
+    input.focus();
+  }
+
+  async function toggleItem(item) {
+    await window.host.call('db.update', {
+      table: 'items',
+      values: { done: item.done ? 0 : 1 },
+      where: [{ column: 'id', value: item.id }]
+    });
+    await reloadItems();
+  }
+
+  async function deleteItem(item) {
+    await window.host.call('db.delete', {
+      table: 'items',
+      where: [{ column: 'id', value: item.id }]
+    });
+    await reloadItems();
+  }
+
+  async function clearDone() {
+    var done = state.items.filter(function (i) { return i.done; });
+    if (done.length === 0) return;
+    if (!confirm('删掉这 ' + done.length + ' 条已完成的条目？')) return;
+    for (var i = 0; i < done.length; i++) {
+      await window.host.call('db.delete', {
+        table: 'items',
+        where: [{ column: 'id', value: done[i].id }]
+      });
+    }
+    await reloadItems();
+  }
+
+  async function convertToTask(item) {
+    try {
+      await window.host.call('task.create', { title: item.content });
+      await window.host.call('db.update', {
+        table: 'items',
+        values: { done: 1 },
+        where: [{ column: 'id', value: item.id }]
+      });
+      await reloadItems();
+      toast('已加到任务，这条标为完成');
+    } catch (e) {
+      toast('转任务失败：' + ((e && e.message) || e));
+    }
+  }
+
+  async function saveAsTemplate() {
+    if (state.currentId == null) return;
+    var name = prompt('模板名字', state.currentName);
+    if (name == null || !name.trim()) return;
+
+    var inserted = await window.host.call('db.insert', {
+      table: 'lists',
+      values: { name: name.trim(), is_template: 1, created_at: nowIso(), used_at: nowIso() }
+    });
+    var tplId = inserted && inserted.id;
+    if (tplId == null) return;
+
+    for (var i = 0; i < state.items.length; i++) {
+      await window.host.call('db.insert', {
+        table: 'items',
+        values: { list_id: tplId, content: state.items[i].content, done: 0, sort_order: i }
+      });
+    }
+    toast('已存为模板');
+    backToShelf();
+  }
+
+  async function deleteList() {
+    if (state.currentId == null) return;
+    if (!confirm('删除「' + state.currentName + '」和它的所有条目？')) return;
+    var id = state.currentId;
+    await window.host.call('db.delete', { table: 'items', where: [{ column: 'list_id', value: id }] });
+    await window.host.call('db.delete', { table: 'lists', where: [{ column: 'id', value: id }] });
+    backToShelf();
+  }
+
+  // ---- 事件 ----
+
+  document.getElementById('newList').onclick = function () {
+    var name = prompt('清单名字', '');
+    if (name == null) return;
+    createList(name);
+  };
+
+  document.getElementById('back').onclick = backToShelf;
+
+  var input = document.getElementById('itemInput');
+  input.addEventListener('input', function () {
+    document.getElementById('addItem').disabled = input.value.trim().length === 0;
   });
+  input.addEventListener('keydown', function (event) {
+    if (event.key === 'Enter') addItem();
+  });
+  document.getElementById('addItem').onclick = addItem;
+  document.getElementById('clearDone').onclick = clearDone;
+  document.getElementById('saveTemplate').onclick = saveAsTemplate;
+  document.getElementById('deleteList').onclick = deleteList;
+
+  whenHostReady(reloadLists);
+})();
 </script>
 </body>
 </html>

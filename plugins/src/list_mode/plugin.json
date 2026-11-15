@@ -1,18 +1,49 @@
 {
   "id": "list_mode",
   "name": "待办清单",
-  "version": "1.1.1",
+  "version": "2.0.0",
   "contract": 1,
   "entry": "index.html",
-  "description": "所有待办拉平，逾期排最前。",
+  "queryEntry": "query.html",
+  "description": "购物、打包、流程核对——可以反复用的清单。",
   "icon": "checklist",
   "home": {
     "label": "清单模式",
-    "hint": "所有待办拉平，逾期排最前",
+    "hint": "可复用的核对清单",
     "order": 20
   },
   "permissions": [
-    "task:read",
     "task:write"
-  ]
+  ],
+  "storage": {
+    "version": 1,
+    "tables": [
+      {
+        "name": "lists",
+        "columns": [
+          { "name": "name", "type": "text" },
+          { "name": "is_template", "type": "integer" },
+          { "name": "created_at", "type": "text" },
+          { "name": "used_at", "type": "text" }
+        ],
+        "indexes": [
+          ["is_template"],
+          ["used_at"]
+        ]
+      },
+      {
+        "name": "items",
+        "columns": [
+          { "name": "list_id", "type": "integer" },
+          { "name": "content", "type": "text" },
+          { "name": "done", "type": "integer" },
+          { "name": "sort_order", "type": "integer" }
+        ],
+        "indexes": [
+          ["list_id"],
+          ["done"]
+        ]
+      }
+    ]
+  }
 }

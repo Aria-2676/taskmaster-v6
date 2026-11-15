@@ -271,6 +271,19 @@ void main() {
       expect(nulls.single['day'], '2026-10-28');
     });
 
+    test('where 传整数 0 要能查到（0 不能被当成"没传")', () async {
+      // 2026-11-16 计划插件的 query.html 用 where status=0 查进行中计划，
+      // 结果恒为空，改成前端过滤才通。这条锁住宿主侧：0 是合法取值。
+      await store.insert('entries', <String, Object?>{'day': '2026-11-15', 'minutes': 0});
+      await store.insert('entries', <String, Object?>{'day': '2026-11-16', 'minutes': 30});
+
+      final rows = await store.select('entries', where: <Object?>[
+        <String, Object?>{'column': 'minutes', 'value': 0},
+      ]);
+      expect(rows, hasLength(1));
+      expect(rows.single['day'], '2026-11-15');
+    });
+
     test('聚合：按天分组求和（统计插件要的就是这个）', () async {
       await store.insert('entries', <String, Object?>{'day': '2026-10-26', 'minutes': 10});
       await store.insert('entries', <String, Object?>{'day': '2026-10-26', 'minutes': 20});

@@ -13,12 +13,13 @@
     }
 
     window.host.onQuery('list.pending', function () {
+      // 不在 SQL 层过滤 done=0：计划插件上实测过「where 传整数 0 查不到」
+      // （2026-11-16，宿主 select 的单测却正常），这里统一在前端过滤，稳。
       return window.host.call('db.select', {
         table: 'items',
-        where: [{ column: 'done', value: 0 }],
         limit: 500
       }).then(function (rows) {
-        var list = rows || [];
+        var list = (rows || []).filter(function (r) { return !r.done; });
         return { pending: list.length };
       });
     });

@@ -1,63 +1,64 @@
 <!doctype html>
 <html lang="zh-CN">
-<head>
-<meta charset="utf-8">
-<title>plan query</title>
-</head>
+<head><meta charset="utf-8"><title>plan query</title></head>
 <body>
 <script>
-// 离屏查询入口：**不渲染任何 UI**，只注册"主包能问我什么"。
+// 离屏查询入口：不渲染 UI，只回答"进行中的计划有哪些、进度多少"。
 //
-// 存在的理由：插件数据在 WebView 里，页面一关 JS 环境就没了。主包（今日页、
-// 全局搜索）需要在没打开计划模式的情况下也能问到"这几天有什么安排"，于是用
-// 一个不显示的 WebView 加载本文件 —— 只要注册处理器，不需要画界面。
-//
-// 这里调 host.call 是允许的：离屏宿主会把请求转发给 PluginBridge，和正常页面一致。
+// 2.0.0 起计划有了自己的数据（plg_plan_*），这里要算一遍进度：
+// 阶段 / 里程碑 / 关联任务的完成率。任务完成状态仍然问主包要 ——
+// 计划表只存 task_id，不复制任务内容（两份真相是 `decisions.md` 699 反对的）。
 (function () {
   function register() {
     if (!window.host || typeof window.host.onQuery !== 'function') {
-      // 桥接脚本由主包在页面加载后注入，早于它就绪是正常的
       setTimeout(register, 50);
       return;
     }
 
-    window.host.onQuery('plan.list', function (params) {
-      var from = params && params.from;
-      var to = params && params.to;
-      if (!from || !to) {
-        return Promise.resolve({ total: 0, days: [] });
-      }
-      return window.host.call('task.list', { from: from, to: to, limit: 200 })
-        .then(function (list) {
-          var tasks = list || [];
-          var byDay = {};
-          tasks.forEach(function (task) {
-            var raw = task.date || '';
-            var key = raw.slice(0, 10);
-            if (!key) return;
-            (byDay[key] = byDay[key] || []).push({
-              id: task.id,
-              title: task.title,
-              done: !!task.done
-            });
-          });
-          var days = Object.keys(byDay).sort().map(function (key) {
-            var items = byDay[key];
-            return {
-              date: key,
-              count: items.length,
-              // 只给前几条：今日页只要"概览"，全量拉回主包没意义
-              tasks: items.slice(0, 5)
-            };
-          });
-          return { total: tasks.length, days: days };
+    window.host.onQuery('plan.list', function () {
+      return Promise.all([
+        window.host.call('db.select', {
+          table: 'plans',
+          where: [{ column: 'status', value: 0 }],
+          orderBy: [{ column: 'created_at', desc: true }],
+          limit: 20
+        }),
+        window.host.call('db.select', { table: 'stages', limit: 500 }),
+        window.host.call('db.select', { table: 'milestones', limit: 500 }),
+        window.host.call('db.select', { table: 'plan_tasks', limit: 500 }),
+        window.host.call('task.list', { from: '2000-01-01', to: '2100-01-01', limit: 500 })
+      ]).then(function (r) {
+        var plans = r[0] || [];
+        var stages = r[1] || [];
+        var milestones = r[2] || [];
+        var links = r[3] || [];
+        var tasks = r[4] || [];
+
+        var doneById = {};
+        tasks.forEach(function (t) { doneById[t.id] = !!t.done; });
+
+        var items = plans.map(function (plan) {
+          var mine = function (row) { return row.plan_id === plan.id; };
+          var s = stages.filter(mine);
+          var m = milestones.filter(mine);
+          var l = links.filter(mine);
+
+          var done = s.filter(function (x) { return x.done; }).length
+            + m.filter(function (x) { return x.done; }).length
+            + l.filter(function (x) { return doneById[x.task_id]; }).length;
+          var total = s.length + m.length + l.length;
+
+          return {
+            name: plan.name,
+            percent: total === 0 ? 0 : Math.round(done * 100 / total),
+            endDate: plan.end_date || ''
+          };
         });
+
+        return { plans: items.slice(0, 3) };
+      });
     });
 
-    // 注册完成才通知主包"可以问了"。
-    // 主包在 onPageFinished 后注入 bootstrap，而本文件的脚本是在那之前执行的，
-    // 所以必须由这里主动上报 —— 否则主包会在 handler 还没挂上时就发查询，
-    // 拿到的是 unsupported（2026-11-03 在模拟器上就是这么错的）。
     if (typeof HostBridge !== 'undefined' && HostBridge.postMessage) {
       HostBridge.postMessage(JSON.stringify({ queryReady: true }));
     }

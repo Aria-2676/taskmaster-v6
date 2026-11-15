@@ -31,8 +31,8 @@ class TodayPage extends StatefulWidget {
 }
 
 class _TodayPageState extends State<TodayPage> {
-  /// 计划插件给的"未来几天安排"。null = 还没拿到或没有。
-  List<_PlanDay>? _planDays;
+  /// 计划插件给的"进行中的计划"。null = 还没拿到或没有。
+  List<_PlanItem>? _planItems;
   bool _planLoading = false;
   String? _planNote;
 
@@ -58,7 +58,7 @@ class _TodayPageState extends State<TodayPage> {
   }
 
   void _onMarketChanged() {
-    if (_planDays == null && !_planLoading) {
+    if (_planItems == null && !_planLoading) {
       unawaited(_loadPlanBlock());
     }
     if (_memoItems == null && !_memoLoading) {
@@ -141,9 +141,8 @@ class _TodayPageState extends State<TodayPage> {
         return;
       }
 
-      final days = _parseDays(result.data);
       setState(() {
-        _planDays = days;
+        _planItems = _parsePlans(result.data);
         _planLoading = false;
       });
     } catch (error) {
@@ -214,21 +213,23 @@ class _TodayPageState extends State<TodayPage> {
   static String _dateKey(DateTime d) =>
       '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
 
-  static List<_PlanDay> _parseDays(Map<String, Object?>? data) {
-    final raw = data?['days'];
-    if (raw is! List) return const <_PlanDay>[];
-    final days = <_PlanDay>[];
-    for (final item in raw) {
-      if (item is! Map) continue;
-      final date = item['date'];
-      final count = item['count'];
-      if (date is! String) continue;
-      days.add(_PlanDay(
-        int.tryParse(date.split('-').last) ?? 0,
-        count is int ? count : 0,
+  static List<_PlanItem> _parsePlans(Map<String, Object?>? data) {
+    final raw = data?['plans'];
+    if (raw is! List) return const <_PlanItem>[];
+    final items = <_PlanItem>[];
+    for (final one in raw) {
+      if (one is! Map) continue;
+      final name = one['name'];
+      if (name is! String) continue;
+      final percent = one['percent'];
+      final endDate = one['endDate'];
+      items.add(_PlanItem(
+        name,
+        percent is int ? percent : 0,
+        endDate is String ? endDate : '',
       ));
     }
-    return days;
+    return items;
   }
 
   @override
@@ -261,9 +262,9 @@ class _TodayPageState extends State<TodayPage> {
           const SizedBox(height: 14),
           _block('置顶备忘', _memoContent(scheme)),
         ],
-        if (_planLoading || _planDays != null || _planNote != null) ...<Widget>[
+        if (_planLoading || _planItems != null || _planNote != null) ...<Widget>[
           const SizedBox(height: 14),
-          _block('未来七天', _planContent(scheme)),
+          _block('计划', _planContent(scheme)),
         ],
       ],
     );
@@ -379,28 +380,39 @@ class _TodayPageState extends State<TodayPage> {
             style: TextStyle(fontSize: 12, color: scheme.onSurfaceVariant)),
       );
     }
-    final days = _planDays ?? const <_PlanDay>[];
-    if (days.isEmpty) {
+    final items = _planItems ?? const <_PlanItem>[];
+    if (items.isEmpty) {
       return Padding(
         padding: const EdgeInsets.symmetric(vertical: 10),
-        child: Text('这周还没有安排',
+        child: Text('还没有进行中的计划',
             style: TextStyle(fontSize: 12, color: scheme.onSurfaceVariant)),
       );
     }
-    return Wrap(
-      spacing: 8,
-      runSpacing: 8,
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
-        for (final d in days)
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-            decoration: BoxDecoration(
-              color: scheme.surfaceContainerHighest,
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Text(
-              '${d.day} 日 · ${d.count} 件',
-              style: TextStyle(fontSize: 12, color: scheme.onSurface),
+        for (final item in items)
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 5),
+            child: Row(
+              children: <Widget>[
+                Icon(Icons.flag_outlined, size: 14, color: scheme.primary),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    item.name,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(fontSize: 13),
+                  ),
+                ),
+                Text(
+                  item.endDate.isEmpty
+                      ? '${item.percent}%'
+                      : '${item.percent}% · 到 ${item.endDate}',
+                  style: TextStyle(fontSize: 11.5, color: scheme.onSurfaceVariant),
+                ),
+              ],
             ),
           ),
       ],
@@ -413,8 +425,9 @@ class _MemoItem {
   final String content;
 }
 
-class _PlanDay {
-  const _PlanDay(this.day, this.count);
-  final int day;
-  final int count;
+class _PlanItem {
+  const _PlanItem(this.name, this.percent, this.endDate);
+  final String name;
+  final int percent;
+  final String endDate;
 }

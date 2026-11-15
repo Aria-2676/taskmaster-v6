@@ -1,19 +1,74 @@
 {
   "id": "plan_mode",
-  "name": "周计划",
-  "version": "1.3.1",
+  "name": "计划",
+  "version": "2.0.0",
   "contract": 1,
   "entry": "index.html",
   "queryEntry": "query.html",
-  "description": "把未来七天铺开，一件事挪到哪天就是哪天。",
-  "icon": "calendar_view_week",
+  "description": "把一个目标拆成阶段，排上任务，看得见进度。",
+  "icon": "flag",
   "home": {
     "label": "计划模式",
-    "hint": "未来七天铺开，点任务改期",
+    "hint": "目标拆阶段，排任务看进度",
     "order": 10
   },
   "permissions": [
     "task:read",
     "task:write"
-  ]
+  ],
+  "storage": {
+    "version": 1,
+    "tables": [
+      {
+        "name": "plans",
+        "columns": [
+          { "name": "name", "type": "text" },
+          { "name": "goal", "type": "text" },
+          { "name": "start_date", "type": "text" },
+          { "name": "end_date", "type": "text" },
+          { "name": "status", "type": "integer" },
+          { "name": "created_at", "type": "text" }
+        ],
+        "indexes": [
+          ["status"],
+          ["created_at"]
+        ]
+      },
+      {
+        "name": "stages",
+        "columns": [
+          { "name": "plan_id", "type": "integer" },
+          { "name": "name", "type": "text" },
+          { "name": "sort_order", "type": "integer" },
+          { "name": "done", "type": "integer" }
+        ],
+        "indexes": [
+          ["plan_id"]
+        ]
+      },
+      {
+        "name": "milestones",
+        "columns": [
+          { "name": "plan_id", "type": "integer" },
+          { "name": "name", "type": "text" },
+          { "name": "due_date", "type": "text" },
+          { "name": "done", "type": "integer" }
+        ],
+        "indexes": [
+          ["plan_id"]
+        ]
+      },
+      {
+        "name": "plan_tasks",
+        "columns": [
+          { "name": "plan_id", "type": "integer" },
+          { "name": "task_id", "type": "integer" }
+        ],
+        "indexes": [
+          ["plan_id"],
+          ["task_id"]
+        ]
+      }
+    ]
+  }
 }

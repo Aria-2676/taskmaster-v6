@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "publishedAt": "2026-11-15T16:19:43Z",
+  "publishedAt": "2026-11-15T16:25:03Z",
   "plugins": [
     {
       "id": "energy_currency",
@@ -64,24 +64,24 @@
     },
     {
       "id": "plan_mode",
-      "name": "周计划",
-      "version": "1.3.1",
+      "name": "计划",
+      "version": "2.0.0",
       "contract": 1,
-      "description": "把未来七天铺开，一件事挪到哪天就是哪天。",
-      "icon": "calendar_view_week",
+      "description": "把一个目标拆成阶段，排上任务，看得见进度。",
+      "icon": "flag",
       "permissions": [
         "task:read",
         "task:write"
       ],
       "home": {
         "label": "计划模式",
-        "hint": "未来七天铺开，点任务改期",
+        "hint": "目标拆阶段，排任务看进度",
         "order": 10
       },
       "package": {
-        "path": "plugins/packages/plan_mode_v1.3.1.zip",
-        "sha256": "14ff5d503ed4edc212176b9a93b894b3adc21d32f9cb246519dfee29015a03b0",
-        "sizeBytes": 7825
+        "path": "plugins/packages/plan_mode_v2.0.0.zip",
+        "sha256": "035335a41333a211909e3361ce01fb4d5bbb1e6bf4eeb3ec348d81efc55444e2",
+        "sizeBytes": 8369
       }
     },
     {

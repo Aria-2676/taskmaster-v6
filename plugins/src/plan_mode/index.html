@@ -1,490 +1,650 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="zh-CN">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>计划模式</title>
+<title>计划</title>
 <style>
   :root {
-    --bg: #ffffff;
-    --fg: #1b1b1f;
-    --muted: #5f5e6a;
-    --line: #e6e1ee;
-    --accent: #6750a4;
-    --chip: #eeedfe;
-    --done: #8e8b96;
-    --p-red: #d64545;
-    --p-orange: #e0891f;
-    --p-yellow: #d9b400;
-    --p-blue: #4a7fd4;
-    --p-white: #b9b5c2;
+    --bg: #faf8fd; --card: #ffffff; --line: #e6e0ee;
+    --text: #1d1b20; --muted: #79747e; --accent: #6750a4; --danger: #b3261e;
   }
   @media (prefers-color-scheme: dark) {
     :root {
-      --bg: #141218;
-      --fg: #e6e1e9;
-      --muted: #a8a4b3;
-      --line: #2b2830;
-      --accent: #cfbdfe;
-      --chip: #26215c;
-      --done: #77737f;
-      --p-red: #ff8a8a;
-      --p-orange: #ffb862;
-      --p-yellow: #e8cf5a;
-      --p-blue: #8ab4ff;
-      --p-white: #56525e;
+      --bg: #141218; --card: #211f26; --line: #332f3a;
+      --text: #e6e0e9; --muted: #938f99; --accent: #d0bcff; --danger: #f2b8b5;
     }
   }
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
-  html, body { height: 100%; }
   body {
-    margin: 0;
-    background: var(--bg);
-    color: var(--fg);
-    font: 14px/1.5 -apple-system, "Segoe UI", "Noto Sans SC", system-ui, sans-serif;
-    -webkit-text-size-adjust: 100%;
+    margin: 0; background: var(--bg); color: var(--text);
+    font-family: -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+    font-size: 14px;
+    padding-bottom: env(safe-area-inset-bottom);
   }
-  .wrap { padding: 10px 12px 28px; }
-
-  .head {
-    display: flex; align-items: baseline; gap: 8px;
-    padding: 2px 2px 10px;
+  .view { display: none; }
+  .view.on { display: block; }
+  header {
+    display: flex; align-items: center; gap: 10px;
+    padding: 12px 14px 10px; position: sticky; top: 0;
+    background: var(--bg); z-index: 2;
   }
-  .head h1 { font-size: 15px; font-weight: 600; margin: 0; }
-  .head .sum { color: var(--muted); font-size: 11.5px; margin-left: auto; }
-
-  .day { margin-bottom: 14px; }
-  .day-head {
-    display: flex; align-items: center; gap: 7px;
-    padding: 3px 2px 6px;
-    position: sticky; top: 0; background: var(--bg); z-index: 1;
+  h1 { font-size: 17px; font-weight: 600; margin: 0; flex: 1; }
+  .sub { font-size: 11.5px; color: var(--muted); margin-top: 2px; }
+  button {
+    font: inherit; border: 0; border-radius: 9px; cursor: pointer;
+    background: var(--accent); color: #fff; padding: 7px 13px;
   }
-  .day-name { font-size: 12.5px; font-weight: 600; }
-  .day-date { font-size: 11px; color: var(--muted); }
-  .day-count {
-    margin-left: auto; font-size: 10.5px; color: var(--muted);
-    border: 1px solid var(--line); border-radius: 999px;
-    padding: 0 6px; line-height: 16px;
+  button.ghost { background: transparent; color: var(--accent); padding: 6px 8px; }
+  button.danger { background: transparent; color: var(--danger); }
+  button:disabled { opacity: .4; }
+  .section {
+    font-size: 12px; font-weight: 600; color: var(--muted);
+    padding: 14px 14px 6px; display: flex; align-items: center; gap: 8px;
   }
-  .day.today .day-name { color: var(--accent); }
-
-  .task {
-    display: flex; align-items: flex-start; gap: 9px;
-    padding: 9px 10px; margin-bottom: 6px;
-    border: 1px solid var(--line); border-radius: 10px;
-    background: transparent;
+  .section .spacer { flex: 1; }
+  .section .act { font-size: 12px; color: var(--accent); cursor: pointer; }
+  .card {
+    background: var(--card); border: 1px solid var(--line);
+    border-radius: 12px; padding: 12px; margin: 0 14px 8px;
   }
-  .task:active { background: var(--chip); }
-  /* 圆圈直接可点：勾完成不该先点开动作层再点一次。 */
+  .card .title { font-weight: 500; }
+  .card .goal { font-size: 12px; color: var(--muted); margin-top: 3px; }
+  .bar { height: 5px; background: var(--line); border-radius: 3px; margin-top: 9px; overflow: hidden; }
+  .bar i { display: block; height: 100%; background: var(--accent); }
+  .meta { font-size: 11.5px; color: var(--muted); margin-top: 6px; display: flex; justify-content: space-between; }
+  .item { display: flex; align-items: flex-start; gap: 10px; padding: 10px 14px; }
   .check {
-    width: 18px; height: 18px; flex: none; margin-top: 2px; padding: 0;
-    border: 1.5px solid var(--p-white); border-radius: 50%;
-    background: transparent; color: var(--accent);
-    font: inherit; font-size: 12px; line-height: 1;
+    width: 20px; height: 20px; border-radius: 6px; flex: none;
+    border: 1.5px solid var(--line); margin-top: 1px;
     display: flex; align-items: center; justify-content: center;
+    font-size: 13px; color: transparent;
   }
-  .check:active { background: var(--chip); }
-  .p-red .check { border-color: var(--p-red); }
-  .p-orange .check { border-color: var(--p-orange); }
-  .p-yellow .check { border-color: var(--p-yellow); }
-  .p-blue .check { border-color: var(--p-blue); }
-  .task.done .check { border-color: var(--done); color: var(--done); }
-  .title { font-size: 13.5px; line-height: 1.45; word-break: break-word; }
-  .meta { font-size: 11px; color: var(--muted); margin-top: 2px; }
-  .task.done .title { color: var(--done); text-decoration: line-through; }
-  .empty { color: var(--muted); font-size: 11.5px; padding: 2px 4px 6px; }
-
-  /* 「加一条」收进日期标题右侧的一个小 +。
-     之前是每天末尾一整行虚线按钮 —— 七天就是七行，把"一屏铺开"的密度吃掉了。
-     列表的留白应该属于任务，不属于入口。 */
-  .head-add {
-    width: 26px; height: 26px; flex: none;
-    margin-left: 6px;
-    border: 1px dashed var(--line); border-radius: 8px;
-    background: transparent; color: var(--muted);
-    font: inherit; font-size: 15px; line-height: 1;
-    display: flex; align-items: center; justify-content: center;
-    padding: 0;
+  .item.done .check { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .item .txt { flex: 1; line-height: 1.45; word-break: break-word; }
+  .item.done .txt { text-decoration: line-through; color: var(--muted); }
+  .item .acts { display: flex; gap: 8px; flex: none; }
+  .item .acts span { font-size: 11.5px; color: var(--accent); cursor: pointer; }
+  .item .acts span.del { color: var(--danger); }
+  .dateTag { font-size: 11px; color: var(--muted); margin-top: 2px; }
+  input, textarea {
+    font: inherit; color: var(--text);
+    background: var(--card); border: 1px solid var(--line);
+    border-radius: 10px; padding: 9px 11px; outline: 0; width: 100%;
   }
-  .head-add:active { background: var(--chip); color: var(--accent); border-color: var(--accent); }
-  .input {
-    width: 100%; padding: 11px 12px; margin: 0 0 10px;
-    border: 1px solid var(--line); border-radius: 10px;
-    background: transparent; color: var(--fg); font: inherit; font-size: 15px;
-  }
-  .input:focus { outline: none; border-color: var(--accent); }
-
-  /* 底部动作层 */
+  textarea { resize: none; min-height: 52px; }
+  .addRow { display: flex; gap: 8px; padding: 4px 14px 8px; }
+  .addRow input { flex: 1; }
+  .footer { display: flex; flex-wrap: wrap; gap: 6px; padding: 14px; }
+  .empty { color: var(--muted); font-size: 12.5px; padding: 12px 14px; }
   .mask {
-    position: fixed; inset: 0; background: rgba(0,0,0,.32);
-    display: none; z-index: 10;
+    position: fixed; inset: 0; background: rgba(0,0,0,.42);
+    display: flex; align-items: center; justify-content: center;
+    padding: 24px; z-index: 50;
   }
-  .mask.on { display: block; }
-  .sheet {
-    position: fixed; left: 0; right: 0; bottom: 0; z-index: 11;
-    background: var(--bg); border-radius: 16px 16px 0 0;
-    padding: 14px 16px calc(16px + env(safe-area-inset-bottom));
-    transform: translateY(100%); transition: transform .18s ease-out;
-    max-height: 76vh; overflow: auto;
+  .mask[hidden] { display: none; }
+  .dialog {
+    background: var(--card); border-radius: 16px; padding: 18px;
+    width: 100%; max-width: 340px; max-height: 80vh; overflow: auto;
   }
-  .sheet.on { transform: translateY(0); }
-  .sheet h2 { font-size: 13.5px; margin: 0 0 2px; font-weight: 600; }
-  .sheet .sub { color: var(--muted); font-size: 11.5px; margin: 0 0 10px; }
-  .grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 7px; }
-  .pick {
-    border: 1px solid var(--line); border-radius: 9px;
-    padding: 7px 0; text-align: center; font-size: 11.5px;
-    background: transparent; color: var(--fg); font-family: inherit;
-  }
-  .pick small { display: block; color: var(--muted); font-size: 10px; }
-  .pick:active { background: var(--chip); }
-  .pick.cur { border-color: var(--accent); color: var(--accent); }
-  .sheet .row { display: flex; gap: 8px; margin-top: 10px; }
-  .btn {
-    flex: 1; padding: 9px 0; border-radius: 9px; font: inherit; font-size: 12.5px;
-    border: 1px solid var(--line); background: transparent; color: var(--fg);
-  }
-  .btn.primary { border-color: var(--accent); color: var(--accent); }
-  .btn:active { background: var(--chip); }
-  .toast {
-    position: fixed; left: 50%; bottom: 84px; transform: translateX(-50%);
-    background: rgba(0,0,0,.8); color: #fff; font-size: 12px;
-    padding: 7px 12px; border-radius: 999px; opacity: 0;
-    transition: opacity .18s; pointer-events: none; z-index: 12;
-  }
-  .toast.on { opacity: 1; }
+  .dialog .dTitle { font-size: 15px; font-weight: 600; margin-bottom: 12px; }
+  .dialog label { font-size: 12px; color: var(--muted); display: block; margin: 10px 0 4px; }
+  .actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; }
+  .pickerRow { display: flex; align-items: center; gap: 10px; padding: 9px 0; border-bottom: 1px solid var(--line); }
+  .pickerRow .t { flex: 1; font-size: 13.5px; }
 </style>
 </head>
 <body>
-<div class="wrap">
-  <div class="head">
+
+<!-- 计划列表 -->
+<div class="view on" id="shelf">
+  <header>
     <h1>计划</h1>
-    <span class="sum" id="sum">读取中…</span>
-  </div>
-  <div id="days"></div>
+    <button id="newPlan">新建</button>
+  </header>
+  <div id="plans"></div>
+  <div class="empty" id="emptyShelf" hidden>还没有计划。新建一个，比如「三个月读完 12 本书」。</div>
 </div>
 
-<div class="mask" id="mask"></div>
-<div class="sheet" id="sheet">
-  <h2 id="sheetTitle">任务</h2>
-  <p class="sub" id="sheetSub">选择要移动到的日期</p>
-  <div class="grid" id="picks"></div>
-  <div class="row">
-    <button class="btn" id="toggleDone">标记完成</button>
-    <button class="btn primary" id="closeSheet">取消</button>
+<!-- 计划详情 -->
+<div class="view" id="detail">
+  <header>
+    <button class="ghost" id="back">返回</button>
+    <div style="flex:1;min-width:0">
+      <h1 id="planName" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap"></h1>
+      <div class="sub" id="planMeta"></div>
+    </div>
+  </header>
+
+  <div class="card" style="margin-top:4px">
+    <div class="goal" id="planGoal"></div>
+    <div class="bar"><i id="planBar"></i></div>
+    <div class="meta"><span id="planPercent">0%</span><span id="planCounts"></span></div>
+  </div>
+
+  <div class="section">阶段<span class="spacer"></span><span class="act" id="addStageAct">+ 加阶段</span></div>
+  <div id="stages"></div>
+  <div class="empty" id="emptyStages" hidden>还没有阶段</div>
+
+  <div class="section">里程碑<span class="spacer"></span><span class="act" id="addMilestoneAct">+ 加里程碑</span></div>
+  <div id="milestones"></div>
+  <div class="empty" id="emptyMilestones" hidden>还没有里程碑</div>
+
+  <div class="section">任务<span class="spacer"></span><span class="act" id="addTasksAct">+ 排入任务</span></div>
+  <div id="tasks"></div>
+  <div class="empty" id="emptyTasks" hidden>还没有排任务</div>
+
+  <div class="footer">
+    <button class="danger" id="deletePlan">删除计划</button>
   </div>
 </div>
-<div class="mask" id="addMask"></div>
-<div class="sheet" id="addSheet">
-  <h2>新建任务</h2>
-  <p class="sub" id="addSub">今天</p>
-  <input id="addInput" class="input" placeholder="要做什么？" maxlength="60" enterkeyhint="done">
-  <div class="row">
-    <button class="btn" id="addCancel">取消</button>
-    <button class="btn primary" id="addOk">添加</button>
+
+<!-- 新建计划 -->
+<div class="mask" id="planMask" hidden>
+  <div class="dialog">
+    <div class="dTitle">新建计划</div>
+    <label>名字</label>
+    <input id="pName" placeholder="比如：三个月读完 12 本书">
+    <label>目标（可选）</label>
+    <textarea id="pGoal" placeholder="想达成什么"></textarea>
+    <label>起止</label>
+    <div style="display:flex;gap:8px">
+      <input type="date" id="pStart">
+      <input type="date" id="pEnd">
+    </div>
+    <div class="actions">
+      <button class="ghost" id="planCancel">取消</button>
+      <button id="planOk">创建</button>
+    </div>
   </div>
 </div>
-<div class="toast" id="toast"></div>
+
+<!-- 加阶段 / 加里程碑 -->
+<div class="mask" id="askMask" hidden>
+  <div class="dialog">
+    <div class="dTitle" id="askTitle"></div>
+    <input id="askInput" autocomplete="off">
+    <input type="date" id="askDate" style="margin-top:8px" hidden>
+    <div class="actions">
+      <button class="ghost" id="askCancel">取消</button>
+      <button id="askOk">确定</button>
+    </div>
+  </div>
+</div>
+
+<!-- 任务选择 -->
+<div class="mask" id="pickerMask" hidden>
+  <div class="dialog">
+    <div class="dTitle">排入任务</div>
+    <div id="pickerList" style="max-height:52vh;overflow:auto"></div>
+    <div class="empty" id="pickerEmpty" hidden>没有可排的未完成任务</div>
+    <div class="actions">
+      <button class="ghost" id="pickerCancel">取消</button>
+      <button id="pickerOk">加入</button>
+    </div>
+  </div>
+</div>
 
 <script>
-  // 计划模式：把未来七天铺开，点一条任务就能挪到别的哪天。
-  //
-  // 为什么是"点开再选一天"而不是拖拽：WebView 里的长按拖动会和页面滚动
-  // 打架，而且手指一抖就落到错误日期上 —— 改错日期比多点一步麻烦得多。
-  //
-  // 只用三个宿主能力：task.list / task.update（改日期）/ task.setDone，
-  // 加上 task.create（在这天新增）。
-  // 不写自己的表：这个插件没有"自己的数据"，全部事实都在主包的任务里。
-  //
-  // 为什么不靠主包的 `+`：主包在插件模式下不画 `+`（它不知道插件里"新建"
-  // 是什么意思）。而计划模式下"新建"的语义很明确 —— **加到这一天**，
-  // 所以按钮长在每一天的末尾，日期不用再选一次。
+(function () {
+  var state = {
+    plans: [],
+    plan: null,
+    stages: [],
+    milestones: [],
+    tasks: [],        // 关联任务（含主包字段）
+    allTasks: [],     // 可排入的主包任务
+    selected: {},     // 选择器里勾中的 taskId
+  };
 
-  var DAYS = 7;
-  var state = { days: [], tasks: [], picked: null };
+  function whenHostReady(fn, tries) {
+    tries = tries || 0;
+    if (window.host) return fn();
+    if (tries > 100) return;
+    setTimeout(function () { whenHostReady(fn, tries + 1); }, 50);
+  }
 
+  function nowIso() { return new Date().toISOString(); }
+  function todayKey() {
+    var d = new Date();
+    return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate());
+  }
   function pad(n) { return (n < 10 ? '0' : '') + n; }
-  function key(date) {
-    return date.getFullYear() + '-' + pad(date.getMonth() + 1) + '-' + pad(date.getDate());
-  }
-  function startOfToday() {
-    var now = new Date();
-    return new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  }
-  function addDays(base, n) {
-    var d = new Date(base.getTime());
-    d.setDate(d.getDate() + n);
-    return d;
-  }
 
-  var WEEK = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
-
-  function labelOf(date, index) {
-    if (index === 0) return '今天';
-    if (index === 1) return '明天';
-    return WEEK[date.getDay()];
+  function el(tag, cls, text) {
+    var node = document.createElement(tag);
+    if (cls) node.className = cls;
+    if (text != null) node.textContent = text;
+    return node;
   }
 
   function toast(text) {
-    var el = document.getElementById('toast');
-    el.textContent = text;
-    el.classList.add('on');
+    var box = document.getElementById('toast');
+    if (!box) {
+      box = el('div');
+      box.id = 'toast';
+      box.style.cssText = 'position:fixed;left:50%;bottom:28px;transform:translateX(-50%);' +
+        'background:rgba(0,0,0,.82);color:#fff;font-size:12.5px;padding:8px 14px;' +
+        'border-radius:20px;z-index:99;transition:opacity .2s;pointer-events:none';
+      document.body.appendChild(box);
+    }
+    box.textContent = text;
+    box.style.opacity = '1';
     clearTimeout(toast._t);
-    toast._t = setTimeout(function () { el.classList.remove('on'); }, 1400);
+    toast._t = setTimeout(function () { box.style.opacity = '0'; }, 1400);
   }
 
-  function render() {
-    var host = document.getElementById('days');
-    host.innerHTML = '';
+  // 页面内输入弹层（不用 window.prompt：它会弹 Android 原生灰框，2026-11-16 实测）
+  function askText(title, defaultValue, withDate) {
+    return new Promise(function (resolve) {
+      var mask = document.getElementById('askMask');
+      var input = document.getElementById('askInput');
+      var dateInput = document.getElementById('askDate');
+      document.getElementById('askTitle').textContent = title;
+      input.value = defaultValue || '';
+      dateInput.hidden = !withDate;
+      if (withDate) dateInput.value = todayKey();
+      mask.hidden = false;
+      input.focus();
 
-    var total = 0;
-    var done = 0;
-
-    state.days.forEach(function (day, index) {
-      var tasks = state.tasks.filter(function (t) { return t.dueDate === day.key; });
-      total += tasks.length;
-      done += tasks.filter(function (t) { return t.isDone; }).length;
-
-      var section = document.createElement('section');
-      section.className = 'day' + (index === 0 ? ' today' : '');
-
-      var head = document.createElement('div');
-      head.className = 'day-head';
-      head.innerHTML =
-        '<span class="day-name">' + labelOf(day.date, index) + '</span>' +
-        '<span class="day-date">' + (day.date.getMonth() + 1) + '月' + day.date.getDate() + '日</span>' +
-        '<span class="day-count">' + tasks.length + '</span>';
-
-      var addBtn = document.createElement('button');
-      addBtn.type = 'button';
-      addBtn.className = 'head-add';
-      addBtn.setAttribute('aria-label', '往这天加一条');
-      addBtn.textContent = '＋';
-      addBtn.addEventListener('click', function () { openAdd(day, index); });
-      head.appendChild(addBtn);
-      section.appendChild(head);
-
-      // 空天不各写一句提示：七天里六天是空的，六行"这天还没有安排"比空着更吵。
-      // 只有今天保留一句 —— 它是一屏的落点，用户第一眼看的也是这里。
-      if (!tasks.length && index === 0) {
-        var empty = document.createElement('div');
-        empty.className = 'empty';
-        empty.textContent = '今天还没有安排';
-        section.appendChild(empty);
+      function done(ok) {
+        mask.hidden = true;
+        document.getElementById('askOk').onclick = null;
+        document.getElementById('askCancel').onclick = null;
+        resolve(ok ? { text: input.value, date: dateInput.value } : null);
       }
-
-      tasks.forEach(function (task) {
-        var row = document.createElement('div');
-        row.className = 'task p-' + (task.priority || 'white') + (task.isDone ? ' done' : '');
-        row.dataset.id = String(task.id);
-
-        var check = document.createElement('button');
-        check.type = 'button';
-        check.className = 'check';
-        check.setAttribute('aria-label', task.isDone ? '取消完成' : '标记完成');
-        check.textContent = task.isDone ? '✓' : '';
-        check.addEventListener('click', function (event) {
-          // 别冒泡到整行：点勾是"完成"，点别处才是"改期"
-          event.stopPropagation();
-          toggleDone(task);
-        });
-        row.appendChild(check);
-
-        var body = document.createElement('div');
-        var title = document.createElement('div');
-        title.className = 'title';
-        title.textContent = task.title;
-        body.appendChild(title);
-
-        var bits = [];
-        if (task.estimatedMinutes) bits.push(task.estimatedMinutes + ' 分钟');
-        if (task.tags && task.tags.length) bits.push(task.tags.join(' · '));
-        if (bits.length) {
-          var meta = document.createElement('div');
-          meta.className = 'meta';
-          meta.textContent = bits.join(' · ');
-          body.appendChild(meta);
-        }
-        row.appendChild(body);
-
-        row.addEventListener('click', function () { openSheet(task); });
-        section.appendChild(row);
-      });
-
-      host.appendChild(section);
-    });
-
-    document.getElementById('sum').textContent =
-      total ? done + '/' + total + ' 已完成' : '这七天还没有任务';
-  }
-
-  function load() {
-    var from = startOfToday();
-    state.days = [];
-    for (var i = 0; i < DAYS; i++) {
-      var d = addDays(from, i);
-      state.days.push({ date: d, key: key(d) });
-    }
-
-    return window.host.call('task.list', {
-      from: state.days[0].key,
-      to: state.days[DAYS - 1].key,
-      limit: 200,
-    }).then(function (list) {
-      state.tasks = list || [];
-      render();
-    }).catch(function (error) {
-      document.getElementById('sum').textContent =
-        '读取失败：' + (error.message || error.code);
+      document.getElementById('askOk').onclick = function () { done(true); };
+      document.getElementById('askCancel').onclick = function () { done(false); };
     });
   }
 
-  // ---- 新增：加到某一天 ----
+  // ---- 列表 ----
 
-  var adding = { dayKey: null };
-
-  function openAdd(day, index) {
-    adding.dayKey = day.key;
-    document.getElementById('addSub').textContent =
-      labelOf(day.date, index) + ' · ' + (day.date.getMonth() + 1) + '月' + day.date.getDate() + '日';
-    var input = document.getElementById('addInput');
-    input.value = '';
-    document.getElementById('addMask').classList.add('on');
-    document.getElementById('addSheet').classList.add('on');
-    // 等弹出动画起来再抢焦点，否则键盘会把还没定位好的输入框顶飞
-    setTimeout(function () { input.focus(); }, 120);
+  async function loadPlans() {
+    state.plans = (await window.host.call('db.select', {
+      table: 'plans',
+      orderBy: [{ column: 'status' }, { column: 'created_at', desc: true }],
+      limit: 100
+    })) || [];
+    renderShelf();
   }
 
-  function closeAdd() {
-    document.getElementById('addMask').classList.remove('on');
-    document.getElementById('addSheet').classList.remove('on');
-    document.getElementById('addInput').blur();
+  function renderShelf() {
+    var box = document.getElementById('plans');
+    box.innerHTML = '';
+    state.plans.forEach(function (p) { box.appendChild(planCard(p)); });
+    document.getElementById('emptyShelf').hidden = state.plans.length !== 0;
   }
 
-  function submitAdd() {
-    var input = document.getElementById('addInput');
-    var title = (input.value || '').trim();
-    if (!title) { input.focus(); return; }
+  function planCard(plan) {
+    var card = el('div', 'card');
+    card.appendChild(el('div', 'title', plan.name));
+    if (plan.goal) card.appendChild(el('div', 'goal', plan.goal));
 
-    var dayKey = adding.dayKey;
-    closeAdd();
-    window.host.call('task.create', { title: title, date: dayKey })
-      .then(function (result) {
-        // 自己先插进本地列表，不重新整页拉：一次网络往返都不需要，
-        // 而且用户看到的"刚加的那条"就在眼前，不用等列表刷新。
+    var bar = el('div', 'bar');
+    var fill = el('i');
+    bar.appendChild(fill);
+    card.appendChild(bar);
+
+    var meta = el('div', 'meta');
+    var range = (plan.start_date || '') + ' ~ ' + (plan.end_date || '');
+    meta.appendChild(el('span', null, range.trim() === '~' ? '未设日期' : range));
+    meta.appendChild(el('span', null, plan.status ? '已结束' : '进行中'));
+    card.appendChild(meta);
+
+    card.onclick = function () { openPlan(plan); };
+    // 进度要异步算（阶段/里程碑/任务的完成率），先按 0 画，到了再填
+    loadProgress(plan.id).then(function (p) {
+      fill.style.width = p.percent + '%';
+    });
+    return card;
+  }
+
+  async function loadProgress(planId) {
+    var stages = (await window.host.call('db.select', {
+      table: 'stages', where: [{ column: 'plan_id', value: planId }], limit: 200
+    })) || [];
+    var milestones = (await window.host.call('db.select', {
+      table: 'milestones', where: [{ column: 'plan_id', value: planId }], limit: 200
+    })) || [];
+    var links = (await window.host.call('db.select', {
+      table: 'plan_tasks', where: [{ column: 'plan_id', value: planId }], limit: 300
+    })) || [];
+    return computeProgress(stages, milestones, links, planId);
+  }
+
+  function computeProgress(stages, milestones, links, planId) {
+    var doneStage = stages.filter(function (s) { return s.done; }).length;
+    var doneMs = milestones.filter(function (m) { return m.done; }).length;
+    var doneTask = links.filter(function (l) { return l.task_done; }).length;
+    var total = stages.length + milestones.length + links.length;
+    var done = doneStage + doneMs + doneTask;
+    return {
+      percent: total === 0 ? 0 : Math.round(done * 100 / total),
+      done: done,
+      total: total,
+    };
+  }
+
+  // ---- 详情 ----
+
+  async function openPlan(plan) {
+    state.plan = plan;
+    document.getElementById('planName').textContent = plan.name;
+    document.getElementById('planMeta').textContent =
+      ((plan.start_date || '') + ' ~ ' + (plan.end_date || '')).replace(/^~$/, '未设日期');
+    document.getElementById('planGoal').textContent = plan.goal || '';
+
+    document.getElementById('shelf').classList.remove('on');
+    document.getElementById('detail').classList.add('on');
+
+    await reloadDetail();
+  }
+
+  async function reloadDetail() {
+    var planId = state.plan.id;
+    state.stages = (await window.host.call('db.select', {
+      table: 'stages', where: [{ column: 'plan_id', value: planId }],
+      orderBy: [{ column: 'sort_order' }, { column: 'id' }], limit: 200
+    })) || [];
+    state.milestones = (await window.host.call('db.select', {
+      table: 'milestones', where: [{ column: 'plan_id', value: planId }],
+      orderBy: [{ column: 'due_date' }, { column: 'id' }], limit: 200
+    })) || [];
+
+    var links = (await window.host.call('db.select', {
+      table: 'plan_tasks', where: [{ column: 'plan_id', value: planId }], limit: 300
+    })) || [];
+
+    // 关联任务的标题/完成状态要问主包要（计划表里只存 task_id）
+    state.tasks = [];
+    if (links.length > 0) {
+      var all = (await window.host.call('task.list', {
+        from: '2000-01-01', to: '2100-01-01', limit: 500
+      })) || [];
+      var byId = {};
+      all.forEach(function (t) { byId[t.id] = t; });
+      links.forEach(function (link) {
+        var task = byId[link.task_id];
         state.tasks.push({
-          id: result.id,
-          title: title,
-          dueDate: dayKey,
-          isDone: false,
-          priority: 'white',
-          estimatedMinutes: 0,
-          tags: [],
+          linkId: link.id,
+          taskId: link.task_id,
+          title: task ? task.title : '（任务已删除）',
+          done: task ? !!task.done : false,
+          date: task ? task.date : null,
+          missing: !task,
         });
-        render();
-        toast('加好了');
-      })
-      .catch(function (error) {
-        toast('添加失败：' + (error.message || error.code));
       });
+    }
+
+    // 给 computeProgress 用的字段名叫 task_done，这里补上
+    var enrichedLinks = state.tasks.map(function (t) { return { task_done: t.done }; });
+    var p = computeProgress(state.stages, state.milestones, enrichedLinks, planId);
+    document.getElementById('planBar').style.width = p.percent + '%';
+    document.getElementById('planPercent').textContent = p.percent + '%';
+    document.getElementById('planCounts').textContent =
+      p.total === 0 ? '还没有可计数的内容' : (p.done + ' / ' + p.total + ' 项');
+
+    renderStages();
+    renderMilestones();
+    renderTasks();
   }
 
-  document.getElementById('addOk').addEventListener('click', submitAdd);
-  document.getElementById('addCancel').addEventListener('click', closeAdd);
-  document.getElementById('addMask').addEventListener('click', closeAdd);
-  document.getElementById('addInput').addEventListener('keydown', function (event) {
-    if (event.key === 'Enter') submitAdd();
-  });
+  function renderStages() {
+    var box = document.getElementById('stages');
+    box.innerHTML = '';
+    state.stages.forEach(function (s) {
+      var row = el('div', 'item' + (s.done ? ' done' : ''));
+      var check = el('div', 'check', '✓');
+      check.onclick = function () { toggleStage(s); };
+      row.appendChild(check);
+      row.appendChild(el('div', 'txt', s.name));
+      var acts = el('div', 'acts');
+      var del = el('span', 'del', '删');
+      del.onclick = function () { deleteStage(s); };
+      acts.appendChild(del);
+      row.appendChild(acts);
+      box.appendChild(row);
+    });
+    document.getElementById('emptyStages').hidden = state.stages.length !== 0;
+  }
 
-  // ---- 底部动作层 ----
+  function renderMilestones() {
+    var box = document.getElementById('milestones');
+    box.innerHTML = '';
+    state.milestones.forEach(function (m) {
+      var row = el('div', 'item' + (m.done ? ' done' : ''));
+      var check = el('div', 'check', '✓');
+      check.onclick = function () { toggleMilestone(m); };
+      row.appendChild(check);
 
-  function openSheet(task) {
-    state.picked = task;
-    document.getElementById('sheetTitle').textContent = task.title;
-    document.getElementById('sheetSub').textContent = task.isDone
-      ? '已完成 · 选一天可以挪过去'
-      : '选择要移动到的日期';
+      var txt = el('div', 'txt');
+      txt.appendChild(el('div', null, m.name));
+      if (m.due_date) txt.appendChild(el('div', 'dateTag', m.due_date));
+      row.appendChild(txt);
 
-    var picks = document.getElementById('picks');
-    picks.innerHTML = '';
-    state.days.forEach(function (day, index) {
-      var btn = document.createElement('button');
-      btn.className = 'pick' + (day.key === task.dueDate ? ' cur' : '');
-      btn.innerHTML = labelOf(day.date, index) +
-        '<small>' + (day.date.getMonth() + 1) + '/' + day.date.getDate() + '</small>';
-      btn.addEventListener('click', function () {
-        if (day.key === task.dueDate) { closeSheet(); return; }
-        move(task, day.key, index);
-      });
-      picks.appendChild(btn);
+      var acts = el('div', 'acts');
+      var del = el('span', 'del', '删');
+      del.onclick = function () { deleteMilestone(m); };
+      acts.appendChild(del);
+      row.appendChild(acts);
+      box.appendChild(row);
+    });
+    document.getElementById('emptyMilestones').hidden = state.milestones.length !== 0;
+  }
+
+  function renderTasks() {
+    var box = document.getElementById('tasks');
+    box.innerHTML = '';
+    state.tasks.forEach(function (t) {
+      var row = el('div', 'item' + (t.done ? ' done' : ''));
+      var check = el('div', 'check', '✓');
+      // 任务完成状态归主包管，这里只读，不提供勾选（否则两份真相）
+      check.style.opacity = '.5';
+      row.appendChild(check);
+
+      var txt = el('div', 'txt');
+      txt.appendChild(el('div', null, t.title));
+      if (t.date) txt.appendChild(el('div', 'dateTag', String(t.date).slice(0, 10)));
+      row.appendChild(txt);
+
+      var acts = el('div', 'acts');
+      if (!t.missing) {
+        var move = el('span', null, '改期');
+        move.onclick = function () { changeTaskDate(t); };
+        acts.appendChild(move);
+      }
+      var del = el('span', 'del', '移除');
+      del.onclick = function () { removeTask(t); };
+      acts.appendChild(del);
+      row.appendChild(acts);
+      box.appendChild(row);
+    });
+    document.getElementById('emptyTasks').hidden = state.tasks.length !== 0;
+  }
+
+  // ---- 写 ----
+
+  async function createPlan() {
+    var name = document.getElementById('pName').value.trim();
+    if (!name) { toast('名字不能为空'); return; }
+    await window.host.call('db.insert', {
+      table: 'plans',
+      values: {
+        name: name,
+        goal: document.getElementById('pGoal').value.trim(),
+        start_date: document.getElementById('pStart').value || '',
+        end_date: document.getElementById('pEnd').value || '',
+        status: 0,
+        created_at: nowIso()
+      }
+    });
+    document.getElementById('planMask').hidden = true;
+    document.getElementById('pName').value = '';
+    document.getElementById('pGoal').value = '';
+    await loadPlans();
+  }
+
+  async function addStage() {
+    var r = await askText('阶段名字', '');
+    if (!r || !r.text.trim()) return;
+    var max = state.stages.reduce(function (a, s) { return Math.max(a, s.sort_order || 0); }, 0);
+    await window.host.call('db.insert', {
+      table: 'stages',
+      values: { plan_id: state.plan.id, name: r.text.trim(), sort_order: max + 1, done: 0 }
+    });
+    await reloadDetail();
+  }
+
+  async function toggleStage(stage) {
+    await window.host.call('db.update', {
+      table: 'stages', values: { done: stage.done ? 0 : 1 },
+      where: [{ column: 'id', value: stage.id }]
+    });
+    await reloadDetail();
+  }
+
+  async function deleteStage(stage) {
+    await window.host.call('db.delete', { table: 'stages', where: [{ column: 'id', value: stage.id }] });
+    await reloadDetail();
+  }
+
+  async function addMilestone() {
+    var r = await askText('里程碑名字', '', true);
+    if (!r || !r.text.trim()) return;
+    await window.host.call('db.insert', {
+      table: 'milestones',
+      values: { plan_id: state.plan.id, name: r.text.trim(), due_date: r.date || '', done: 0 }
+    });
+    await reloadDetail();
+  }
+
+  async function toggleMilestone(ms) {
+    await window.host.call('db.update', {
+      table: 'milestones', values: { done: ms.done ? 0 : 1 },
+      where: [{ column: 'id', value: ms.id }]
+    });
+    await reloadDetail();
+  }
+
+  async function deleteMilestone(ms) {
+    await window.host.call('db.delete', { table: 'milestones', where: [{ column: 'id', value: ms.id }] });
+    await reloadDetail();
+  }
+
+  async function openPicker() {
+    state.allTasks = (await window.host.call('task.list', {
+      from: '2000-01-01', to: '2100-01-01', limit: 500
+    })) || [];
+    var linked = {};
+    state.tasks.forEach(function (t) { linked[t.taskId] = true; });
+
+    var candidates = state.allTasks.filter(function (t) {
+      return !t.done && !linked[t.id];
     });
 
-    var toggle = document.getElementById('toggleDone');
-    toggle.textContent = task.isDone ? '取消完成' : '标记完成';
+    state.selected = {};
+    var box = document.getElementById('pickerList');
+    box.innerHTML = '';
+    candidates.forEach(function (t) {
+      var row = el('div', 'pickerRow');
+      var cb = document.createElement('input');
+      cb.type = 'checkbox';
+      cb.style.width = '18px';
+      cb.onchange = function () {
+        if (cb.checked) state.selected[t.id] = true;
+        else delete state.selected[t.id];
+      };
+      row.appendChild(cb);
+      var txt = el('div', 't');
+      txt.appendChild(el('div', null, t.title));
+      if (t.date) txt.appendChild(el('div', 'dateTag', String(t.date).slice(0, 10)));
+      row.appendChild(txt);
+      box.appendChild(row);
+    });
 
-    document.getElementById('mask').classList.add('on');
-    document.getElementById('sheet').classList.add('on');
+    document.getElementById('pickerEmpty').hidden = candidates.length !== 0;
+    document.getElementById('pickerMask').hidden = false;
   }
 
-  function closeSheet() {
-    state.picked = null;
-    document.getElementById('mask').classList.remove('on');
-    document.getElementById('sheet').classList.remove('on');
-  }
-
-  function move(task, dayKey, index) {
-    closeSheet();
-    window.host.call('task.update', { id: task.id, date: dayKey })
-      .then(function () {
-        task.dueDate = dayKey;
-        render();
-        toast('挪到' + labelOf(state.days[index].date, index));
-      })
-      .catch(function (error) {
-        toast('改期失败：' + (error.message || error.code));
+  async function confirmPicker() {
+    var ids = Object.keys(state.selected);
+    for (var i = 0; i < ids.length; i++) {
+      await window.host.call('db.insert', {
+        table: 'plan_tasks',
+        values: { plan_id: state.plan.id, task_id: Number(ids[i]) }
       });
-  }
-
-  // 勾完成：列表里的圈和动作层里的按钮走同一条路，避免两处行为漂移
-  function toggleDone(task) {
-    var next = !task.isDone;
-    window.host.call('task.setDone', { id: task.id, done: next })
-      .then(function () {
-        task.isDone = next;
-        render();
-        toast(next ? '完成了' : '已取消完成');
-      })
-      .catch(function (error) {
-        toast('操作失败：' + (error.message || error.code));
-      });
-  }
-
-  document.getElementById('toggleDone').addEventListener('click', function () {
-    var task = state.picked;
-    if (!task) return;
-    closeSheet();
-    toggleDone(task);
-  });
-
-  document.getElementById('closeSheet').addEventListener('click', closeSheet);
-  document.getElementById('mask').addEventListener('click', closeSheet);
-
-  // 切回这个页面时重新拉一次：别的页面可能刚改过任务。
-  document.addEventListener('visibilitychange', function () {
-    if (!document.hidden && window.host) load();
-  });
-
-  function whenHostReady(callback, tries) {
-    tries = tries || 0;
-    if (window.host) return callback();
-    if (tries > 100) {
-      document.getElementById('sum').textContent = '宿主通道没起来';
-      return;
     }
-    setTimeout(function () { whenHostReady(callback, tries + 1); }, 30);
+    document.getElementById('pickerMask').hidden = true;
+    await reloadDetail();
   }
 
-  whenHostReady(load);
+  async function removeTask(t) {
+    await window.host.call('db.delete', {
+      table: 'plan_tasks', where: [{ column: 'id', value: t.linkId }]
+    });
+    await reloadDetail();
+  }
+
+  async function changeTaskDate(t) {
+    var r = await askText('「' + t.title + '」改到哪天', '', true);
+    if (!r || !r.date) return;
+    try {
+      await window.host.call('task.update', { id: t.taskId, date: r.date });
+      await reloadDetail();
+      toast('已改到 ' + r.date);
+    } catch (e) {
+      toast('改期失败：' + ((e && e.message) || e));
+    }
+  }
+
+  async function deletePlan() {
+    if (!state.plan) return;
+    if (!confirm('删除「' + state.plan.name + '」和它的阶段、里程碑？')) return;
+    var id = state.plan.id;
+    await window.host.call('db.delete', { table: 'stages', where: [{ column: 'plan_id', value: id }] });
+    await window.host.call('db.delete', { table: 'milestones', where: [{ column: 'plan_id', value: id }] });
+    await window.host.call('db.delete', { table: 'plan_tasks', where: [{ column: 'plan_id', value: id }] });
+    await window.host.call('db.delete', { table: 'plans', where: [{ column: 'id', value: id }] });
+    back();
+  }
+
+  function back() {
+    state.plan = null;
+    document.getElementById('detail').classList.remove('on');
+    document.getElementById('shelf').classList.add('on');
+    loadPlans();
+  }
+
+  // ---- 事件 ----
+
+  document.getElementById('newPlan').onclick = function () {
+    var d = new Date();
+    document.getElementById('pStart').value = todayKey();
+    d.setDate(d.getDate() + 30);
+    document.getElementById('pEnd').value =
+      d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate());
+    document.getElementById('planMask').hidden = false;
+    document.getElementById('pName').focus();
+  };
+  document.getElementById('planCancel').onclick = function () {
+    document.getElementById('planMask').hidden = true;
+  };
+  document.getElementById('planOk').onclick = createPlan;
+
+  document.getElementById('back').onclick = back;
+  document.getElementById('addStageAct').onclick = addStage;
+  document.getElementById('addMilestoneAct').onclick = addMilestone;
+  document.getElementById('addTasksAct').onclick = openPicker;
+  document.getElementById('deletePlan').onclick = deletePlan;
+
+  document.getElementById('pickerCancel').onclick = function () {
+    document.getElementById('pickerMask').hidden = true;
+  };
+  document.getElementById('pickerOk').onclick = confirmPicker;
+
+  whenHostReady(loadPlans);
+})();
 </script>
 </body>
 </html>

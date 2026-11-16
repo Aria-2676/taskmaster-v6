@@ -163,6 +163,9 @@ class PluginBridge {
           'title': task.title,
           'dueDate': TaskDate.dayKey(task.dueDate),
           'isDone': task.isDone,
+          // 完成时刻。统计要按「哪天完成的」归日，不能按 dueDate ——
+          // 逾期任务今天做完，记到截止日那天是错的（2026-11-16 发现）。
+          'completedAt': task.completedAt?.toIso8601String(),
           'priority': task.priority,
           'estimatedMinutes': task.estimatedMinutes,
           'tags': <String>[for (final tag in task.tags) tag.name],

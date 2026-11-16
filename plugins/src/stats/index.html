@@ -185,10 +185,17 @@
     return (Math.round(h * 10) / 10) + ' 小时';
   }
 
+  /// 完成日：优先用 completedAt（真的哪天做完的），没有才回退 dueDate。
+  /// 按 dueDate 归日会把"昨天逾期、今天做完"记到昨天，数字对但语义错。
+  function dayOf(task) {
+    var raw = task.completedAt || task.dueDate || '';
+    return String(raw).slice(0, 10);
+  }
+
   function streakOf(doneAll) {
     var byDay = {};
     doneAll.forEach(function (t) {
-      var day = String(t.dueDate || '').slice(0, 10);
+      var day = dayOf(t);
       if (day) byDay[day] = (byDay[day] || 0) + 1;
     });
     var count = 0;
@@ -213,7 +220,7 @@
 
     var byDay = {};
     done.forEach(function (t) {
-      var day = String(t.dueDate || '').slice(0, 10);
+      var day = dayOf(t);
       if (day) byDay[day] = (byDay[day] || 0) + 1;
     });
 

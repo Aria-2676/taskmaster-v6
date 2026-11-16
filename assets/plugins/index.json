@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "publishedAt": "2026-11-16T00:23:53Z",
+  "publishedAt": "2026-11-16T00:29:50Z",
   "plugins": [
     {
       "id": "energy_currency",
@@ -125,7 +125,7 @@
     {
       "id": "stats",
       "name": "统计",
-      "version": "1.0.0",
+      "version": "1.0.1",
       "contract": 1,
       "description": "完成数、专注时长、每天的趋势。",
       "icon": "insights",
@@ -138,9 +138,9 @@
         "order": 40
       },
       "package": {
-        "path": "plugins/packages/stats_v1.0.0.zip",
-        "sha256": "8a0f7906d9e2df04bfe75a69ab83a78e56a586f7179575c2c881dd21789c9716",
-        "sizeBytes": 4147
+        "path": "plugins/packages/stats_v1.0.1.zip",
+        "sha256": "556ddc2db5fbf0e032e901c6359c5ebb32822caf68f01fb5429fa6dbb329413f",
+        "sizeBytes": 4307
       }
     }
   ]

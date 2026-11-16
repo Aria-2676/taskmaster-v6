@@ -105,6 +105,8 @@ void main() {
       'title',
       'dueDate',
       'isDone',
+      // 统计要按「哪天完成」归日，不能用 dueDate 代替
+      'completedAt',
       'priority',
       'estimatedMinutes',
       'tags',

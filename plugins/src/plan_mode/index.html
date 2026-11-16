@@ -103,7 +103,12 @@
     <button id="newPlan">新建</button>
   </header>
   <div id="plans"></div>
-  <div class="empty" id="emptyShelf" hidden>还没有计划。新建一个，比如「三个月读完 12 本书」。</div>
+  <div class="empty" id="emptyShelf" hidden>
+    <div style="line-height:1.7;margin-bottom:10px">
+      还没有计划。计划是把一个目标拆成阶段和里程碑，进度自己会算。
+    </div>
+    <button class="ghost" id="seedShelf">载入示例：学英语 30 天</button>
+  </div>
 </div>
 
 <!-- 计划详情 -->
@@ -439,8 +444,17 @@
     state.tasks.forEach(function (t) {
       var row = el('div', 'item' + (t.done ? ' done' : ''));
       var check = el('div', 'check', '✓');
-      // 任务完成状态归主包管，这里只读，不提供勾选（否则两份真相）
-      check.style.opacity = '.5';
+      // 以前这里是"只读"的（灰 0.5、没有 handler）：任务是主包的，计划只存 id。
+      // 但界面上画了个方框，用户当然会点 —— 点了没反应就是 bug（2026-11-16）。
+      // 改成直接调主包的 task.setDone：任务本身仍在主包，不存在两份真相。
+      if (t.missing) {
+        check.style.opacity = '.4';
+      } else {
+        check.onclick = function (event) {
+          event.stopPropagation();
+          toggleTask(t);
+        };
+      }
       row.appendChild(check);
 
       var txt = el('div', 'txt');
@@ -463,7 +477,83 @@
     document.getElementById('emptyTasks').hidden = state.tasks.length !== 0;
   }
 
+  /// 勾选关联任务。改的是主包里的那条任务，不是计划里的副本。
+  async function toggleTask(t) {
+    if (t.missing || !t.taskId) {
+      toast('这条任务已经不在主包里了');
+      return;
+    }
+    var next = !t.done;
+    var r;
+    try {
+      r = await window.host.call('task.setDone', { id: t.taskId, done: next });
+    } catch (error) {
+      // host.call 在权限不足 / 参数错时是直接抛的，不接住的话界面一动不动
+      toast('改不动：' + (error && error.message ? error.message : error));
+      return;
+    }
+    if (!r || r.error) {
+      toast('改不动：' + ((r && r.error) || '未知原因'));
+      return;
+    }
+    // 本地先改再重拉：重拉要等主包吐数据，中间那一两百毫秒界面会"点不动"
+    t.done = next;
+    renderTasks();
+    await reloadDetail();
+    toast(next ? '已完成' : '已取消完成');
+  }
+
   // ---- 写 ----
+
+  /// 空态给一份示例：阶段、里程碑、进度条都摆出来，比一句"还没有计划"清楚。
+  ///
+  /// 名字带「（示例）」：一眼能认出不是自己建的，删起来不心疼。
+  /// 不建关联任务 —— 那会往主包的任务列表里塞东西，用户没要求的不能塞。
+  async function seedShelf() {
+    var btn = document.getElementById('seedShelf');
+    if (btn) {
+      btn.disabled = true;
+      btn.textContent = '载入中…';
+    }
+
+    var start = todayKey();
+    var end = new Date();
+    end.setDate(end.getDate() + 30);
+    var endKey = end.getFullYear() + '-' +
+      pad(end.getMonth() + 1) + '-' + pad(end.getDate());
+
+    var inserted = await window.host.call('db.insert', {
+      table: 'plans',
+      values: {
+        name: '学英语 30 天（示例）',
+        goal: '每天 30 分钟，月底能不看字幕看完一集',
+        start_date: start,
+        end_date: endKey,
+        status: 0,
+        created_at: nowIso()
+      }
+    });
+    var planId = inserted && inserted.id;
+    if (planId == null) {
+      toast('示例没写成，再试一次');
+      return;
+    }
+
+    var stages = [['背完第一单元', 1], ['每天听力 15 分钟', 0], ['口语跟读 10 句', 0]];
+    for (var i = 0; i < stages.length; i++) {
+      await window.host.call('db.insert', {
+        table: 'stages',
+        values: { plan_id: planId, name: stages[i][0], sort_order: i + 1, done: stages[i][1] }
+      });
+    }
+    await window.host.call('db.insert', {
+      table: 'milestones',
+      values: { plan_id: planId, name: '能复述一段新闻', due_date: endKey, done: 0 }
+    });
+
+    await loadPlans();
+    toast('已载入示例，点开看看阶段和进度');
+  }
 
   async function createPlan() {
     var name = document.getElementById('pName').value.trim();
@@ -634,6 +724,7 @@
   document.getElementById('planOk').onclick = createPlan;
 
   document.getElementById('back').onclick = back;
+  document.getElementById('seedShelf').onclick = seedShelf;
   document.getElementById('addStageAct').onclick = addStage;
   document.getElementById('addMilestoneAct').onclick = addMilestone;
   document.getElementById('addTasksAct').onclick = openPicker;

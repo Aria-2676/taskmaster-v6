@@ -57,18 +57,26 @@ class PluginQueryHost {
     String installDir, {
     required HostDispatch dispatch,
   }) async {
-    final existing = _plugins[pluginId];
-    if (existing != null) return existing.ready.isCompleted;
-
     debugPrint('[query-host] 读清单 $installDir');
     final manifest = await _readManifest(installDir);
     debugPrint('[query-host] 清单=${manifest?.id} queryEntry=${manifest?.queryEntry}');
     final entry = manifest?.queryEntry;
     if (entry == null) return false;
 
+    final path = p.join(installDir, entry);
+    final existing = _plugins[pluginId];
+    if (existing != null) {
+      // 路径一样才复用。插件升级后目录是 `id/新版本/`，旧页面还活着的，
+      // 复用它就等于"查的是上一版的逻辑"—— 用户看到的现象是"今日页数字
+      // 死活不认新版插件，重启 App 才好"（这条记在记忆里很久了）。
+      if (existing.loadedPath == path) return existing.ready.isCompleted;
+      debugPrint('[query-host] $pluginId 目录变了（可能刚升级），重建离屏页面');
+      await release(pluginId);
+    }
+
     final host = _OffscreenPlugin(pluginId, dispatch);
     _plugins[pluginId] = host;
-    final ok = await host.load(p.join(installDir, entry));
+    final ok = await host.load(path);
     if (!ok) {
       debugPrint('[query-host] $pluginId 离屏页面没在 ${readyTimeout.inSeconds}s 内就绪，'
           '这一轮不参与查询');
@@ -132,6 +140,10 @@ class _OffscreenPlugin {
 
   final String pluginId;
   final HostDispatch _dispatch;
+
+  /// 这份页面是从哪个文件加载的（绝对路径）。插件升级后目录会变，
+  /// 靠它判断"内存里这份是不是当前版本"。
+  String? loadedPath;
   final WebViewController _controller = WebViewController();
   final Completer<void> ready = Completer<void>();
   final Map<int, Completer<QueryResult>> _pending =
@@ -139,6 +151,7 @@ class _OffscreenPlugin {
   int _seq = 0;
 
   Future<bool> load(String absolutePath) async {
+    loadedPath = absolutePath;
     try {
       _controller.setJavaScriptMode(JavaScriptMode.unrestricted);
       _controller.addJavaScriptChannel(

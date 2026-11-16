@@ -14,10 +14,15 @@ import '../models/task.dart';
 /// 之所以不用 Provider 包：v6 主包的外壳只需要一个可监听对象，
 /// `ChangeNotifier` + `ListenableBuilder` 已经够，少一层依赖少一个失效点。
 class TaskStore extends ChangeNotifier {
-  TaskStore(this._repo, this._settings);
+  TaskStore(this._repo, this._settings, {DateTime Function()? clock})
+      : _clock = clock ?? DateTime.now;
 
   final TaskRepository _repo;
   final SettingsRepository _settings;
+
+  /// "今天"从哪来。抽成可注入的函数是为了测试 —— 写死 `DateTime.now()` 的话，
+  /// 任何带固定日期的测试都会随真实时间漂移，某天突然变红还看不出原因。
+  final DateTime Function() _clock;
 
   DateTime _day = DateTime.now();
   List<Task> _tasks = const <Task>[];
@@ -166,7 +171,12 @@ class TaskStore extends ChangeNotifier {
     }
 
     _tasks = await _repo.tasksOn(_day);
-    _overdue = await _repo.overdueBefore(_day);
+    // 逾期**按今天算，不按当前查看的日期算**。
+    //
+    // 用 `_day` 的后果：翻到 11-20 时，11-17~11-19 未完成的任务全被标成"逾期"，
+    // 可它们分明还没到期（用户 2026-11-16 报的）。查看历史日期时，
+    // 那之前的任务该算逾期 —— 也是相对今天成立，所以统一用今天。
+    _overdue = await _repo.overdueBefore(_clock());
     _tags = await _repo.allTags();
     _loading = false;
     _ready = true;

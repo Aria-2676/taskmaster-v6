@@ -20,10 +20,29 @@ class PluginMarketPage extends StatefulWidget {
 }
 
 class _PluginMarketPageState extends State<PluginMarketPage> {
+  /// 手动刷新中。和 `store.indexRefreshing` 分开：那个只表示"索引在拉"，
+  /// 而这里还要等"已安装列表重读"，两者都完了才算刷完。
+  bool _refreshing = false;
+
   @override
   void initState() {
     super.initState();
     widget.store.refresh();
+  }
+
+  /// 手动刷新 = 重读已装 + 重拉索引。
+  ///
+  /// 只拉索引的话，"我把插件装了但列表还显示未装"这种情况修不掉；
+  /// 只重读已装的话，远端上了新插件也看不到。
+  Future<void> _refresh() async {
+    if (_refreshing) return;
+    setState(() => _refreshing = true);
+    try {
+      await widget.store.refresh();
+      await widget.store.refreshIndex();
+    } finally {
+      if (mounted) setState(() => _refreshing = false);
+    }
   }
 
   @override
@@ -35,6 +54,19 @@ class _PluginMarketPageState extends State<PluginMarketPage> {
         return Scaffold(
           appBar: AppBar(
             title: const Text('插件市场', style: TextStyle(fontSize: 16)),
+            actions: <Widget>[
+              IconButton(
+                tooltip: '刷新',
+                onPressed: _refreshing ? null : _refresh,
+                icon: _refreshing
+                    ? const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.refresh),
+              ),
+            ],
           ),
           body: store.loading && store.installed.isEmpty
               ? const Center(
@@ -44,7 +76,10 @@ class _PluginMarketPageState extends State<PluginMarketPage> {
                     child: CircularProgressIndicator(strokeWidth: 2),
                   ),
                 )
-              : _buildList(context, store),
+              : RefreshIndicator(
+                  onRefresh: _refresh,
+                  child: _buildList(context, store),
+                ),
         );
       },
     );
@@ -54,6 +89,8 @@ class _PluginMarketPageState extends State<PluginMarketPage> {
     final muted = Theme.of(context).colorScheme.onSurfaceVariant;
 
     return ListView(
+      // 内容不满一屏时也能下拉刷新，否则"插件少的时候反而刷不了"
+      physics: const AlwaysScrollableScrollPhysics(),
       padding: const EdgeInsets.fromLTRB(16, 6, 16, 28),
       children: <Widget>[
         _sectionHeader('已安装 · ${store.installed.length}'),

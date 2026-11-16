@@ -107,6 +107,22 @@
     return node;
   }
 
+  function toast(text) {
+    var box = document.getElementById('toast');
+    if (!box) {
+      box = document.createElement('div');
+      box.id = 'toast';
+      box.style.cssText = 'position:fixed;left:50%;bottom:28px;transform:translateX(-50%);' +
+        'background:rgba(0,0,0,.82);color:#fff;font-size:12.5px;padding:8px 14px;' +
+        'border-radius:20px;z-index:99;transition:opacity .2s;pointer-events:none';
+      document.body.appendChild(box);
+    }
+    box.textContent = text;
+    box.style.opacity = '1';
+    clearTimeout(toast._t);
+    toast._t = setTimeout(function () { box.style.opacity = '0'; }, 1600);
+  }
+
   function renderOne(row) {
     var wrap = el('div', 'item' + (row.pinned ? ' pinned' : ''));
     wrap.appendChild(el('div', 'content', row.content));
@@ -119,7 +135,7 @@
     meta.appendChild(pin);
 
     var toTask = el('span', 'link', '转任务');
-    toTask.onclick = function () { convert(row); };
+    toTask.onclick = function () { convert(row, toTask); };
     meta.appendChild(toTask);
 
     var del = el('span', 'link danger', '删除');
@@ -187,7 +203,28 @@
     await reload();
   }
 
-  async function convert(row) {
+  /// 转成任务。
+  ///
+  /// 以前成功了一声不吭、失败弹原生 alert：用户看不到成功，就会再点一次，
+  /// 结果多出一条一模一样的任务（2026-11-16 报的）。
+  /// 现在点下去立刻禁用按钮并改文案，成功/失败都给话。
+  async function convert(row, node) {
+    if (node && node.dataset.busy === '1') return;
+    if (node) {
+      node.dataset.busy = '1';
+      node.textContent = '转任务中…';
+      node.style.opacity = '.55';
+      node.style.pointerEvents = 'none';
+    }
+
+    function restore() {
+      if (!node) return;
+      node.dataset.busy = '';
+      node.textContent = '转任务';
+      node.style.opacity = '';
+      node.style.pointerEvents = '';
+    }
+
     try {
       await window.host.call('task.create', { title: row.content.slice(0, 80) });
       // 转过去就取消置顶，避免今日页一直挂着已经变成任务的东西
@@ -198,9 +235,11 @@
           where: [{ column: 'id', value: row.id }]
         });
       }
-      await reload();
+      await reload(); // 重建列表，节点随之作废，不用再 restore
+      toast('已转成任务，在任务列表里');
     } catch (e) {
-      alert('转任务失败：' + ((e && e.message) || e));
+      restore();
+      toast('转任务失败：' + ((e && e.message) || e));
     }
   }
 

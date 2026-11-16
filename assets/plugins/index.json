@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "publishedAt": "2026-11-16T05:47:27Z",
+  "publishedAt": "2026-11-16T06:30:03Z",
   "plugins": [
     {
       "id": "energy_currency",
@@ -44,7 +44,7 @@
     {
       "id": "list_mode",
       "name": "待办清单",
-      "version": "2.0.2",
+      "version": "2.0.3",
       "contract": 1,
       "description": "购物、打包、流程核对——可以反复用的清单。",
       "icon": "checklist",
@@ -57,15 +57,15 @@
         "order": 20
       },
       "package": {
-        "path": "plugins/packages/list_mode_v2.0.2.zip",
-        "sha256": "3af8dffa0f46db328cc8d306a88bbeccb5889625bfe6a962f0ef2a0391a3a871",
-        "sizeBytes": 6529
+        "path": "plugins/packages/list_mode_v2.0.3.zip",
+        "sha256": "7d54fc211319b026d5f5a8e0649e5ced8833477c7e600d00706146e1139c0b98",
+        "sizeBytes": 7121
       }
     },
     {
       "id": "memo",
       "name": "备忘",
-      "version": "1.0.0",
+      "version": "1.0.1",
       "contract": 1,
       "description": "随手记一句，稍后再整理。",
       "icon": "sticky_note_2",
@@ -78,15 +78,15 @@
         "order": 20
       },
       "package": {
-        "path": "plugins/packages/memo_v1.0.0.zip",
-        "sha256": "170351737df346e9456c99ebd41ad9e9812e50f1a078b8b18536e2cd995f051c",
-        "sizeBytes": 3944
+        "path": "plugins/packages/memo_v1.0.1.zip",
+        "sha256": "fc8c9041f6bccaf6d01df88611b47e438eed630bb90ef8167197c3946f803fbb",
+        "sizeBytes": 4560
       }
     },
     {
       "id": "plan_mode",
       "name": "计划",
-      "version": "2.0.3",
+      "version": "2.0.5",
       "contract": 1,
       "description": "把一个目标拆成阶段，排上任务，看得见进度。",
       "icon": "flag",
@@ -100,9 +100,9 @@
         "order": 10
       },
       "package": {
-        "path": "plugins/packages/plan_mode_v2.0.3.zip",
-        "sha256": "902f54e8ffc20faf93957eb73be750cb474def38d1949db5d0e7c9614de2255b",
-        "sizeBytes": 8974
+        "path": "plugins/packages/plan_mode_v2.0.5.zip",
+        "sha256": "ebc74df353b0a165c82350aac72a17f5c169e4c0c922bbc5fa1ce502f48c7bba",
+        "sizeBytes": 10180
       }
     },
     {

@@ -102,7 +102,12 @@
   <div id="templates"></div>
   <div class="section">我的清单</div>
   <div id="lists"></div>
-  <div class="empty" id="emptyShelf" hidden>还没有清单。新建一个，比如「露营打包」。</div>
+  <div class="empty" id="emptyShelf" hidden>
+    <div style="line-height:1.7;margin-bottom:10px">
+      还没有清单。清单就是一组勾选项 —— 打包、采购、搬家，都行。
+    </div>
+    <button class="ghost" id="seedShelf">载入示例：露营打包</button>
+  </div>
 </div>
 
 <!-- 清单内页 -->
@@ -311,6 +316,48 @@
 
   // ---- 写 ----
 
+  /// 空态给一份示例。
+  ///
+  /// 新用户点进来只看到「还没有清单」，很难想象这功能能干什么（用户 2026-11-16
+  /// 反馈"各模式无预设模板，上手有理解困难"）。名字带「（示例）」，
+  /// 一眼能认出不是自己的数据，删起来也不心疼。
+  async function seedShelf() {
+    var btn = document.getElementById('seedShelf');
+    if (btn) {
+      btn.disabled = true;
+      btn.textContent = '载入中…';
+    }
+
+    var inserted = await window.host.call('db.insert', {
+      table: 'lists',
+      values: {
+        name: '露营打包（示例）',
+        is_template: 0,
+        created_at: nowIso(),
+        used_at: nowIso()
+      }
+    });
+    var listId = inserted && inserted.id;
+
+    // 故意留两条已勾上：进度条和非空的样子，比空列表能说明问题
+    var rows = [['帐篷', 1], ['睡袋', 1], ['炉具', 0], ['头灯', 0], ['充电宝', 0]];
+    if (listId != null) {
+      for (var i = 0; i < rows.length; i++) {
+        await window.host.call('db.insert', {
+          table: 'items',
+          values: {
+            list_id: listId,
+            content: rows[i][0],
+            done: rows[i][1],
+            sort_order: i + 1
+          }
+        });
+      }
+    }
+    await loadLists();
+    toast('已载入示例，点开看看');
+  }
+
   async function createList(name, templateId) {
     var trimmed = String(name || '').trim();
     if (!trimmed) return;
@@ -469,6 +516,8 @@
   }
 
   // ---- 事件 ----
+
+  document.getElementById('seedShelf').onclick = seedShelf;
 
   document.getElementById('newList').onclick = async function () {
     var name = await askText('清单名字', '');

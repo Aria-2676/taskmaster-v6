@@ -36,7 +36,9 @@ void main() {
     );
     addTearDown(db.close);
     repo = TaskRepository(db);
-    store = TaskStore(repo, SettingsRepository(db));
+    // 时钟固定成测试里的 `today`：逾期按"今天"算，不注入的话
+    // 断言会跟着真实时间漂移（2026-11-16 引入 clock 注入时改的）
+    store = TaskStore(repo, SettingsRepository(db), clock: () => today);
   });
 
   group('查询', () {
@@ -84,6 +86,20 @@ void main() {
 
       expect(store.tasks, isEmpty);
       expect(store.overdue.map((t) => t.title), <String>['漏掉的']);
+    });
+
+    test('翻到后天看：后天之前的任务不算逾期（还没到期）', () async {
+      final dayAfterTomorrow = today.add(const Duration(days: 2));
+      await repo.insert(title: '明天的', day: today.add(const Duration(days: 1)));
+      await repo.insert(title: '昨天的', day: yesterday);
+
+      await store.load(dayAfterTomorrow);
+
+      expect(
+        store.overdue.map((t) => t.title),
+        <String>['昨天的'],
+        reason: '明天的事还没到期，翻到后天看也不该标成逾期',
+      );
     });
 
     test('标签筛选也作用在逾期上（筛"工作"不该冒出"学习"的逾期）', () async {

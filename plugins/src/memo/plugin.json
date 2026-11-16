@@ -1,7 +1,7 @@
 {
   "id": "memo",
   "name": "备忘",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "contract": 1,
   "entry": "index.html",
   "queryEntry": "query.html",
@@ -21,13 +21,26 @@
       {
         "name": "entries",
         "columns": [
-          { "name": "content", "type": "text" },
-          { "name": "pinned", "type": "integer" },
-          { "name": "at", "type": "text" }
+          {
+            "name": "content",
+            "type": "text"
+          },
+          {
+            "name": "pinned",
+            "type": "integer"
+          },
+          {
+            "name": "at",
+            "type": "text"
+          }
         ],
         "indexes": [
-          ["pinned"],
-          ["at"]
+          [
+            "pinned"
+          ],
+          [
+            "at"
+          ]
         ]
       }
     ]

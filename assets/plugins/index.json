@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "publishedAt": "2026-11-15T16:40:15Z",
+  "publishedAt": "2026-11-16T00:23:53Z",
   "plugins": [
     {
       "id": "energy_currency",
@@ -23,7 +23,7 @@
     {
       "id": "journal",
       "name": "日记",
-      "version": "1.0.0",
+      "version": "1.0.1",
       "contract": 1,
       "description": "按天记，心情和发生了什么。",
       "icon": "menu_book",
@@ -36,9 +36,9 @@
         "order": 30
       },
       "package": {
-        "path": "plugins/packages/journal_v1.0.0.zip",
-        "sha256": "8461b31289c97e8fcbe21235b3c6d2148a10fd3b661b9e6bd48521dc37ec72eb",
-        "sizeBytes": 5131
+        "path": "plugins/packages/journal_v1.0.1.zip",
+        "sha256": "a18c699d97326722a5734409ccb190181b3b5a813f01223eb0784ce56d2aa8e4",
+        "sizeBytes": 5166
       }
     },
     {
@@ -86,7 +86,7 @@
     {
       "id": "plan_mode",
       "name": "计划",
-      "version": "2.0.1",
+      "version": "2.0.2",
       "contract": 1,
       "description": "把一个目标拆成阶段，排上任务，看得见进度。",
       "icon": "flag",
@@ -100,9 +100,9 @@
         "order": 10
       },
       "package": {
-        "path": "plugins/packages/plan_mode_v2.0.1.zip",
-        "sha256": "c580a3918d1160b46ba9db62414fc948b53580c5f3bdf582827527863cac213e",
-        "sizeBytes": 8542
+        "path": "plugins/packages/plan_mode_v2.0.2.zip",
+        "sha256": "4dd7fde49867e16230a3d01f66d35007c29fa1f6c6cb14257ca2f52e61409456",
+        "sizeBytes": 8589
       }
     },
     {
@@ -120,6 +120,27 @@
         "path": "plugins/packages/pomodoro_v1.3.6.zip",
         "sha256": "592bc56ae57ebc503f5307984c0f46c9540c3fc301c6f41dd044d1d2e31cfd1e",
         "sizeBytes": 8711
+      }
+    },
+    {
+      "id": "stats",
+      "name": "统计",
+      "version": "1.0.0",
+      "contract": 1,
+      "description": "完成数、专注时长、每天的趋势。",
+      "icon": "insights",
+      "permissions": [
+        "task:read"
+      ],
+      "home": {
+        "label": "统计模式",
+        "hint": "完成数、专注时长、趋势",
+        "order": 40
+      },
+      "package": {
+        "path": "plugins/packages/stats_v1.0.0.zip",
+        "sha256": "8a0f7906d9e2df04bfe75a69ab83a78e56a586f7179575c2c881dd21789c9716",
+        "sizeBytes": 4147
       }
     }
   ]

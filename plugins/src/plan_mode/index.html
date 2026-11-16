@@ -370,8 +370,8 @@
           linkId: link.id,
           taskId: link.task_id,
           title: task ? task.title : '（任务已删除）',
-          done: task ? !!task.done : false,
-          date: task ? task.date : null,
+          done: task ? !!task.isDone : false,
+          date: task ? task.dueDate : null,
           missing: !task,
         });
       });
@@ -540,7 +540,8 @@
     state.tasks.forEach(function (t) { linked[t.taskId] = true; });
 
     var candidates = state.allTasks.filter(function (t) {
-      return !t.done && !linked[t.id];
+      // task.list 返回的是 isDone / dueDate（不是 done / date）
+      return !t.isDone && !linked[t.id];
     });
 
     state.selected = {};
@@ -558,7 +559,7 @@
       row.appendChild(cb);
       var txt = el('div', 't');
       txt.appendChild(el('div', null, t.title));
-      if (t.date) txt.appendChild(el('div', 'dateTag', String(t.date).slice(0, 10)));
+      if (t.dueDate) txt.appendChild(el('div', 'dateTag', String(t.dueDate).slice(0, 10)));
       row.appendChild(txt);
       box.appendChild(row);
     });

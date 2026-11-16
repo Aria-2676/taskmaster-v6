@@ -262,7 +262,8 @@
       var list = (await window.host.call('task.list', {
         from: todayKey(), to: todayKey(), limit: 50
       })) || [];
-      var done = list.filter(function (t) { return t.done; });
+      // task.list 返回 isDone，不是 done
+      var done = list.filter(function (t) { return t.isDone; });
       if (done.length === 0) return;
       box.textContent = '今天完成：' + done.map(function (t) { return t.title; }).join('、');
       box.hidden = false;

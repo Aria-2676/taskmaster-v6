@@ -1,0 +1,17 @@
+{
+  "id": "stats",
+  "name": "统计",
+  "version": "1.0.0",
+  "contract": 1,
+  "entry": "index.html",
+  "description": "完成数、专注时长、每天的趋势。",
+  "icon": "insights",
+  "home": {
+    "label": "统计模式",
+    "hint": "完成数、专注时长、趋势",
+    "order": 40
+  },
+  "permissions": [
+    "task:read"
+  ]
+}

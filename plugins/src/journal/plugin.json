@@ -1,7 +1,7 @@
 {
   "id": "journal",
   "name": "日记",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "contract": 1,
   "entry": "index.html",
   "queryEntry": "query.html",
@@ -21,14 +21,30 @@
       {
         "name": "entries",
         "columns": [
-          { "name": "day", "type": "text" },
-          { "name": "content", "type": "text" },
-          { "name": "mood", "type": "integer" },
-          { "name": "created_at", "type": "text" }
+          {
+            "name": "day",
+            "type": "text"
+          },
+          {
+            "name": "content",
+            "type": "text"
+          },
+          {
+            "name": "mood",
+            "type": "integer"
+          },
+          {
+            "name": "created_at",
+            "type": "text"
+          }
         ],
         "indexes": [
-          ["day"],
-          ["created_at"]
+          [
+            "day"
+          ],
+          [
+            "created_at"
+          ]
         ]
       }
     ]

@@ -1120,6 +1120,8 @@ class _MainShellState extends State<MainShell> {
           store: _store,
           marketStore: widget.marketStore,
           pluginLauncher: widget.pluginLauncher,
+          // `IndexedStack` 里三页都活着，只有 index 对应的那个在显示
+          active: _tab == 1,
         ),
         // 开关全搬去设置页了，这里只剩身份与入口
         ProfileStubPage(

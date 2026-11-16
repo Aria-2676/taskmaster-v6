@@ -30,16 +30,23 @@
         window.host.call('task.list', { from: '2000-01-01', to: '2100-01-01', limit: 500 })
       ]).then(function (r) {
         var plans = (r[0] || []).filter(function (p) { return !p.status; });
-        console.log('[plan-query] plans=' + (r[0] || []).length +
+        // 每张表的原始行数都打出来：空块到底是"查不到"还是"过滤掉了"，
+        // 光看 active=0 分不清（2026-11-16 今日页计划块就是这个症状）。
+        console.log('[plan-query] tables plans=' + (r[0] || []).length +
+          ' stages=' + (r[1] || []).length +
+          ' milestones=' + (r[2] || []).length +
+          ' links=' + (r[3] || []).length +
+          ' tasks=' + (r[4] || []).length +
           ' active=' + plans.length +
-          ' tasks=' + ((r[4] || []).length));
+          ' first=' + JSON.stringify((r[0] || [])[0] || null));
         var stages = r[1] || [];
         var milestones = r[2] || [];
         var links = r[3] || [];
         var tasks = r[4] || [];
 
         var doneById = {};
-        tasks.forEach(function (t) { doneById[t.id] = !!t.done; });
+        // task.list 返回 isDone（不是 done）—— 2.0.2 改插件页时漏了这一处
+        tasks.forEach(function (t) { doneById[t.id] = !!t.isDone; });
 
         var items = plans.map(function (plan) {
           var mine = function (row) { return row.plan_id === plan.id; };
@@ -60,6 +67,11 @@
         });
 
         return { plans: items.slice(0, 3) };
+      }).catch(function (error) {
+        // 任一查询失败会让整条 Promise.all 挂掉，界面表现和"没有计划"一样。
+        // 这里必须留痕，否则只能靠猜（宿主侧只会看到"结果为空"）。
+        console.log('[plan-query] 失败 ' + (error && error.message ? error.message : error));
+        return { plans: [] };
       });
     });
 

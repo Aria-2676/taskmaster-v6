@@ -20,11 +20,21 @@ class TodayPage extends StatefulWidget {
     required this.store,
     this.marketStore,
     this.pluginLauncher,
+    this.active = true,
   });
 
   final TaskStore store;
   final PluginMarketStore? marketStore;
   final Future<PluginLaunchSpec> Function(InstalledPlugin plugin)? pluginLauncher;
+
+  /// 今日页当前是不是正在显示的那个 tab。
+  ///
+  /// 今日页在 `IndexedStack` 里常驻，插件块拿到一次就停在那个快照上。
+  /// 靠它判断"值不值得重拉"：不可见时重拉是白起一次离屏 WebView，
+  /// 真正的刷新时机是下面两种 ——
+  /// 1. 从别的 tab 切回今日（`active` false → true）
+  /// 2. 从插件页 / 编辑页返回（route 重新成为最上层）
+  final bool active;
 
   @override
   State<TodayPage> createState() => _TodayPageState();
@@ -39,6 +49,24 @@ class _TodayPageState extends State<TodayPage> {
   /// 备忘插件给的置顶条目。
   List<_MemoItem>? _memoItems;
   bool _memoLoading = false;
+
+  /// 上一次加载时用的插件签名（`id@版本`）。
+  ///
+  /// 用它判断"要不要重拉"：签名没变不必重复起离屏 WebView，
+  /// 但插件升级、重装、换版本时必须重拉，否则块里永远是旧版本算出来的数。
+  String? _planSignature;
+  String? _memoSignature;
+
+  /// 信号合并用。快速切 tab、连按返回时不要连着开两个离屏 WebView。
+  Timer? _reloadTimer;
+  static const Duration _reloadDelay = Duration(milliseconds: 250);
+
+  /// 上一轮还在跑时又来了刷新请求：记下来，跑完补一次，不能直接丢。
+  bool _planDirty = false;
+  bool _memoDirty = false;
+
+  /// 上次见到「自己是不是最上层 route」。false → true 就是"从别的页面回来了"。
+  bool _routeWasCurrent = true;
 
   /// 本月日历的起点（今天往后 7 天）。
   DateTime get _from {
@@ -57,17 +85,47 @@ class _TodayPageState extends State<TodayPage> {
     unawaited(_loadMemoBlock());
   }
 
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // `ModalRoute.of` 会订阅 route 状态：从插件页 / 编辑页返回时这里会再走一遍。
+    // 这比"在每个 push 点手动敲一遍"可靠 —— 漏一个点就是一处数据不联动，
+    // 而且不会报错，只能等用户发现"我明明改了它怎么没变"。
+    final current = ModalRoute.of(context)?.isCurrent ?? true;
+    if (current && !_routeWasCurrent && widget.active) _scheduleReload();
+    _routeWasCurrent = current;
+  }
+
+  @override
+  void didUpdateWidget(covariant TodayPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // 切回今日 tab：在首页/任务列表里勾掉的任务可能已经改变了计划进度
+    if (widget.active && !oldWidget.active) _scheduleReload();
+  }
+
+  /// 把短时间内的多次"该刷了"合并成一次，然后强制重拉两个块。
+  ///
+  /// 250ms 是给"切 tab 的同时又点了返回"这种连击留的合并窗口，不是为了等数据。
+  void _scheduleReload() {
+    if (!mounted) return;
+    _reloadTimer?.cancel();
+    _reloadTimer = Timer(_reloadDelay, () {
+      if (!mounted || !widget.active) return;
+      debugPrint('[today] 重拉插件块（切回今日 / 从别的页面返回）');
+      unawaited(_loadPlanBlock(force: true));
+      unawaited(_loadMemoBlock(force: true));
+    });
+  }
+
+  /// 插件列表变了：签名一样的话 [loadXxx] 会自己跳过，这里不必再判断。
   void _onMarketChanged() {
-    if (_planItems == null && !_planLoading) {
-      unawaited(_loadPlanBlock());
-    }
-    if (_memoItems == null && !_memoLoading) {
-      unawaited(_loadMemoBlock());
-    }
+    unawaited(_loadPlanBlock());
+    unawaited(_loadMemoBlock());
   }
 
   @override
   void dispose() {
+    _reloadTimer?.cancel();
     widget.marketStore?.removeListener(_onMarketChanged);
     // 策略 3：离屏 WebView 跟随本页生命周期，离开就释放。
     unawaited(PluginQueryHost.instance.releaseAll());
@@ -78,7 +136,11 @@ class _TodayPageState extends State<TodayPage> {
   ///
   /// 三步都可能失败（没装插件 / 没声明 queryEntry / 超时），**每一步失败都只是
   /// 这一块不出现**，绝不影响上面的任务列表。
-  Future<void> _loadPlanBlock() async {
+  ///
+  /// [force] 为 true 时无条件重拉。不强制时按签名（`id@版本`）判断：签名一样就
+  /// 直接返回，因为市场通知 / 切 tab / 从别的页面返回会连着响，每次都起一个离屏
+  /// WebView 太贵，而那样拉回来的还是同一份数据。
+  Future<void> _loadPlanBlock({bool force = false}) async {
     final market = widget.marketStore;
     final launcher = widget.pluginLauncher;
     if (market == null || launcher == null) {
@@ -94,16 +156,32 @@ class _TodayPageState extends State<TodayPage> {
       }
     }
     if (plugin == null) {
-      debugPrint('[today] 跳过计划块：没有可用的周计划插件');
+      debugPrint('[today] 计划块：没有启用的 plan_mode 插件');
+      // 插件被卸载/停用：块要收回去，别把上一次的内容留着冒充现状
+      if (_planItems != null && mounted) {
+        setState(() {
+          _planItems = null;
+          _planNote = null;
+          _planSignature = null;
+        });
+      }
+      return;
+    }
+
+    final signature = '${plugin.pluginId}@${plugin.version}';
+    if (!force && signature == _planSignature) return;
+
+    if (_planLoading) {
+      // 上一轮还没跑完（切 tab 很快、或返回时市场又通知一次）。
+      // 直接丢掉这次请求会让界面停在更旧的版本上，所以记下来跑完补一次。
+      _planDirty = true;
       return;
     }
 
     setState(() => _planLoading = true);
-    debugPrint('[today] 加载计划块：${plugin.pluginId} v${plugin.version}');
+    debugPrint('[today] 加载计划块：$signature（force=$force）');
     try {
-      debugPrint('[today] ① 调用 launcher');
       final spec = await launcher(plugin);
-      debugPrint('[today] ② launcher 返回，开始 acquire');
       // **必须用 directoryOf**：`plugin.installDir` 是相对值（`id/version`），
       // 拿它去 File() 会找不到清单，表现为"插件装了但查不到"。
       final directory = await market.installer.directoryOf(plugin);
@@ -112,14 +190,10 @@ class _TodayPageState extends State<TodayPage> {
         directory,
         dispatch: spec.bridge.dispatch,
       );
-      debugPrint('[today] ③ acquire 返回 $ok');
-      if (!ok) {
-        if (mounted) setState(() => _planLoading = false);
-        return;
-      }
+      debugPrint('[today] acquire 返回 $ok');
+      if (!ok) return;
 
       final to = _from.add(const Duration(days: 7));
-      debugPrint('[today] ④ 开始查询 plan.list');
       final result = await PluginQueryRegistry.instance.query(
         plugin.pluginId,
         'plan.list',
@@ -133,26 +207,32 @@ class _TodayPageState extends State<TodayPage> {
       if (!result.isOk) {
         // 不弹错：这块拿不到就是没有，界面保持安静
         setState(() {
-          _planLoading = false;
           _planNote = result.status == QueryStatus.unsupported
               ? '计划插件未提供该查询'
               : null;
+          _planSignature = signature;
         });
         return;
       }
 
       setState(() {
         _planItems = _parsePlans(result.data);
-        _planLoading = false;
+        _planNote = null;
+        _planSignature = signature;
       });
     } catch (error) {
       debugPrint('[today] 计划块加载失败：$error');
+    } finally {
       if (mounted) setState(() => _planLoading = false);
+      if (_planDirty) {
+        _planDirty = false;
+        unawaited(_loadPlanBlock(force: true));
+      }
     }
   }
 
   /// 拉"置顶备忘"块。和计划块同一套机制，只是方法名不同。
-  Future<void> _loadMemoBlock() async {
+  Future<void> _loadMemoBlock({bool force = false}) async {
     final market = widget.marketStore;
     final launcher = widget.pluginLauncher;
     if (market == null || launcher == null) return;
@@ -164,7 +244,24 @@ class _TodayPageState extends State<TodayPage> {
         break;
       }
     }
-    if (plugin == null) return;
+    if (plugin == null) {
+      debugPrint('[today] 备忘块：没有启用的 memo 插件');
+      if (_memoItems != null && mounted) {
+        setState(() {
+          _memoItems = null;
+          _memoSignature = null;
+        });
+      }
+      return;
+    }
+
+    final signature = '${plugin.pluginId}@${plugin.version}';
+    if (!force && signature == _memoSignature) return;
+
+    if (_memoLoading) {
+      _memoDirty = true;
+      return;
+    }
 
     setState(() => _memoLoading = true);
     try {
@@ -175,26 +272,28 @@ class _TodayPageState extends State<TodayPage> {
         directory,
         dispatch: spec.bridge.dispatch,
       );
-      if (!ok) {
-        if (mounted) setState(() => _memoLoading = false);
-        return;
-      }
+      if (!ok) return;
       final result = await PluginQueryRegistry.instance.query(
         plugin.pluginId,
         'memo.pinned',
       );
       if (!mounted) return;
       if (!result.isOk) {
-        setState(() => _memoLoading = false);
+        setState(() => _memoSignature = signature);
         return;
       }
       setState(() {
         _memoItems = _parseMemos(result.data);
-        _memoLoading = false;
+        _memoSignature = signature;
       });
     } catch (error) {
       debugPrint('[today] 备忘块加载失败：$error');
+    } finally {
       if (mounted) setState(() => _memoLoading = false);
+      if (_memoDirty) {
+        _memoDirty = false;
+        unawaited(_loadMemoBlock(force: true));
+      }
     }
   }
 
@@ -331,7 +430,9 @@ class _TodayPageState extends State<TodayPage> {
   }
 
   Widget _memoContent(ColorScheme scheme) {
-    if (_memoLoading) {
+    // 刷新时不显示「读取中…」：那会把已有内容闪掉，看着像数据丢了。
+    // 只有"手上还没有内容"时才提示正在加载。
+    if (_memoLoading && _memoItems == null) {
       return Padding(
         padding: const EdgeInsets.symmetric(vertical: 10),
         child: Text('读取中…',
@@ -366,7 +467,8 @@ class _TodayPageState extends State<TodayPage> {
   }
 
   Widget _planContent(ColorScheme scheme) {
-    if (_planLoading) {
+    // 同备忘块：已经拿到过内容就静默刷新，不闪「读取中…」
+    if (_planLoading && _planItems == null && _planNote == null) {
       return Padding(
         padding: const EdgeInsets.symmetric(vertical: 10),
         child: Text('读取中…',

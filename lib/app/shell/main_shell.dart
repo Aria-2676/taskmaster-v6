@@ -341,6 +341,22 @@ class _MainShellState extends State<MainShell> {
     super.dispose();
   }
 
+  /// 按 id 打开已装插件。今日页的块用它当入口。
+  ///
+  /// 找不到就安静返回：块能显示说明查询是通的，此时弹「没装」只会误导 ——
+  /// 真没装的话那块根本不会出现。
+  void _openPluginById(String pluginId) {
+    final market = widget.marketStore;
+    if (market == null) return;
+    for (final plugin in market.installed) {
+      if (plugin.pluginId == pluginId && plugin.enabled) {
+        unawaited(_openPlugin(plugin));
+        return;
+      }
+    }
+    debugPrint('[today] 点开的插件不在已装列表里：$pluginId');
+  }
+
   /// 打开已装插件。入口路径、权限都从包内 `plugin.json` 读，
   /// 数据源由应用层通过 [pluginLauncher] 注入。
   Future<void> _openPlugin(InstalledPlugin plugin) async {
@@ -1122,6 +1138,8 @@ class _MainShellState extends State<MainShell> {
           pluginLauncher: widget.pluginLauncher,
           // `IndexedStack` 里三页都活着，只有 index 对应的那个在显示
           active: _tab == 1,
+          onOpenPlugin: _openPluginById,
+          onOpenTask: _openEditor,
         ),
         // 开关全搬去设置页了，这里只剩身份与入口
         ProfileStubPage(

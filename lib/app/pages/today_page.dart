@@ -21,11 +21,20 @@ class TodayPage extends StatefulWidget {
     this.marketStore,
     this.pluginLauncher,
     this.active = true,
+    this.onOpenPlugin,
+    this.onOpenTask,
   });
 
   final TaskStore store;
   final PluginMarketStore? marketStore;
   final Future<PluginLaunchSpec> Function(InstalledPlugin plugin)? pluginLauncher;
+
+  /// 打开已装插件（按 id）。今日页的块是**入口**，不是终点 ——
+  /// 看到「置顶备忘」想改，看到计划进度想看阶段，都不该逼用户自己去找侧边栏。
+  final void Function(String pluginId)? onOpenPlugin;
+
+  /// 打开任务编辑页。今日页只读，但"看到了想改"是常事。
+  final void Function(Task task)? onOpenTask;
 
   /// 今日页当前是不是正在显示的那个 tab。
   ///
@@ -396,32 +405,62 @@ class _TodayPageState extends State<TodayPage> {
         _block('这天的安排', _taskList(visible, scheme)),
         if (_memoLoading || (_memoItems?.isNotEmpty ?? false)) ...<Widget>[
           const SizedBox(height: 14),
-          _block('置顶备忘', _memoContent(scheme)),
+          _block(
+            '置顶备忘',
+            _memoContent(scheme),
+            onTap: widget.onOpenPlugin == null
+                ? null
+                : () => widget.onOpenPlugin!('memo'),
+          ),
         ],
         if (_planLoading || _planItems != null || _planNote != null) ...<Widget>[
           const SizedBox(height: 14),
-          _block('计划', _planContent(scheme)),
+          _block(
+            '计划',
+            _planContent(scheme),
+            onTap: widget.onOpenPlugin == null
+                ? null
+                : () => widget.onOpenPlugin!('plan_mode'),
+          ),
         ],
       ],
     );
   }
 
-  Widget _block(String title, Widget child) {
+  /// 一个带小标题的块。
+  ///
+  /// [onTap] 不为空时整块可点，标题后面加一个 `›` —— 只有箭头没有热区、
+  /// 或者只有热区没有箭头，都是"看着像能点 / 其实点不到"的典型。
+  Widget _block(String title, Widget child, {VoidCallback? onTap}) {
     final scheme = Theme.of(context).colorScheme;
-    return Column(
+    final body = Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
-        Text(
-          title,
-          style: TextStyle(
-            fontSize: 12,
-            fontWeight: FontWeight.w600,
-            color: scheme.onSurfaceVariant,
-          ),
+        Row(
+          children: <Widget>[
+            Text(
+              title,
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: scheme.onSurfaceVariant,
+              ),
+            ),
+            if (onTap != null) ...<Widget>[
+              const SizedBox(width: 2),
+              Icon(Icons.chevron_right, size: 15, color: scheme.onSurfaceVariant),
+            ],
+          ],
         ),
         const SizedBox(height: 6),
         child,
       ],
+    );
+    if (onTap == null) return body;
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(10),
+      child: body,
     );
   }
 
@@ -433,33 +472,40 @@ class _TodayPageState extends State<TodayPage> {
             style: TextStyle(fontSize: 12, color: scheme.onSurfaceVariant)),
       );
     }
+    final onOpen = widget.onOpenTask;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
         for (final task in tasks)
-          Padding(
-            padding: const EdgeInsets.symmetric(vertical: 7),
-            child: Row(
-              children: <Widget>[
-                Icon(
-                  task.isDone ? Icons.check_circle : Icons.circle_outlined,
-                  size: 16,
-                  color: task.isDone ? scheme.primary : scheme.outline,
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Text(
-                    task.title,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      fontSize: 13.5,
-                      decoration: task.isDone ? TextDecoration.lineThrough : null,
-                      color: task.isDone ? scheme.onSurfaceVariant : scheme.onSurface,
+          InkWell(
+            onTap: onOpen == null ? null : () => onOpen(task),
+            borderRadius: BorderRadius.circular(8),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 7),
+              child: Row(
+                children: <Widget>[
+                  Icon(
+                    task.isDone ? Icons.check_circle : Icons.circle_outlined,
+                    size: 16,
+                    color: task.isDone ? scheme.primary : scheme.outline,
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      task.title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 13.5,
+                        decoration: task.isDone ? TextDecoration.lineThrough : null,
+                        color: task.isDone ? scheme.onSurfaceVariant : scheme.onSurface,
+                      ),
                     ),
                   ),
-                ),
-              ],
+                  if (onOpen != null)
+                    Icon(Icons.chevron_right, size: 15, color: scheme.outline),
+                ],
+              ),
             ),
           ),
       ],

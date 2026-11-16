@@ -36,6 +36,32 @@
   }
   .seg span.on { background: var(--accent); color: #fff; }
 
+  .refresh {
+    width: 32px; height: 32px; flex: none; padding: 0;
+    display: flex; align-items: center; justify-content: center;
+    background: var(--card); border: 1px solid var(--line);
+    border-radius: 9px; color: var(--muted); cursor: pointer;
+  }
+  .refresh:active { background: var(--line); }
+  .refresh.busy { color: var(--accent); }
+  .refresh.busy svg { animation: spin .7s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* 刷新时间戳：让用户确认"确实拉到新数据了"，而不是数字没变就当没刷新 */
+  .updated {
+    font-size: 11px; color: var(--muted); text-align: center;
+    padding: 8px 14px 0; min-height: 15px;
+  }
+  .updated.warn { color: #b3261e; }
+
+  /* 下拉刷新：只在手势进行中显示，松手立即收起 */
+  .pull {
+    position: fixed; left: 0; right: 0; top: 0; z-index: 9;
+    display: flex; align-items: flex-end; justify-content: center;
+    height: 0; overflow: hidden; background: var(--bg);
+    font-size: 11.5px; color: var(--muted); padding-bottom: 6px;
+  }
+
   .cards { display: flex; gap: 8px; padding: 4px 14px 0; }
   .card {
     flex: 1; background: var(--card); border: 1px solid var(--line);
@@ -68,13 +94,25 @@
 </head>
 <body>
 
+<div class="pull" id="pull"></div>
+
 <header>
   <h1>统计</h1>
   <div class="seg">
     <span id="seg7" class="on">7 天</span>
     <span id="seg30">30 天</span>
   </div>
+  <button class="refresh" id="refresh" aria-label="刷新">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
+         stroke="currentColor" stroke-width="2.2"
+         stroke-linecap="round" stroke-linejoin="round">
+      <path d="M21 12a9 9 0 1 1-2.64-6.36"/>
+      <polyline points="21 3 21 9 15 9"/>
+    </svg>
+  </button>
 </header>
+
+<div class="updated" id="updated">正在加载…</div>
 
 <div class="cards">
   <div class="card"><b id="cDone">–</b><span>完成任务</span></div>
@@ -99,7 +137,7 @@
 
 <script>
 (function () {
-  var state = { days: 7, tasks: [], sessions: [] };
+  var state = { days: 7, tasks: [], sessions: [], loading: false, lastLoadAt: 0 };
 
   function pad(n) { return (n < 10 ? '0' : '') + n; }
   function keyOf(d) { return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()); }
@@ -128,28 +166,67 @@
 
   // ---- 数据 ----
 
+  /// 拉数据。**主动刷新和首次加载走同一条路**，避免两套逻辑算出不同的数。
+  ///
+  /// 三条刷新入口都调它：顶栏按钮、下拉手势、从后台切回来。
+  /// 用 [state.loading] 防并发：连点刷新、下拉中途再点按钮都只会跑一次。
   async function load() {
-    var r = range();
-    var from = keyOf(r.start);
-    var to = keyOf(r.end);
-
-    state.tasks = (await window.host.call('task.list', {
-      from: from, to: to, limit: 500
-    })) || [];
+    if (state.loading) return;
+    state.loading = true;
+    setBusy(true);
 
     try {
-      state.sessions = (await window.host.call('timer.history', {
-        since: r.start.toISOString(),
-        limit: 200
-      })) || [];
-      // 契约是 {sessions: [...]}，兼容直接返回数组的实现
-      if (!Array.isArray(state.sessions)) state.sessions = state.sessions.sessions || [];
-    } catch (e) {
-      // 没装番茄钟插件 / 没有权限，专注时长显示 0，不报错
-      state.sessions = [];
-    }
+      var r = range();
+      var from = keyOf(r.start);
+      var to = keyOf(r.end);
 
-    render(r);
+      state.tasks = (await window.host.call('task.list', {
+        from: from, to: to, limit: 500
+      })) || [];
+
+      try {
+        state.sessions = (await window.host.call('timer.history', {
+          since: r.start.toISOString(),
+          limit: 200
+        })) || [];
+        // 契约是 {sessions: [...]}，兼容直接返回数组的实现
+        if (!Array.isArray(state.sessions)) state.sessions = state.sessions.sessions || [];
+      } catch (e) {
+        // 没装番茄钟插件 / 没有权限，专注时长显示 0，不报错
+        state.sessions = [];
+      }
+
+      render(r);
+      state.lastLoadAt = Date.now();
+      setUpdated('更新于 ' + stamp(), false);
+    } catch (error) {
+      // 刷新失败要说出来：数字停在旧值又没提示，用户会以为"数据就这样"
+      setUpdated('刷新失败：' + describe(error), true);
+    } finally {
+      state.loading = false;
+      setBusy(false);
+    }
+  }
+
+  function stamp() {
+    var d = new Date();
+    return pad(d.getHours()) + ':' + pad(d.getMinutes()) + ':' + pad(d.getSeconds());
+  }
+
+  function describe(error) {
+    if (!error) return '未知错误';
+    var text = error.message || String(error);
+    return text.length > 60 ? text.slice(0, 60) + '…' : text;
+  }
+
+  function setBusy(busy) {
+    document.getElementById('refresh').classList.toggle('busy', busy);
+  }
+
+  function setUpdated(text, warn) {
+    var node = document.getElementById('updated');
+    node.textContent = text;
+    node.classList.toggle('warn', !!warn);
   }
 
   function render(r) {
@@ -175,7 +252,8 @@
     renderTags(done);
 
     document.getElementById('hint').textContent =
-      '数据来自主包的任务和你装的番茄钟。没装番茄钟时专注时长为 0，不影响其他数字。';
+      '数据来自主包的任务和你装的番茄钟。没装番茄钟时专注时长为 0，不影响其他数字。' +
+      '点右上角按钮或下拉可刷新。';
   }
 
   function formatDuration(seconds) {
@@ -292,6 +370,7 @@
 
   document.getElementById('seg7').onclick = function () { switchDays(7); };
   document.getElementById('seg30').onclick = function () { switchDays(30); };
+  document.getElementById('refresh').onclick = function () { load(); };
 
   function switchDays(n) {
     if (state.days === n) return;
@@ -300,6 +379,62 @@
     document.getElementById('seg30').classList.toggle('on', n === 30);
     load();
   }
+
+  // ---- 下拉刷新 ----
+
+  /// 只在页面已经滚到顶时接管下拉；不 preventDefault，正常滚动完全不受影响。
+  var pull = { tracking: false, startY: 0, distance: 0 };
+  var PULL_TRIGGER = 56;
+
+  document.addEventListener('touchstart', function (event) {
+    if (state.loading || window.scrollY > 0) return;
+    pull.tracking = true;
+    pull.startY = event.touches[0].clientY;
+    pull.distance = 0;
+  }, { passive: true });
+
+  document.addEventListener('touchmove', function (event) {
+    if (!pull.tracking) return;
+    var dy = event.touches[0].clientY - pull.startY;
+    if (dy <= 0) {
+      pull.distance = 0;
+      paintPull(false);
+      return;
+    }
+    pull.distance = Math.min(90, dy);
+    paintPull(pull.distance >= PULL_TRIGGER);
+  }, { passive: true });
+
+  document.addEventListener('touchend', function () {
+    if (!pull.tracking) return;
+    var fire = pull.distance >= PULL_TRIGGER;
+    pull.tracking = false;
+    pull.distance = 0;
+    paintPull(false);
+    if (fire) load();
+  }, { passive: true });
+
+  document.addEventListener('touchcancel', function () {
+    pull.tracking = false;
+    pull.distance = 0;
+    paintPull(false);
+  }, { passive: true });
+
+  function paintPull(ready) {
+    var box = document.getElementById('pull');
+    box.style.height = pull.distance ? Math.min(44, Math.round(pull.distance * 0.6)) + 'px' : '0';
+    box.textContent = pull.distance ? (ready ? '松开刷新' : '下拉刷新') : '';
+  }
+
+  // ---- 切回前台自动刷新 ----
+
+  /// 用户切到别的 App 再回来时，数据可能已经变了（在通知栏点完成、在别处记了一笔）。
+  /// 5 秒内刚拉过就跳过，避免和按钮/下拉连着拉两次。
+  document.addEventListener('visibilitychange', function () {
+    if (document.visibilityState !== 'visible') return;
+    if (Date.now() - state.lastLoadAt < 5000) return;
+    load();
+  });
 
   whenHostReady(load);
 })();

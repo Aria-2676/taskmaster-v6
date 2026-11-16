@@ -91,6 +91,21 @@ class PluginQueryHost {
     }
   }
 
+  /// 只释放一个插件，下一次 [acquire] 会重新建页面。
+  ///
+  /// 用于"页面还在、但里面的 handler 已经没了"这种状态 —— 表现是查询回
+  /// `unsupported`。Android 的 WebView 在后台被回收后 JS 上下文会重建，
+  /// 而 `ready` 已经把"就绪"记下了，于是再也不会重新注入。
+  /// 光靠 `ready` 判断会一直拿到 `unsupported`，只能重建（2026-11-16 今日页
+  /// 计划块从"没有计划"变成"未提供该查询"就是这个）。**这是兜底，不是解释** ——
+  /// 触发条件没能在本地复现，所以用"重来一次"保证行为正确。
+  Future<void> release(String pluginId) async {
+    final host = _plugins.remove(pluginId);
+    if (host == null) return;
+    PluginQueryRegistry.instance.unregister(pluginId);
+    await host.dispose();
+  }
+
   /// 只给测试用：当前托管的插件数。
   @visibleForTesting
   int get debugHostCount => _plugins.length;

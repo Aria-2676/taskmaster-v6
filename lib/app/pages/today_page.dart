@@ -65,6 +65,10 @@ class _TodayPageState extends State<TodayPage> {
   bool _planDirty = false;
   bool _memoDirty = false;
 
+  /// 查询回 `unsupported`、需要重建离屏页面再试。见 [_rebuildPlanQuery]。
+  bool _needPlanRebuild = false;
+  bool _needMemoRebuild = false;
+
   /// 上次见到「自己是不是最上层 route」。false → true 就是"从别的页面回来了"。
   bool _routeWasCurrent = true;
 
@@ -140,7 +144,7 @@ class _TodayPageState extends State<TodayPage> {
   /// [force] 为 true 时无条件重拉。不强制时按签名（`id@版本`）判断：签名一样就
   /// 直接返回，因为市场通知 / 切 tab / 从别的页面返回会连着响，每次都起一个离屏
   /// WebView 太贵，而那样拉回来的还是同一份数据。
-  Future<void> _loadPlanBlock({bool force = false}) async {
+  Future<void> _loadPlanBlock({bool force = false, bool retried = false}) async {
     final market = widget.marketStore;
     final launcher = widget.pluginLauncher;
     if (market == null || launcher == null) {
@@ -205,6 +209,15 @@ class _TodayPageState extends State<TodayPage> {
       if (!mounted) return;
 
       if (!result.isOk) {
+        if (result.status == QueryStatus.unsupported && !retried) {
+          // 页面在、handler 却没了：WebView 被系统回收后 JS 上下文重建，而
+          // `ready` 还记着"就绪"，于是永远等不到 handler。重建一次再问 ——
+          // 不这么做界面会一直写"未提供该查询"，但插件其实是支持的
+          // （2026-11-16 今日页计划块就停在这句话上）。
+          debugPrint('[today] 计划块 unsupported，重建离屏页面后重试');
+          _needPlanRebuild = true;
+          return;
+        }
         // 不弹错：这块拿不到就是没有，界面保持安静
         setState(() {
           _planNote = result.status == QueryStatus.unsupported
@@ -224,15 +237,25 @@ class _TodayPageState extends State<TodayPage> {
       debugPrint('[today] 计划块加载失败：$error');
     } finally {
       if (mounted) setState(() => _planLoading = false);
-      if (_planDirty) {
+      if (_needPlanRebuild) {
+        _needPlanRebuild = false;
+        unawaited(_rebuildPlanQuery(plugin.pluginId));
+      } else if (_planDirty) {
         _planDirty = false;
         unawaited(_loadPlanBlock(force: true));
       }
     }
   }
 
+  /// 重建计划插件的离屏页面，再问一次（只重试一次，[retried] 拦住死循环）。
+  Future<void> _rebuildPlanQuery(String pluginId) async {
+    await PluginQueryHost.instance.release(pluginId);
+    if (!mounted) return;
+    await _loadPlanBlock(force: true, retried: true);
+  }
+
   /// 拉"置顶备忘"块。和计划块同一套机制，只是方法名不同。
-  Future<void> _loadMemoBlock({bool force = false}) async {
+  Future<void> _loadMemoBlock({bool force = false, bool retried = false}) async {
     final market = widget.marketStore;
     final launcher = widget.pluginLauncher;
     if (market == null || launcher == null) return;
@@ -279,6 +302,11 @@ class _TodayPageState extends State<TodayPage> {
       );
       if (!mounted) return;
       if (!result.isOk) {
+        if (result.status == QueryStatus.unsupported && !retried) {
+          debugPrint('[today] 备忘块 unsupported，重建离屏页面后重试');
+          _needMemoRebuild = true;
+          return;
+        }
         setState(() => _memoSignature = signature);
         return;
       }
@@ -290,11 +318,20 @@ class _TodayPageState extends State<TodayPage> {
       debugPrint('[today] 备忘块加载失败：$error');
     } finally {
       if (mounted) setState(() => _memoLoading = false);
-      if (_memoDirty) {
+      if (_needMemoRebuild) {
+        _needMemoRebuild = false;
+        unawaited(_rebuildMemoQuery(plugin.pluginId));
+      } else if (_memoDirty) {
         _memoDirty = false;
         unawaited(_loadMemoBlock(force: true));
       }
     }
+  }
+
+  Future<void> _rebuildMemoQuery(String pluginId) async {
+    await PluginQueryHost.instance.release(pluginId);
+    if (!mounted) return;
+    await _loadMemoBlock(force: true, retried: true);
   }
 
   static List<_MemoItem> _parseMemos(Map<String, Object?>? data) {

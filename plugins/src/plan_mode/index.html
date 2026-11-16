@@ -516,6 +516,19 @@
       btn.textContent = '载入中…';
     }
 
+    try {
+      await seedShelfInner();
+    } catch (error) {
+      console.log('[seed] 失败 ' + (error && error.message ? error.message : error));
+      toast('示例没写成：' + (error && error.message ? error.message : error));
+      if (btn) {
+        btn.disabled = false;
+        btn.textContent = '载入示例：学英语 30 天';
+      }
+    }
+  }
+
+  async function seedShelfInner() {
     var start = todayKey();
     var end = new Date();
     end.setDate(end.getDate() + 30);

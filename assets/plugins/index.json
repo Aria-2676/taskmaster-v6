@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "publishedAt": "2026-11-16T06:30:03Z",
+  "publishedAt": "2026-11-16T16:52:14Z",
   "plugins": [
     {
       "id": "energy_currency",
@@ -44,7 +44,7 @@
     {
       "id": "list_mode",
       "name": "待办清单",
-      "version": "2.0.3",
+      "version": "2.0.4",
       "contract": 1,
       "description": "购物、打包、流程核对——可以反复用的清单。",
       "icon": "checklist",
@@ -57,9 +57,9 @@
         "order": 20
       },
       "package": {
-        "path": "plugins/packages/list_mode_v2.0.3.zip",
-        "sha256": "7d54fc211319b026d5f5a8e0649e5ced8833477c7e600d00706146e1139c0b98",
-        "sizeBytes": 7121
+        "path": "plugins/packages/list_mode_v2.0.4.zip",
+        "sha256": "cf4d4f17e6773eac65ea16ab4094fc20e88002d5f8e84c9cd213931523f19fbb",
+        "sizeBytes": 7278
       }
     },
     {
@@ -86,7 +86,7 @@
     {
       "id": "plan_mode",
       "name": "计划",
-      "version": "2.0.5",
+      "version": "2.0.6",
       "contract": 1,
       "description": "把一个目标拆成阶段，排上任务，看得见进度。",
       "icon": "flag",
@@ -100,9 +100,9 @@
         "order": 10
       },
       "package": {
-        "path": "plugins/packages/plan_mode_v2.0.5.zip",
-        "sha256": "ebc74df353b0a165c82350aac72a17f5c169e4c0c922bbc5fa1ce502f48c7bba",
-        "sizeBytes": 10180
+        "path": "plugins/packages/plan_mode_v2.0.6.zip",
+        "sha256": "4a24b1433bd575e389785b60c14ec14637d03bb79ed026b1da8c65cc730ffe14",
+        "sizeBytes": 10253
       }
     },
     {

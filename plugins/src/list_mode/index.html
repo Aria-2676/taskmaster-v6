@@ -328,6 +328,20 @@
       btn.textContent = '载入中…';
     }
 
+    try {
+      await seedShelfInner();
+    } catch (error) {
+      // 不接住的话按钮永远停在「载入中…」，用户只看到"点了没反应"。
+      console.log('[seed] 失败 ' + (error && error.message ? error.message : error));
+      toast('示例没写成：' + (error && error.message ? error.message : error));
+      if (btn) {
+        btn.disabled = false;
+        btn.textContent = '载入示例：露营打包';
+      }
+    }
+  }
+
+  async function seedShelfInner() {
     var inserted = await window.host.call('db.insert', {
       table: 'lists',
       values: {
@@ -354,7 +368,7 @@
         });
       }
     }
-    await loadLists();
+    await reloadLists();
     toast('已载入示例，点开看看');
   }
 

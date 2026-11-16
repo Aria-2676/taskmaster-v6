@@ -1,7 +1,7 @@
 {
   "id": "list_mode",
   "name": "待办清单",
-  "version": "2.0.3",
+  "version": "2.0.4",
   "contract": 1,
   "entry": "index.html",
   "queryEntry": "query.html",

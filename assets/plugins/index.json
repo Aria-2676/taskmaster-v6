@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "publishedAt": "2026-11-16T16:52:14Z",
+  "publishedAt": "2026-11-17T15:37:45Z",
   "plugins": [
     {
       "id": "energy_currency",
@@ -86,7 +86,7 @@
     {
       "id": "plan_mode",
       "name": "计划",
-      "version": "2.0.6",
+      "version": "2.0.7",
       "contract": 1,
       "description": "把一个目标拆成阶段，排上任务，看得见进度。",
       "icon": "flag",
@@ -100,9 +100,9 @@
         "order": 10
       },
       "package": {
-        "path": "plugins/packages/plan_mode_v2.0.6.zip",
-        "sha256": "4a24b1433bd575e389785b60c14ec14637d03bb79ed026b1da8c65cc730ffe14",
-        "sizeBytes": 10253
+        "path": "plugins/packages/plan_mode_v2.0.7.zip",
+        "sha256": "0039bcc2745a0529dfc0b27744ab7448914328bd4cee5e837484d0ab1516c2cd",
+        "sizeBytes": 10863
       }
     },
     {

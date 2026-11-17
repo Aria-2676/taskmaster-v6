@@ -31,7 +31,11 @@ class TodayPage extends StatefulWidget {
 
   /// 打开已装插件（按 id）。今日页的块是**入口**，不是终点 ——
   /// 看到「置顶备忘」想改，看到计划进度想看阶段，都不该逼用户自己去找侧边栏。
-  final void Function(String pluginId)? onOpenPlugin;
+  ///
+  /// 第二个参数是"打开后落在哪儿"（见 [PluginLaunchSpec.openWith]）：
+  /// 点某条计划就带上它的 id，插件直接进详情，不用再让用户在列表里找一遍。
+  final void Function(String pluginId, [Map<String, Object?>? openWith])?
+      onOpenPlugin;
 
   /// 打开任务编辑页。今日页只读，但"看到了想改"是常事。
   final void Function(Task task)? onOpenTask;
@@ -368,7 +372,9 @@ class _TodayPageState extends State<TodayPage> {
       if (name is! String) continue;
       final percent = one['percent'];
       final endDate = one['endDate'];
+      final id = one['id'];
       items.add(_PlanItem(
+        id is int ? id : 0,
         name,
         percent is int ? percent : 0,
         endDate is String ? endDate : '',
@@ -573,31 +579,44 @@ class _TodayPageState extends State<TodayPage> {
             style: TextStyle(fontSize: 12, color: scheme.onSurfaceVariant)),
       );
     }
+    final onOpen = widget.onOpenPlugin;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
         for (final item in items)
-          Padding(
-            padding: const EdgeInsets.symmetric(vertical: 5),
-            child: Row(
-              children: <Widget>[
-                Icon(Icons.flag_outlined, size: 14, color: scheme.primary),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    item.name,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(fontSize: 13),
+          InkWell(
+            // 点哪条开哪条。整块只给"看全部"用（块标题那个箭头）。
+            onTap: onOpen == null || item.id == 0
+                ? null
+                : () => onOpen('plan_mode', <String, Object?>{
+                      'kind': 'plan',
+                      'id': item.id,
+                    }),
+            borderRadius: BorderRadius.circular(8),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 5),
+              child: Row(
+                children: <Widget>[
+                  Icon(Icons.flag_outlined, size: 14, color: scheme.primary),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      item.name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(fontSize: 13),
+                    ),
                   ),
-                ),
-                Text(
-                  item.endDate.isEmpty
-                      ? '${item.percent}%'
-                      : '${item.percent}% · 到 ${item.endDate}',
-                  style: TextStyle(fontSize: 11.5, color: scheme.onSurfaceVariant),
-                ),
-              ],
+                  Text(
+                    item.endDate.isEmpty
+                        ? '${item.percent}%'
+                        : '${item.percent}% · 到 ${item.endDate}',
+                    style: TextStyle(fontSize: 11.5, color: scheme.onSurfaceVariant),
+                  ),
+                  if (onOpen != null && item.id != 0)
+                    Icon(Icons.chevron_right, size: 14, color: scheme.outline),
+                ],
+              ),
             ),
           ),
       ],
@@ -611,7 +630,11 @@ class _MemoItem {
 }
 
 class _PlanItem {
-  const _PlanItem(this.name, this.percent, this.endDate);
+  const _PlanItem(this.id, this.name, this.percent, this.endDate);
+
+  /// 计划行主键。点这一行时带给插件，让它直接进这条计划的详情。
+  final int id;
+
   final String name;
   final int percent;
   final String endDate;

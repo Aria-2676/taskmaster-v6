@@ -19,6 +19,7 @@ class PluginLaunchSpec {
     required this.entryPath,
     required this.bridge,
     this.hooks = const <HookId>{},
+    this.openWith,
   });
 
   final String title;
@@ -27,6 +28,12 @@ class PluginLaunchSpec {
 
   /// manifest 里声明的事件钩子。没声明的不会收到推送。
   final Set<HookId> hooks;
+
+  /// 打开时要给插件的初始参数，比如 `{'kind': 'plan', 'id': 7}`。
+  ///
+  /// 插件读 `window.__hostOpen` 或监听 `host-open` 事件。带参数打开能让
+  /// "点今日页那条计划"直接落到它的详情，而不是先扔进列表让用户再找一遍。
+  final Map<String, Object?>? openWith;
 }
 
 /// 插件页的**内容部分**，不含 Scaffold/AppBar。
@@ -41,6 +48,7 @@ class PluginView extends StatefulWidget {
     required this.entryPath,
     required this.bridge,
     this.hooks = const <HookId>{},
+    this.openWith,
     this.onLoaded,
     this.onError,
   });
@@ -52,6 +60,9 @@ class PluginView extends StatefulWidget {
 
   /// 这个插件订阅的事件（来自 manifest）。空集 = 不推任何事件。
   final Set<HookId> hooks;
+
+  /// 打开时要给插件的初始参数，加载完成后注入（见 [_PluginViewState._injectOpenWith]）。
+  final Map<String, Object?>? openWith;
 
   /// 首帧加载完成（**每份页面只回调一次**）。首页熔断靠它取消超时计时器。
   final ValueChanged<String>? onLoaded;
@@ -120,6 +131,7 @@ class _PluginViewState extends State<PluginView> {
           controller.runJavaScript(_bootstrap);
           // 桥接脚本就绪 → 把排队的事件补发出去
           _channel.markReady();
+          _injectOpenWith(controller);
           if (_reported) return;
           _reported = true;
           widget.onLoaded?.call(url);
@@ -144,6 +156,31 @@ class _PluginViewState extends State<PluginView> {
       }
       await controller.loadFile(widget.entryPath);
     }());
+  }
+
+  /// 把初始参数交给插件。**双保险**：
+  ///
+  /// - 写 `window.__hostOpen`：页面已经在跑时，插件随时读都有；
+  /// - 派发 `host-open` 事件：刚打开的页面，插件注册过监听就能收到。
+  ///
+  /// 只做事件不行 —— 插件可能在 `onPageFinished` 之前就把初始化跑完了，
+  /// 那时监听还没挂上，事件就丢了。只做全局变量也不行 —— 监听了事件的插件
+  /// 会以为"没人告诉我"。
+  ///
+  /// 页面重载后 `__hostOpen` 会随 JS 上下文一起清空，所以这里每次
+  /// `onPageFinished` 都注入一遍。
+  void _injectOpenWith(WebViewController controller) {
+    final open = widget.openWith;
+    if (open == null || open.isEmpty) return;
+    final json = jsonEncode(open);
+    unawaited(controller.runJavaScript('''
+      (function () {
+        window.__hostOpen = $json;
+        try {
+          window.dispatchEvent(new CustomEvent('host-open', { detail: $json }));
+        } catch (e) {}
+      })();
+    '''));
   }
 
   @override
@@ -256,12 +293,16 @@ class PluginPage extends StatelessWidget {
     required this.entryPath,
     required this.bridge,
     this.hooks = const <HookId>{},
+    this.openWith,
   });
 
   final String title;
   final String entryPath;
   final PluginBridge bridge;
   final Set<HookId> hooks;
+
+  /// 打开时要给插件的初始参数（比如"直接进这条计划"）。
+  final Map<String, Object?>? openWith;
 
   @override
   Widget build(BuildContext context) {
@@ -291,7 +332,12 @@ class PluginPage extends StatelessWidget {
           ),
         ],
       ),
-      body: PluginView(entryPath: entryPath, bridge: bridge, hooks: hooks),
+      body: PluginView(
+        entryPath: entryPath,
+        bridge: bridge,
+        hooks: hooks,
+        openWith: openWith,
+      ),
     );
   }
 }

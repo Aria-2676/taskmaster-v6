@@ -279,6 +279,40 @@
     box.innerHTML = '';
     state.plans.forEach(function (p) { box.appendChild(planCard(p)); });
     document.getElementById('emptyShelf').hidden = state.plans.length !== 0;
+    // 列表到位了才有对象可开 —— 带参数打开时，打开动作就发生在这一步之后
+    tryOpenFromHost();
+  }
+
+  /// 带参数打开：`{'kind': 'plan', 'id': 7}` 直接落到那条计划的详情。
+  ///
+  /// 主包注入两样东西（见 PluginPage 的 `_injectOpenWith`）：
+  /// `window.__hostOpen` 和 `host-open` 事件。两个都要接 —— 页面加载快的
+  /// 时候事件早于脚本注册，页面加载慢的时候只有事件能拿到。
+  var pendingOpen = null;
+
+  window.addEventListener('host-open', function (event) {
+    pendingOpen = event.detail || null;
+    tryOpenFromHost();
+  });
+
+  function tryOpenFromHost() {
+    var wanted = pendingOpen || window.__hostOpen;
+    if (!wanted || wanted.kind !== 'plan' || wanted.id == null) return;
+    if (!state.plans.length) return; // 列表还没拉回来，等 loadPlans 再调一次
+    var hit = null;
+    for (var i = 0; i < state.plans.length; i++) {
+      if (state.plans[i].id === wanted.id) { hit = state.plans[i]; break; }
+    }
+    if (!hit) {
+      // 计划可能已经被删了。说清楚比默默停在列表上好。
+      toast('这条计划已经不在了');
+      pendingOpen = null;
+      window.__hostOpen = null;
+      return;
+    }
+    pendingOpen = null;
+    window.__hostOpen = null;
+    openPlan(hit);
   }
 
   function planCard(plan) {

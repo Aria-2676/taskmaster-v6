@@ -60,6 +60,8 @@
           var total = s.length + m.length + l.length;
 
           return {
+            // 带上 id：今日页点这一行时要靠它直接进详情
+            id: plan.id,
             name: plan.name,
             percent: total === 0 ? 0 : Math.round(done * 100 / total),
             endDate: plan.end_date || ''

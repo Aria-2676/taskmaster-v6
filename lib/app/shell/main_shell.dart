@@ -345,12 +345,12 @@ class _MainShellState extends State<MainShell> {
   ///
   /// 找不到就安静返回：块能显示说明查询是通的，此时弹「没装」只会误导 ——
   /// 真没装的话那块根本不会出现。
-  void _openPluginById(String pluginId) {
+  void _openPluginById(String pluginId, [Map<String, Object?>? openWith]) {
     final market = widget.marketStore;
     if (market == null) return;
     for (final plugin in market.installed) {
       if (plugin.pluginId == pluginId && plugin.enabled) {
-        unawaited(_openPlugin(plugin));
+        unawaited(_openPlugin(plugin, openWith: openWith));
         return;
       }
     }
@@ -359,7 +359,10 @@ class _MainShellState extends State<MainShell> {
 
   /// 打开已装插件。入口路径、权限都从包内 `plugin.json` 读，
   /// 数据源由应用层通过 [pluginLauncher] 注入。
-  Future<void> _openPlugin(InstalledPlugin plugin) async {
+  Future<void> _openPlugin(
+    InstalledPlugin plugin, {
+    Map<String, Object?>? openWith,
+  }) async {
     final launcher = widget.pluginLauncher;
     final navigator = Navigator.of(context);
     // 兜底：入口已经被过滤掉了，还能走到这里说明是从别处（首页、旧调用点）
@@ -390,6 +393,7 @@ class _MainShellState extends State<MainShell> {
             entryPath: spec.entryPath,
             bridge: spec.bridge,
             hooks: spec.hooks,
+            openWith: openWith,
           ),
         ),
       );

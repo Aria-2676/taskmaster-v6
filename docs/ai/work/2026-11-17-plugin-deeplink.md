@@ -1,6 +1,6 @@
 # 任务 · 插件实例化参数（带参数打开，deeplink 前置）
 
-> 日期：2026-11-17 ｜ 状态：in_progress
+> 日期：2026-11-17 ｜ 状态：review
 > 协调者：用户 ｜ 实现者：小鱼 ｜ 核查者：用户
 
 ## 范围
@@ -65,16 +65,29 @@
 
 ### 已完成
 
-（待填）
+- `PluginLaunchSpec.openWith` / `PluginPage.openWith` / `PluginView.openWith`
+- `_injectOpenWith`：加载完成后写 `window.__hostOpen` + 派发 `host-open`，
+  并留一条 `[plugin] 注入 openWith …` 日志（不然"没落到详情"根本分不清是谁的问题）
+- 计划插件 2.0.7：`query.html` 返回 `id`；`index.html` 在 `loadPlans` 之后消费参数，
+  计划已删时 toast
+- 今日页计划行各自可点，带自己的 id
+- `docs/plugin-contract.md` §5.1
 
 ### 下一步
 
-（待填）
+6.8 全局搜索可以直接用这套：搜索结果带 `{kind:'plan'|'memo'|'list', id}` 打开。
+备忘和清单要各自加"按 id 定位"的消费逻辑（备忘没有详情页，可能只需要滚动到那条）。
 
-### 已知坑/失败尝试
+### 已知坑
 
-（待填）
+- **改 `PluginPage` 构造时漏了 `this.openWith,`**，analyze 却"通过"了 ——
+  因为我用 `grep -E "^(error|warning)"` 过滤，而 flutter analyze 的输出行首有空格。
+  `^error` 匹配不到任何错误，于是全量测试才炸出编译错误。
+  **教训：过滤 analyze 输出别用 `^`。**
+- 市场里点"升级"按钮在这个模拟器上极难命中（坐标比例各页面不一致），
+  最后是误判为"没升"而实际升了 —— 用插件诊断页看版本号才确认。
 
 ### 未验证
 
-（待填）
+- `host-open` 事件单独生效（实测无法区分是哪条路径先到）
+- 计划已删时的 toast

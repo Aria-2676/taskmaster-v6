@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../models/calendar_strip_style.dart';
 import '../models/editor_form.dart';
 import '../shell/destinations.dart';
+import 'diagnostics_page.dart';
 import '../state/task_store.dart';
 
 /// 设置页：**只放"怎么工作"**，不放内容浏览和任务操作。
@@ -76,7 +77,7 @@ class SettingsPage extends StatelessWidget {
       body: ListenableBuilder(
         listenable: store,
         builder: (context, _) => ListView(
-        padding: const EdgeInsets.fromLTRB(16, 8, 16, 28),
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 96),
         children: <Widget>[
           _SectionLabel('外观'),
           _Card(children: <Widget>[
@@ -219,6 +220,15 @@ class SettingsPage extends StatelessWidget {
               title: '版本与更新',
               subtitle: '查看版本号、检查新版本',
               onTap: () => onOpenDestination(AppDestination.about),
+            ),
+            const Divider(height: 20),
+            _LinkRow(
+              icon: Icons.monitor_heart_outlined,
+              title: '诊断与日志',
+              subtitle: '出问题时把现场复制出来',
+              onTap: () => Navigator.of(context).push(
+                MaterialPageRoute<void>(builder: (_) => const DiagnosticsPage()),
+              ),
             ),
           ]),
         ],

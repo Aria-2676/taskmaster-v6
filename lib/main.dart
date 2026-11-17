@@ -14,8 +14,12 @@
 import 'package:flutter/material.dart';
 
 import 'app/v6_preview_app.dart';
+import 'core/diagnostics/app_log.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
+  // 接管 debugPrint：日志进内存环形缓冲，设置页「诊断与日志」才看得到。
+  // 必须早于 runApp —— 启动阶段的日志同样要留。
+  AppLog.install();
   runApp(const V6PreviewApp(autoSeed: false, checkUpdate: true));
 }

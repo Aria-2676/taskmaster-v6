@@ -10,6 +10,7 @@ import '../../core/plugin/plugin_hook_channel.dart';
 import '../../core/plugin/plugin_bootstrap.dart';
 import '../../core/plugin/plugin_query_registry.dart';
 import '../data/plugin_bridge.dart';
+import 'diagnostics_page.dart';
 
 /// 启动一个插件所需的全部材料。
 class PluginLaunchSpec {
@@ -267,6 +268,28 @@ class PluginPage extends StatelessWidget {
     return Scaffold(
       appBar: AppBar(
         title: Text(title, style: const TextStyle(fontSize: 16)),
+        actions: <Widget>[
+          // 出问题时第一时间要的就是"它到底是哪个版本、有什么权限、最近报了什么"。
+          // 这三样以前只能靠连电脑看 logcat。
+          IconButton(
+            tooltip: '插件诊断',
+            icon: const Icon(Icons.monitor_heart_outlined),
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute<void>(
+                builder: (_) => DiagnosticsPage(
+                  plugin: PluginDiagnostics(
+                    pluginId: bridge.pluginId,
+                    title: title,
+                    version: bridge.version,
+                    contract: bridge.contract,
+                    permissions: bridge.permissions,
+                    entryPath: entryPath,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
       body: PluginView(entryPath: entryPath, bridge: bridge, hooks: hooks),
     );

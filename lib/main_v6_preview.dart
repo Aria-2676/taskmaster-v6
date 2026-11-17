@@ -6,7 +6,10 @@
 import 'package:flutter/material.dart';
 
 import 'app/v6_preview_app.dart';
+import 'core/diagnostics/app_log.dart';
 
 void main() {
+  WidgetsFlutterBinding.ensureInitialized();
+  AppLog.install();
   runApp(const V6PreviewApp());
 }

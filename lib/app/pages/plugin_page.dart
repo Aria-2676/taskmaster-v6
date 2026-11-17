@@ -173,6 +173,9 @@ class _PluginViewState extends State<PluginView> {
     final open = widget.openWith;
     if (open == null || open.isEmpty) return;
     final json = jsonEncode(open);
+    // 注入看不见摸不着，不留一条日志的话，"点了没落到详情"到底是没传参、
+    // 还是插件没接住，只能靠猜（诊断页那条链路就是为这种问题准备的）。
+    debugPrint('[plugin] 注入 openWith $json -> ${widget.bridge.pluginId}');
     unawaited(controller.runJavaScript('''
       (function () {
         window.__hostOpen = $json;

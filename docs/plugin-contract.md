@@ -356,6 +356,29 @@ window.host.call('event.pending').then(function (list) {
 - **不允许插件自己决定图标图片**（首版用内置图标名，避免风格割裂）
 - 卸载后入口自动消失，不留空位
 
+### 5.1 带参数打开（`host-open`）
+
+主包可以在打开插件时带一份初始参数，比如"直接进这条计划"：
+
+```js
+// 主包注入（加载完成后）：
+//   window.__hostOpen = { kind: 'plan', id: 7 };
+//   window.dispatchEvent(new CustomEvent('host-open', { detail: { kind: 'plan', id: 7 } }));
+```
+
+插件侧**两样都要接**，只接一样会在某半边失效：
+
+```js
+window.addEventListener('host-open', function (e) { handle(e.detail); });
+// 页面加载快的时候事件早于脚本注册，只在 __hostOpen 里
+if (window.__hostOpen) handle(window.__hostOpen);
+```
+
+- 参数由主包构造，**不来自用户输入**，插件不需要校验类型之外的信任问题
+- 不带参数打开时，主包不注入、不派发 —— 插件按老行为走（列表页）
+- 消费完建议把 `window.__hostOpen` 置空，避免页面内二次导航时重复触发
+- 这是**可选能力**：不接的插件完全不受影响，只是"点进去落在列表"
+
 ---
 
 ## 6. 分发

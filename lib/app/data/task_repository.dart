@@ -88,6 +88,33 @@ class TaskRepository {
     return _hydrate(rows);
   }
 
+  /// 全局搜索：标题和描述都搜。
+  ///
+  /// `%` `_` `\` 要转义 —— 用户搜「100%」时，`%` 是 LIKE 的通配符，
+  /// 不转义会变成"匹配任何东西"，搜出一堆不相干的任务。
+  Future<List<Task>> search(String keyword, {int limit = 50}) async {
+    final trimmed = keyword.trim();
+    if (trimmed.isEmpty) return const <Task>[];
+    final like = '%${_escapeLike(trimmed)}%';
+    final rows = await _db.rawQuery('''
+      SELECT t.*, (
+        SELECT GROUP_CONCAT(${TaskTagCol.tagId})
+        FROM ${V6Table.taskTags} tt
+        WHERE tt.${TaskTagCol.taskId} = t.${TaskCol.id}
+      ) AS tag_ids
+      FROM ${V6Table.tasks} t
+      WHERE (t.${TaskCol.title} LIKE ? ESCAPE '\\' OR t.${TaskCol.description} LIKE ? ESCAPE '\\')
+      ORDER BY t.${TaskCol.isOk} ASC, t.${TaskCol.cplTime} DESC, $_priorityRank
+      LIMIT ?
+    ''', <Object?>[like, like, limit]);
+    return _hydrate(rows);
+  }
+
+  String _escapeLike(String raw) => raw
+      .replaceAll('\\', '\\\\')
+      .replaceAll('%', '\\%')
+      .replaceAll('_', '\\_');
+
   Future<List<Tag>> allTags() async {    final rows = await _db.query(V6Table.tags, orderBy: TagCol.id);
     return rows
         .map((r) => Tag(

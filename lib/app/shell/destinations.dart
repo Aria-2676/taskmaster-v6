@@ -13,6 +13,9 @@ enum DestinationSurface { drawer, profile }
 /// [ready] 为 false 的入口**不是隐藏，而是灰显 + 标注「未接入」**：
 /// 用户能看见规划，但不会点了个没反应还以为坏了。
 enum AppDestination {
+  // 搜索放最前：它是跨模式的全局入口，不该排在某个具体页面下面。
+  // 只进侧边栏（2026-11-19 用户定的）：顶栏已经有 ☰、+、货币，再加一个会挤。
+  search('search', '搜索', Icons.search),
   todayTasks('today', '今日任务', Icons.today_outlined),
   recycleBin('recycle', '任务列表 · 回收站', Icons.inbox_outlined),
   tagManager('tags', '标签管理', Icons.sell_outlined),
@@ -30,6 +33,7 @@ enum AppDestination {
   final IconData icon;
 
   Set<DestinationSurface> get surfaces => switch (this) {
+        search ||
         todayTasks ||
         recycleBin ||
         tagManager ||

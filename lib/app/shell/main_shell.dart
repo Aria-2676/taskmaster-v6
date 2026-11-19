@@ -16,6 +16,7 @@ import '../../core/updater/models/app_update_manifest.dart';
 import '../../core/updater/providers/app_update_provider.dart';
 import '../../core/updater/services/legacy_v5_service.dart';
 import '../../core/updater/services/app_update_launcher.dart';
+import '../pages/search_page.dart';
 import '../pages/settings_page.dart';
 import '../pages/today_page.dart';
 import '../pages/sidebar_entries_page.dart';
@@ -687,6 +688,12 @@ class _MainShellState extends State<MainShell> {
     }
 
     switch (destination) {
+      case AppDestination.search:
+        navigator.push(
+          MaterialPageRoute<void>(
+            builder: (_) => SearchPage(store: _store, onOpenTask: _openEditor),
+          ),
+        );
       case AppDestination.todayTasks:
         setState(() => _tab = 0);
       case AppDestination.tagManager:

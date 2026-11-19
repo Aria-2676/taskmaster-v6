@@ -183,6 +183,10 @@ class TaskStore extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// 全局搜索。走 repo 而不是拿 `_tasks` 过滤 —— `_tasks` 只有当前选中那一天。
+  Future<List<Task>> search(String keyword, {int limit = 50}) =>
+      _repo.search(keyword, limit: limit);
+
   Future<void> toggle(Task task) async {
     final next = !task.isDone;
     await _repo.setDone(task.id, next);

@@ -69,7 +69,14 @@ class PluginQueryHost {
       // 路径一样才复用。插件升级后目录是 `id/新版本/`，旧页面还活着的，
       // 复用它就等于"查的是上一版的逻辑"—— 用户看到的现象是"今日页数字
       // 死活不认新版插件，重启 App 才好"（这条记在记忆里很久了）。
-      if (existing.loadedPath == path) return existing.ready.isCompleted;
+      if (existing.loadedPath == path) {
+        // **复用前必须重新登记**。registry 是按 pluginId 一张表，前台插件页
+        // 关闭时会 `unregister(pluginId)` —— 它删的是"这个 id 的登记"，
+        // 离屏那份跟着一起没了。实例还在、ready 还是 true，但 registry 空了，
+        // 于是查询全部返回 `unavailable`（2026-11-19 搜索一直"没连上"就是这个）。
+        PluginQueryRegistry.instance.register(pluginId, existing.query);
+        return existing.ready.isCompleted;
+      }
       debugPrint('[query-host] $pluginId 目录变了（可能刚升级），重建离屏页面');
       await release(pluginId);
     }

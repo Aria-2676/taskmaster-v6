@@ -77,6 +77,30 @@
       });
     });
 
+    // 全局搜索：搜名字和目标。返回统一的 {items:[{id,title,subtitle}]}，
+    // 主包只负责展示和跳转，标题里带什么由这里决定（最清楚该显示什么的是插件）。
+    window.host.onQuery('plan.search', function (params) {
+      var kw = String((params && params.keyword) || '').trim().toLowerCase();
+      if (!kw) return { items: [] };
+      var limit = (params && params.limit) || 20;
+      return window.host.call('db.select', {
+        table: 'plans',
+        orderBy: [{ column: 'created_at', desc: true }],
+        limit: 200
+      }).then(function (rows) {
+        var items = (rows || []).filter(function (plan) {
+          var name = String(plan.name || '').toLowerCase();
+          var goal = String(plan.goal || '').toLowerCase();
+          return name.indexOf(kw) >= 0 || goal.indexOf(kw) >= 0;
+        }).slice(0, limit).map(function (plan) {
+          var state = plan.status ? '已完成' : '进行中';
+          var tail = plan.end_date ? ' · 到 ' + plan.end_date : '';
+          return { id: plan.id, title: plan.name, subtitle: state + tail };
+        });
+        return { items: items };
+      });
+    });
+
     if (typeof HostBridge !== 'undefined' && HostBridge.postMessage) {
       HostBridge.postMessage(JSON.stringify({ queryReady: true }));
     }

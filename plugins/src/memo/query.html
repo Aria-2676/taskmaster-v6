@@ -32,6 +32,30 @@
       });
     });
 
+    // 全局搜索：搜正文。备忘没有标题，取正文前 40 字当标题。
+    window.host.onQuery('memo.search', function (params) {
+      var kw = String((params && params.keyword) || '').trim().toLowerCase();
+      if (!kw) return { items: [] };
+      var limit = (params && params.limit) || 20;
+      return window.host.call('db.select', {
+        table: 'entries',
+        orderBy: [{ column: 'at', desc: true }],
+        limit: 300
+      }).then(function (rows) {
+        var items = (rows || []).filter(function (row) {
+          return String(row.content || '').toLowerCase().indexOf(kw) >= 0;
+        }).slice(0, limit).map(function (row) {
+          var text = String(row.content || '');
+          return {
+            id: row.id,
+            title: text.length > 40 ? text.slice(0, 40) + '…' : text,
+            subtitle: (row.pinned ? '置顶 · ' : '') + String(row.at || '').slice(0, 10)
+          };
+        });
+        return { items: items };
+      });
+    });
+
     // 注册完上报，主包据此判定"可以问了"
     if (typeof HostBridge !== 'undefined' && HostBridge.postMessage) {
       HostBridge.postMessage(JSON.stringify({ queryReady: true }));

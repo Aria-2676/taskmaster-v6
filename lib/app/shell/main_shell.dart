@@ -691,7 +691,13 @@ class _MainShellState extends State<MainShell> {
       case AppDestination.search:
         navigator.push(
           MaterialPageRoute<void>(
-            builder: (_) => SearchPage(store: _store, onOpenTask: _openEditor),
+            builder: (_) => SearchPage(
+              store: _store,
+              onOpenTask: _openEditor,
+              marketStore: widget.marketStore,
+              pluginLauncher: widget.pluginLauncher,
+              onOpenPlugin: _openPluginById,
+            ),
           ),
         );
       case AppDestination.todayTasks:

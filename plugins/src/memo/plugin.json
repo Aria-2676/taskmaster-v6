@@ -1,7 +1,7 @@
 {
   "id": "memo",
   "name": "备忘",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "contract": 1,
   "entry": "index.html",
   "queryEntry": "query.html",

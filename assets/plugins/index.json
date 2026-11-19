@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "publishedAt": "2026-11-17T15:37:45Z",
+  "publishedAt": "2026-11-19T14:26:03Z",
   "plugins": [
     {
       "id": "energy_currency",
@@ -65,7 +65,7 @@
     {
       "id": "memo",
       "name": "备忘",
-      "version": "1.0.1",
+      "version": "1.0.2",
       "contract": 1,
       "description": "随手记一句，稍后再整理。",
       "icon": "sticky_note_2",
@@ -78,15 +78,15 @@
         "order": 20
       },
       "package": {
-        "path": "plugins/packages/memo_v1.0.1.zip",
-        "sha256": "fc8c9041f6bccaf6d01df88611b47e438eed630bb90ef8167197c3946f803fbb",
-        "sizeBytes": 4560
+        "path": "plugins/packages/memo_v1.0.2.zip",
+        "sha256": "f5739e03df571d0b753e0d2a3f74f385175ded21cceae0774552815a5965245e",
+        "sizeBytes": 5545
       }
     },
     {
       "id": "plan_mode",
       "name": "计划",
-      "version": "2.0.7",
+      "version": "2.0.8",
       "contract": 1,
       "description": "把一个目标拆成阶段，排上任务，看得见进度。",
       "icon": "flag",
@@ -100,9 +100,9 @@
         "order": 10
       },
       "package": {
-        "path": "plugins/packages/plan_mode_v2.0.7.zip",
-        "sha256": "0039bcc2745a0529dfc0b27744ab7448914328bd4cee5e837484d0ab1516c2cd",
-        "sizeBytes": 10863
+        "path": "plugins/packages/plan_mode_v2.0.8.zip",
+        "sha256": "cfd409ee6dfc8dc07d3950d2605228ad5609cab41d5403af86a30653c346a137",
+        "sizeBytes": 11279
       }
     },
     {

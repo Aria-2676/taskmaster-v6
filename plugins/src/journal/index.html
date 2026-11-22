@@ -49,6 +49,8 @@
   }
   .entry .row1 { display: flex; align-items: center; gap: 8px; }
   .entry .mood { font-size: 16px; line-height: 1; }
+  /* 从搜索结果跳进来时闪一下边框 */
+  .entry.focus { box-shadow: 0 0 0 2px var(--accent); }
   .entry .time { font-size: 11px; color: var(--muted); margin-left: auto; }
   .entry .body {
     margin-top: 6px; line-height: 1.55; white-space: pre-wrap;
@@ -197,8 +199,39 @@
     document.getElementById('emptyFeed').hidden = state.entries.length !== 0;
   }
 
+  /// 从搜索结果跳进来：`{kind:'journal', id}` 滚到那篇并闪一下。
+  var pendingOpen = null;
+  var openTries = 0;
+
+  window.addEventListener('host-open', function (event) {
+    pendingOpen = event.detail || null;
+    openTries = 0;
+    tryOpenFromHost();
+  });
+
+  function tryOpenFromHost() {
+    var wanted = pendingOpen || window.__hostOpen;
+    if (!wanted || wanted.kind !== 'journal' || wanted.id == null) return;
+    var node = document.querySelector('[data-id="' + wanted.id + '"]');
+    if (!node) {
+      // 列表是异步拉的，还没画出来就等下一拍
+      if (openTries++ < 10) { setTimeout(tryOpenFromHost, 250); return; }
+      toast('这篇日记已经不在了');
+      pendingOpen = null;
+      window.__hostOpen = null;
+      return;
+    }
+    pendingOpen = null;
+    window.__hostOpen = null;
+    openTries = 0;
+    node.scrollIntoView({ block: 'center' });
+    node.classList.add('focus');
+    setTimeout(function () { node.classList.remove('focus'); }, 2400);
+  }
+
   function entryCard(e) {
     var card = el('div', 'entry');
+    card.dataset.id = String(e.id); // 搜索结果跳转靠它定位
     var row = el('div', 'row1');
     row.appendChild(el('span', 'mood', MOODS[e.mood] || ''));
     row.appendChild(el('span', 'time', whenText(e.day, e.created_at)));

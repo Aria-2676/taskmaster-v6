@@ -24,6 +24,35 @@
       });
     });
 
+    // 全局搜索：**只搜条目内容，不搜清单名**。
+    // 清单一般几十个，侧边栏和书架一眼能看到；条目动辄上百条，才是最需要搜的。
+    // 命中条目的副标题带清单名，用户就知道它在哪个清单里。
+    window.host.onQuery('list.search', function (params) {
+      var kw = String((params && params.keyword) || '').trim().toLowerCase();
+      if (!kw) return { items: [] };
+      var limit = (params && params.limit) || 20;
+      return Promise.all([
+        window.host.call('db.select', { table: 'items', limit: 600 }),
+        window.host.call('db.select', { table: 'lists', limit: 200 })
+      ]).then(function (res) {
+        var rows = res[0] || [];
+        var lists = res[1] || [];
+        var nameById = {};
+        lists.forEach(function (l) { nameById[l.id] = l.name; });
+        var hits = rows.filter(function (row) {
+          return String(row.content || '').toLowerCase().indexOf(kw) >= 0;
+        }).slice(0, limit).map(function (row) {
+          var where = nameById[row.list_id] || '清单';
+          return {
+            id: row.id,
+            title: row.content,
+            subtitle: where + (row.done ? ' · 已完成' : '')
+          };
+        });
+        return { items: hits };
+      });
+    });
+
     if (typeof HostBridge !== 'undefined' && HostBridge.postMessage) {
       HostBridge.postMessage(JSON.stringify({ queryReady: true }));
     }

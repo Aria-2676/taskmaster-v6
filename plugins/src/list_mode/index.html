@@ -75,6 +75,8 @@
   }
   .footer { display: flex; flex-wrap: wrap; gap: 6px; padding: 14px; }
   .empty { color: var(--muted); font-size: 12.5px; padding: 14px; }
+  /* 从搜索结果跳进来时闪一下，否则分不清"跳到了"和"我自己滑到这儿" */
+  .item.focus { box-shadow: 0 0 0 2px var(--accent); }
   .mask {
     position: fixed; inset: 0; background: rgba(0,0,0,.42);
     display: flex; align-items: center; justify-content: center;
@@ -295,6 +297,7 @@
 
   function itemRow(item) {
     var row = el('div', 'item' + (item.done ? ' done' : ''));
+    row.dataset.id = String(item.id); // 搜索结果跳转靠它定位
 
     var check = el('div', 'check', '✓');
     check.onclick = function () { toggleItem(item); };
@@ -370,6 +373,72 @@
     }
     await reloadLists();
     toast('已载入示例，点开看看');
+  }
+
+  /// 从搜索结果跳进来：`{kind:'list', id}` 是**条目** id。
+  ///
+  /// 需要先问一次条目属于哪个清单（搜索结果只有条目），再打开那个清单、
+  /// 滚到它并闪一下。找不到就说清楚 —— 静默停在书架上，用户会以为搜索骗人。
+  var pendingOpen = null;
+  var openTries = 0;
+
+  window.addEventListener('host-open', function (event) {
+    pendingOpen = event.detail || null;
+    openTries = 0;
+    tryOpenFromHost();
+  });
+
+  async function tryOpenFromHost() {
+    var wanted = pendingOpen || window.__hostOpen;
+    if (!wanted || wanted.kind !== 'list' || wanted.id == null) return;
+
+    // 书架还没加载完时先等，否则找不到清单名
+    if (!state.lists.length) {
+      if (openTries++ < 10) { setTimeout(tryOpenFromHost, 250); return; }
+      toast('清单还没加载出来');
+      pendingOpen = null;
+      window.__hostOpen = null;
+      return;
+    }
+
+    var rows = await window.host.call('db.select', {
+      table: 'items',
+      where: [{ column: 'id', value: wanted.id }],
+      limit: 1
+    });
+    if (!rows || !rows.length) {
+      toast('这条已经在清单里找不到了');
+      pendingOpen = null;
+      window.__hostOpen = null;
+      return;
+    }
+
+    var listId = rows[0].list_id;
+    var target = null;
+    for (var i = 0; i < state.lists.length; i++) {
+      if (state.lists[i].id === listId) { target = state.lists[i]; break; }
+    }
+    if (!target) {
+      toast('它所在的清单已经不在了');
+      pendingOpen = null;
+      window.__hostOpen = null;
+      return;
+    }
+
+    pendingOpen = null;
+    window.__hostOpen = null;
+    openList(target);
+    // 内页条目是异步拉的，给一拍再滚
+    var itemId = wanted.id;
+    setTimeout(function () { focusItem(itemId); }, 350);
+  }
+
+  function focusItem(itemId) {
+    var node = document.querySelector('[data-id="' + itemId + '"]');
+    if (!node) return;
+    node.scrollIntoView({ block: 'center' });
+    node.classList.add('focus');
+    setTimeout(function () { node.classList.remove('focus'); }, 2400);
   }
 
   async function createList(name, templateId) {

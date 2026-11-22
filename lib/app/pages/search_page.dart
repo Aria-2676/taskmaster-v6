@@ -67,6 +67,8 @@ class _SearchPageState extends State<SearchPage> {
   static const List<_SearchTarget> _targets = <_SearchTarget>[
     _SearchTarget('plan_mode', '计划', 'plan.search', 'plan'),
     _SearchTarget('memo', '备忘', 'memo.search', 'memo'),
+    _SearchTarget('list_mode', '清单', 'list.search', 'list'),
+    _SearchTarget('journal', '日记', 'journal.search', 'journal'),
   ];
 
   @override

@@ -27,6 +27,30 @@
       });
     });
 
+    // 全局搜索：搜正文。日记的价值就在正文，只搜标题等于没搜。
+    window.host.onQuery('journal.search', function (params) {
+      var kw = String((params && params.keyword) || '').trim().toLowerCase();
+      if (!kw) return { items: [] };
+      var limit = (params && params.limit) || 20;
+      return window.host.call('db.select', {
+        table: 'entries',
+        orderBy: [{ column: 'created_at', desc: true }],
+        limit: 300
+      }).then(function (rows) {
+        var hits = (rows || []).filter(function (row) {
+          return String(row.content || '').toLowerCase().indexOf(kw) >= 0;
+        }).slice(0, limit).map(function (row) {
+          var text = String(row.content || '');
+          return {
+            id: row.id,
+            title: text.length > 40 ? text.slice(0, 40) + '…' : text,
+            subtitle: String(row.day || '')
+          };
+        });
+        return { items: hits };
+      });
+    });
+
     if (typeof HostBridge !== 'undefined' && HostBridge.postMessage) {
       HostBridge.postMessage(JSON.stringify({ queryReady: true }));
     }

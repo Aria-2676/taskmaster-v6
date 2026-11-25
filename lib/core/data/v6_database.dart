@@ -20,7 +20,7 @@ class V6Database {
   ///
   /// - 1：初始结构
   /// - 2：`recycled_tasks.tag_ids`（回收站保留标签快照，恢复时用来重建 `task_tags`）
-  static const int version = 2;
+  static const int version = 3;
 
   /// 打开数据库（不存在则创建）。
   ///
@@ -60,6 +60,18 @@ class V6Database {
           await db.execute(
             'ALTER TABLE ${V6Table.recycledTasks} '
             'ADD COLUMN ${RecycledTaskCol.tagIds} TEXT',
+          );
+        }
+        if (oldVersion < 3) {
+          // 任务提醒时间。两张表都要补：删除任务是把 tasks 的整行搬进
+          // recycled_tasks，列必须一一对应，否则删除直接报 no column。
+          await db.execute(
+            'ALTER TABLE ${V6Table.tasks} '
+            'ADD COLUMN ${TaskCol.remindAt} TEXT',
+          );
+          await db.execute(
+            'ALTER TABLE ${V6Table.recycledTasks} '
+            'ADD COLUMN ${RecycledTaskCol.remindAt} TEXT',
           );
         }
       },

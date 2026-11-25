@@ -122,6 +122,9 @@ void main() {
     await fields.setVisible(FieldCatalog.description.id, false);
 
     await openEditor(tester, task: store.tasks.single);
+    // 底部多了「提醒」行，把「已隐藏」提示挤出了首屏 —— 先滚到底再断言
+    await tester.drag(find.byType(ListView), const Offset(0, -400));
+    await settle(tester);
 
     expect(find.widgetWithText(TextField, '本周进展'), findsNothing);
     expect(find.textContaining('已隐藏 描述'), findsOneWidget);
@@ -133,6 +136,8 @@ void main() {
     await fields.setVisible(FieldCatalog.description.id, false);
 
     await openEditor(tester, task: store.tasks.single);
+    await tester.drag(find.byType(ListView), const Offset(0, -400));
+    await settle(tester);
     await tester.tap(find.textContaining('已隐藏 描述'));
     await settle(tester);
 

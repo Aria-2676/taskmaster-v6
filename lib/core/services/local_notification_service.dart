@@ -100,6 +100,12 @@ class LocalNotificationService implements NotificationSink {
   /// 插件渠道：默认低打扰，可被系统折叠。
   static const String channelPlugin = 'plugin';
 
+  /// 任务提醒渠道：和番茄钟同级的「到点响」，但单独一条，用户能分别关。
+  ///
+  /// 不跟番茄钟共用：想关掉番茄钟的到点铃声、又想留着任务提醒的人，
+  /// 共用一个渠道就没法只关一个。
+  static const String channelTask = 'task_reminder';
+
   final FlutterLocalNotificationsPlugin _plugin = FlutterLocalNotificationsPlugin();
 
   bool _initialized = false;
@@ -299,6 +305,19 @@ class LocalNotificationService implements NotificationSink {
 
   NotificationDetails _detailsFor(String channelId) {
     switch (channelId) {
+      case channelTask:
+        return NotificationDetails(
+          android: AndroidNotificationDetails(
+            channelTask,
+            '任务提醒',
+            channelDescription: '任务到点提醒',
+            importance: Importance.high,
+            priority: Priority.high,
+            category: AndroidNotificationCategory.reminder,
+            // 显式声明震动：静音/口袋场景只靠提示音等于没提醒
+            enableVibration: true,
+          ),
+        );
       case channelPomodoro:
         // 不能 const：vibrationPattern 是运行时构造的
         return NotificationDetails(

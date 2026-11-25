@@ -6,6 +6,7 @@ import '../../core/data/v6_schema.dart';
 import '../../core/extension/extension_hook.dart';
 import '../data/settings_repository.dart';
 import '../data/task_repository.dart';
+import '../services/task_reminder_scheduler.dart';
 import '../models/editor_form.dart';
 import '../models/task.dart';
 
@@ -187,9 +188,29 @@ class TaskStore extends ChangeNotifier {
   Future<List<Task>> search(String keyword, {int limit = 50}) =>
       _repo.search(keyword, limit: limit);
 
+  /// 启动时把所有提醒重新排进系统闹钟。由应用层在 store 就绪后调一次。
+  Future<void> resyncReminders() async {
+    try {
+      final tasks = await _repo.withReminders();
+      await TaskReminderScheduler.instance.resyncAll(tasks);
+    } catch (error) {
+      // 重排失败不影响使用，日志里留痕即可
+      debugPrint('[remind] 启动重排失败：$error');
+    }
+  }
+
   Future<void> toggle(Task task) async {
     final next = !task.isDone;
     await _repo.setDone(task.id, next);
+    // 完成的任务不该再提醒；取消完成要把它排回来
+    unawaited(TaskReminderScheduler.instance.sync(Task(
+      id: task.id,
+      title: task.title,
+      dueDate: task.dueDate,
+      priority: task.priority,
+      isDone: next,
+      remindAt: task.remindAt,
+    )));
     if (next) {
       // **不 await**：钩子是通知，单个订阅方超时 500ms 也必须放行主流程，
       // 而且用户勾完要立刻看到卡片变化，不能等插件。
@@ -208,18 +229,31 @@ class TaskStore extends ChangeNotifier {
     String priority = 'white',
     List<int> tagIds = const <int>[],
     DateTime? day,
+    String? remindAt,
   }) async {
     final trimmed = title.trim();
     if (trimmed.isEmpty) return;
-    await _repo.insert(
+    final dueDay = day ?? _day;
+    final id = await _repo.insert(
       title: trimmed,
-      day: day ?? _day,
+      day: dueDay,
       description: (description?.trim().isEmpty ?? true) ? null : description!.trim(),
       priority: priority,
       estimatedMinutes: estimatedMinutes,
+      remindAt: remindAt,
       tagIds: tagIds,
     );
     await load();
+    if (remindAt != null) {
+      unawaited(TaskReminderScheduler.instance.sync(Task(
+        id: id,
+        title: trimmed,
+        dueDate: dueDay,
+        priority: priority,
+        isDone: false,
+        remindAt: remindAt,
+      )));
+    }
   }
 
   /// 保存编辑。标题为空直接拒绝（界面上也拦了一层，这里是最后一道）。
@@ -230,6 +264,7 @@ class TaskStore extends ChangeNotifier {
     required DateTime dueDate,
     required String priority,
     int? estimatedMinutes,
+    String? remindAt,
     required List<int> tagIds,
   }) async {
     final trimmed = title.trim();
@@ -242,10 +277,20 @@ class TaskStore extends ChangeNotifier {
       description: (description?.trim().isEmpty ?? true) ? null : description!.trim(),
       day: dueDate,
       priority: priority,
+      remindAt: remindAt,
       estimatedMinutes: estimatedMinutes,
       tagIds: tagIds,
     );
     await load();
+    // 提醒排期跟着保存走：改了时间就重排，清空就撤掉
+    unawaited(TaskReminderScheduler.instance.sync(Task(
+      id: task.id,
+      title: trimmed,
+      dueDate: dueDate,
+      priority: priority,
+      isDone: task.isDone,
+      remindAt: remindAt,
+    )));
   }
 
   // ---- 标签 ----

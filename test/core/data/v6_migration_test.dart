@@ -33,13 +33,34 @@ CREATE TABLE recycled_tasks (
 )
 ''';
 
+/// v1 时代的 `tasks`：**没有 remind_at**。
+///
+/// 真实的老库一定有这张表，迁移会往它上面 ALTER；测试只建 recycled_tasks 的话，
+/// 「表不存在」会把迁移错误变成测试错误（2026-11-25 就撞了这一次）。
+const String _v1TasksDdl = '''
+CREATE TABLE tasks (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  loop_id TEXT,
+  title TEXT NOT NULL,
+  description TEXT,
+  is_word INTEGER NOT NULL DEFAULT 0,
+  is_ok INTEGER NOT NULL DEFAULT 0,
+  cpl_time TEXT NOT NULL,
+  recurrence TEXT NOT NULL DEFAULT 'none',
+  completed_at TEXT,
+  estimated_minutes INTEGER,
+  created_at TEXT NOT NULL,
+  priority TEXT NOT NULL DEFAULT 'white'
+)
+''';
+
 void main() {
   setUpAll(() {
     sqfliteFfiInit();
     databaseFactory = databaseFactoryFfi;
   });
 
-  test('v1 老库升到 v2：补上 tag_ids，旧数据不丢', () async {
+  test('v1 老库升上来：补 tag_ids 与 remind_at，旧数据不丢', () async {
     final dir = await Directory.systemTemp.createTemp('v6_migration');
     addTearDown(() => dir.delete(recursive: true));
     final path = p.join(dir.path, 'v6_tasks.db');
@@ -47,6 +68,7 @@ void main() {
     // 造一个真实的 v1 库（只建这次迁移涉及的这张表）
     final old = await openDatabase(path, version: 1, onCreate: (db, v) async {
       await db.execute(_v1RecycledDdl);
+      await db.execute(_v1TasksDdl);
     });
     await old.insert('recycled_tasks', <String, Object?>{
       'title': '升级前就在回收站里的任务',
@@ -71,14 +93,24 @@ void main() {
     expect(rows, hasLength(1), reason: '迁移不能把这行弄丢');
     expect(rows.single['title'], '升级前就在回收站里的任务');
     expect(rows.single[RecycledTaskCol.tagIds], isNull, reason: '老数据没有标签快照，为空是正常的');
+
+    // 1 → 3 这轮新加的提醒列，两张表都要有
+    final taskColumns = await db.rawQuery('PRAGMA table_info(${V6Table.tasks})');
+    expect(taskColumns.map((c) => c['name']), contains(TaskCol.remindAt));
+    expect(columns.map((c) => c['name']), contains(RecycledTaskCol.remindAt),
+        reason: '回收站存整行快照，少一列删除就报 no column');
   });
 
-  test('新库建出来就是 v2：tag_ids 列存在', () async {
+  test('新库建出来就是当前版本：tag_ids / remind_at 都存在', () async {
     final db = await V6Database.open(path: inMemoryDatabasePath);
     addTearDown(db.close);
 
     final columns = await db.rawQuery('PRAGMA table_info(${V6Table.recycledTasks})');
     expect(columns.map((c) => c['name']), contains(RecycledTaskCol.tagIds));
-    expect(V6Database.version, 2);
+    expect(columns.map((c) => c['name']), contains(RecycledTaskCol.remindAt));
+
+    final taskColumns = await db.rawQuery('PRAGMA table_info(${V6Table.tasks})');
+    expect(taskColumns.map((c) => c['name']), contains(TaskCol.remindAt));
+    expect(V6Database.version, 3);
   });
 }

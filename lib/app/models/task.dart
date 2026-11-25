@@ -18,6 +18,7 @@ class Task {
     this.estimatedMinutes,
     this.createdAt,
     this.completedAt,
+    this.remindAt,
     this.tags = const <Tag>[],
   });
 
@@ -32,12 +33,19 @@ class Task {
       estimatedMinutes: row[TaskCol.estimatedMinutes] as int?,
       createdAt: TaskDate.parseTime(row[TaskCol.createdAt] as String?),
       completedAt: TaskDate.parseTime(row[TaskCol.completedAt] as String?),
+      remindAt: row[TaskCol.remindAt] as String?,
       tags: tags,
     );
   }
 
   final int id;
   final String title;
+
+  /// 提醒时间，`yyyy-MM-dd HH:mm`。null = 不提醒。
+  ///
+  /// 存字符串而不是 DateTime：它是"用户设定的墙上时间"，
+  /// 序列化进 SQLite 时不该被时区来回换算（换算一次就少一小时那种 bug 见多了）。
+  final String? remindAt;
   final String? description;
 
   /// 属于哪一天（本地日期，零点）

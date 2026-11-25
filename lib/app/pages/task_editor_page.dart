@@ -1,9 +1,13 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../../core/field/task_field.dart';
 import '../models/editor_form.dart';
 import '../models/task.dart';
 import '../state/field_store.dart';
+import '../../core/services/local_notification_service.dart';
+import '../services/task_reminder_scheduler.dart';
 import '../state/task_store.dart';
 
 /// 编辑页关闭时的结果。壳层靠它决定提示什么。
@@ -268,6 +272,9 @@ class TaskEditorContentState extends State<TaskEditorContent> {
   late final Set<int> _tagIds =
       widget.task?.tags.map((t) => t.id).toSet() ?? <int>{};
 
+  /// 提醒时间（`yyyy-MM-dd HH:mm`）。null = 不提醒。
+  late String? _remindAt = widget.task?.remindAt;
+
   /// 用户动过的字段。**没动过 = 保存时写回原值（可能是 null）**，
   /// 这是"默认值不回写"的实现点。
   final Set<String> _touched = <String>{};
@@ -338,6 +345,7 @@ class TaskEditorContentState extends State<TaskEditorContent> {
           day: _day,
           priority: _priority,
           estimatedMinutes: minutes,
+          remindAt: _remindAt,
           tagIds: _tagIds.toList(),
         );
       } else {
@@ -348,6 +356,7 @@ class TaskEditorContentState extends State<TaskEditorContent> {
           dueDate: _day,
           priority: _priority,
           estimatedMinutes: minutes,
+          remindAt: _remindAt,
           tagIds: _tagIds.toList(),
         );
       }
@@ -444,6 +453,80 @@ class TaskEditorContentState extends State<TaskEditorContent> {
     };
   }
 
+  /// 「提醒」这一行：没设时是个引导，设了显示时间 + 清除。
+  Widget _remindRow(ColorScheme scheme) {
+    final at = TaskReminderScheduler.parseRemindAt(_remindAt);
+    return Row(
+      children: <Widget>[
+        Icon(
+          at == null ? Icons.alarm_outlined : Icons.alarm_on,
+          size: 18,
+          color: at == null ? scheme.onSurfaceVariant : scheme.primary,
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Text(
+            at == null ? '提醒' : _remindLabel(at),
+            style: TextStyle(
+              fontSize: 13.5,
+              color: at == null ? scheme.onSurfaceVariant : scheme.onSurface,
+            ),
+          ),
+        ),
+        if (at != null)
+          IconButton(
+            tooltip: '清除提醒',
+            visualDensity: VisualDensity.compact,
+            onPressed: () => setState(() {
+              _remindAt = null;
+              _dirty = true;
+            }),
+            icon: Icon(Icons.close, size: 16, color: scheme.onSurfaceVariant),
+          ),
+        TextButton(
+          onPressed: _pickRemind,
+          child: Text(at == null ? '设置' : '修改'),
+        ),
+      ],
+    );
+  }
+
+  /// 时间已经过去的提醒要说出来，不然用户以为设好了会响。
+  String _remindLabel(DateTime at) {
+    final text = TaskReminderScheduler.formatRemindAt(at);
+    return at.isAfter(DateTime.now()) ? text : '$text（已过点）';
+  }
+
+  Future<void> _pickRemind() async {
+    final now = DateTime.now();
+    final base = TaskReminderScheduler.parseRemindAt(_remindAt) ??
+        now.add(const Duration(hours: 1));
+
+    final date = await showDatePicker(
+      context: context,
+      initialDate: base.isBefore(now) ? now : base,
+      firstDate: DateTime(now.year - 1, 1, 1),
+      lastDate: DateTime(now.year + 5, 12, 31),
+    );
+    if (date == null || !mounted) return;
+
+    final time = await showTimePicker(
+      context: context,
+      initialTime: TimeOfDay.fromDateTime(base),
+    );
+    if (time == null) return;
+
+    final at = DateTime(date.year, date.month, date.day, time.hour, time.minute);
+    setState(() {
+      _remindAt = TaskReminderScheduler.formatRemindAt(at);
+      _dirty = true;
+    });
+    // 第一次设提醒就顺手要通知权限。不要权限的话到点会**静默无提示** ——
+    // 用户只会觉得"这提醒根本没响"，而不会想到是权限没给。
+    // 放在这里而不是启动时：设提醒是用户明确的意图，此时弹权限框最讲道理。
+    unawaited(LocalNotificationService.instance.requestPermission());
+  }
+
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
@@ -453,6 +536,12 @@ class TaskEditorContentState extends State<TaskEditorContent> {
       rows.add(_buildField(field, scheme));
       rows.add(const SizedBox(height: 18));
     }
+
+    // 提醒不放进 FieldCatalog：它不是一个「字段」，而是这条任务的一个开关。
+    // 藏起来会让用户以为没设提醒（字段管理里「隐藏」的语义是「别占地方」，
+    // 而不是「这个能力不存在」）。
+    rows.add(_remindRow(scheme));
+    rows.add(const SizedBox(height: 18));
 
     if (_showHidden) {
       for (final field in _hiddenWithValues) {
@@ -476,7 +565,9 @@ class TaskEditorContentState extends State<TaskEditorContent> {
           Expanded(
             child: ListView(
               controller: widget.scrollController,
-              padding: const EdgeInsets.fromLTRB(16, 4, 16, 28),
+              // 底部留够：编辑页是贴底的弹层，最后一行（提醒）会被系统
+              // 导航栏压住，用户看得到点不到
+              padding: const EdgeInsets.fromLTRB(16, 4, 16, 88),
               children: <Widget>[
                 ...rows,
                 if (!_showHidden && _hiddenWithValues.isNotEmpty)

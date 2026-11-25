@@ -63,6 +63,12 @@ class TaskCol {
   static const String createdAt = 'created_at';
   static const String priority = 'priority';
 
+  /// 提醒时间，`yyyy-MM-dd HH:mm`。空 = 不提醒。
+  ///
+  /// 存本地时间字符串而不是时间戳：提醒是"用户眼里的几点"，跨时区/夏令时
+  /// 之后仍然应该在他当时设定的那个钟点响。
+  static const String remindAt = 'remind_at';
+
   /// v5 遗留、v6 明确移除的列。保留常量是为了让"已移除"这件事可被测试断言。
   static const String legacyRewardPoints = 'reward_points';
   static const String legacyIsDeducted = 'is_deducted';
@@ -72,6 +78,11 @@ class RecycledTaskCol {
   const RecycledTaskCol._();
 
   static const String id = 'id';
+
+  /// 与 [TaskCol.remindAt] 同义。回收站存的是**整行快照**（删除时把 tasks 的
+  /// 一行 map 直接搬过去），所以列必须一一对应 —— 少一列，删除就报
+  /// "table recycled_tasks has no column named …"。
+  static const String remindAt = 'remind_at';
   static const String taskId = 'task_id';
   static const String loopId = 'loop_id';
   static const String title = 'title';
@@ -191,7 +202,8 @@ const List<String> v6CreateTables = <String>[
     ${TaskCol.completedAt} TEXT,
     ${TaskCol.estimatedMinutes} INTEGER,
     ${TaskCol.createdAt} TEXT NOT NULL,
-    ${TaskCol.priority} TEXT NOT NULL DEFAULT 'white'
+    ${TaskCol.priority} TEXT NOT NULL DEFAULT 'white',
+    ${TaskCol.remindAt} TEXT
   )
   ''',
   '''
@@ -209,6 +221,7 @@ const List<String> v6CreateTables = <String>[
     ${RecycledTaskCol.estimatedMinutes} INTEGER,
     ${RecycledTaskCol.createdAt} TEXT NOT NULL,
     ${RecycledTaskCol.priority} TEXT NOT NULL DEFAULT 'white',
+    ${RecycledTaskCol.remindAt} TEXT,
     ${RecycledTaskCol.deletedAt} TEXT NOT NULL,
     ${RecycledTaskCol.tagIds} TEXT
   )

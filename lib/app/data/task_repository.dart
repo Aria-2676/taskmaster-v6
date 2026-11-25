@@ -110,6 +110,25 @@ class TaskRepository {
     return _hydrate(rows);
   }
 
+  /// 所有设了提醒的任务（含已过点的，交给调用方判断）。
+  ///
+  /// 启动重排要用**全量**而不是当天视图：用户今天设了明天的提醒，
+  /// 今天重启 App 时如果只排当天，明天那条就悄悄消失了。
+  Future<List<Task>> withReminders() async {
+    final rows = await _db.rawQuery('''
+      SELECT t.*, (
+        SELECT GROUP_CONCAT(${TaskTagCol.tagId})
+        FROM ${V6Table.taskTags} tt
+        WHERE tt.${TaskTagCol.taskId} = t.${TaskCol.id}
+      ) AS tag_ids
+      FROM ${V6Table.tasks} t
+      WHERE t.${TaskCol.remindAt} IS NOT NULL AND t.${TaskCol.remindAt} != ''
+      ORDER BY t.${TaskCol.remindAt} ASC
+      LIMIT 200
+    ''');
+    return _hydrate(rows);
+  }
+
   String _escapeLike(String raw) => raw
       .replaceAll('\\', '\\\\')
       .replaceAll('%', '\\%')
@@ -131,6 +150,7 @@ class TaskRepository {
     String? description,
     String priority = 'white',
     int? estimatedMinutes,
+    String? remindAt,
     List<int> tagIds = const <int>[],
   }) async {
     return _db.transaction<int>((txn) async {
@@ -138,6 +158,7 @@ class TaskRepository {
       final id = await txn.insert(V6Table.tasks, <String, Object?>{
         TaskCol.title: title,
         TaskCol.description: description,
+        TaskCol.remindAt: remindAt,
         TaskCol.cplTime: TaskDate.dayKey(day),
         TaskCol.priority: priority,
         TaskCol.isOk: 0,
@@ -168,6 +189,7 @@ class TaskRepository {
     required DateTime day,
     required String priority,
     int? estimatedMinutes,
+    String? remindAt,
     List<int> tagIds = const <int>[],
   }) async {
     await _db.transaction((txn) async {
@@ -178,6 +200,7 @@ class TaskRepository {
           TaskCol.description: description,
           TaskCol.cplTime: TaskDate.dayKey(day),
           TaskCol.priority: priority,
+          TaskCol.remindAt: remindAt,
           TaskCol.estimatedMinutes: estimatedMinutes,
         },
         where: '${TaskCol.id} = ?',

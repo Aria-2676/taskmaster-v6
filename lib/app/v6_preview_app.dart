@@ -41,6 +41,7 @@ import 'shell/main_shell.dart';
 import 'state/field_store.dart';
 import 'state/currency_store.dart';
 import '../core/services/local_notification_service.dart';
+import 'services/task_reminder_scheduler.dart';
 import 'state/pomodoro_store.dart';
 import 'state/home_mode_store.dart';
 import 'state/plugin_market_store.dart';
@@ -240,6 +241,10 @@ class _V6PreviewAppState extends State<V6PreviewApp> {
       if (!mounted) return;
       setState(() {
         _store = TaskStore(repo, settings);
+        // 任务提醒：把通知服务接上，然后把所有未过点的提醒重排一遍。
+        // 设备重启由插件的 BootReceiver 兜，App 升级/清数据/换时区只能靠这里。
+        TaskReminderScheduler.instance.attach(LocalNotificationService.instance);
+        unawaited(_store!.resyncReminders());
         _fields = fields;
         _home = home;
         _currency = currency;

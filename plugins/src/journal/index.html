@@ -29,6 +29,24 @@
     padding: 12px 14px 10px; position: sticky; top: 0;
     background: var(--bg); z-index: 2;
   }
+  /* 热力图：每列一周、7 行一天，颜色深浅 = 当天写了几篇 */
+  .heatWrap { padding: 0 14px 4px; }
+  .heat {
+    display: grid;
+    grid-template-rows: repeat(7, 11px);
+    grid-auto-flow: column;
+    grid-auto-columns: 11px;
+    gap: 2px;
+  }
+  .heat .cell { width: 11px; height: 11px; border-radius: 2.5px; background: var(--line); }
+  .heat .cell.lv1 { background: #d6c9f0; }
+  .heat .cell.lv2 { background: #b39ddb; }
+  .heat .cell.lv3 { background: #7e57c2; }
+  /* 未来的日期留白，不画成"没写" */
+  .heat .cell.future { background: transparent; }
+  .heatNote {
+    font-size: 11px; color: var(--muted); padding: 6px 14px 8px;
+  }
   h1 { font-size: 17px; font-weight: 600; margin: 0; flex: 1; }
   button {
     font: inherit; border: 0; border-radius: 9px; cursor: pointer;
@@ -93,6 +111,8 @@
     <h1>日记</h1>
     <button id="writeBtn">写</button>
   </header>
+  <div class="heatWrap"><div class="heat" id="heat"></div></div>
+  <div class="heatNote" id="heatNote"></div>
   <div id="groups"></div>
   <div class="empty" id="emptyFeed" hidden>还没有日记。点右上角「写」记下今天。</div>
 </div>
@@ -169,7 +189,50 @@
       orderBy: [{ column: 'created_at', desc: true }],
       limit: 300
     })) || [];
+    renderHeatmap();
     renderFeed();
+  }
+
+  /// 热力图：最近 18 周（126 天）的写作密度。
+  ///
+  /// 日记是唯一一个"有没有坚持"比"写了什么"更重要的模式 —— 流只能看见写了的日子，
+  /// 看不见漏掉的日子。颜色分四档（0/1/2/3+ 篇），比逐日列数字好扫。
+  function renderHeatmap() {
+    var box = document.getElementById('heat');
+    var note = document.getElementById('heatNote');
+    if (!box) return;
+
+    var counts = {};
+    var monthKey = todayKey().slice(0, 7);
+    var monthDays = 0;
+    state.entries.forEach(function (entry) {
+      if (!entry.day) return;
+      counts[entry.day] = (counts[entry.day] || 0) + 1;
+      if (String(entry.day).indexOf(monthKey) === 0) monthDays++;
+    });
+
+    var weeks = 18;
+    var today = new Date();
+    today.setHours(0, 0, 0, 0);
+    var start = new Date(today);
+    // 从 (weeks*7 - 1) 天前开始，正好填满 18 列 × 7 行
+    start.setDate(start.getDate() - (weeks * 7 - 1));
+
+    var html = '';
+    for (var i = 0; i < weeks * 7; i++) {
+      var d = new Date(start);
+      d.setDate(start.getDate() + i);
+      var key = d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate());
+      var n = counts[key] || 0;
+      var level = n === 0 ? 0 : (n === 1 ? 1 : (n === 2 ? 2 : 3));
+      var future = d.getTime() > today.getTime();
+      html += '<i class="cell lv' + level + (future ? ' future' : '') + '"></i>';
+    }
+    box.innerHTML = html;
+
+    note.textContent = monthDays === 0
+      ? '这半年还没写过'
+      : '这个月写了 ' + monthDays + ' 天';
   }
 
   function renderFeed() {

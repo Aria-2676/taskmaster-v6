@@ -1,7 +1,7 @@
 {
   "id": "journal",
   "name": "日记",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "contract": 1,
   "entry": "index.html",
   "queryEntry": "query.html",

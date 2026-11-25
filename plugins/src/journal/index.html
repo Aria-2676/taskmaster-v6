@@ -193,7 +193,7 @@
     renderFeed();
   }
 
-  /// 热力图：最近 18 周（126 天）的写作密度。
+  /// 热力图：最近 24 周（168 天）的写作密度。
   ///
   /// 日记是唯一一个"有没有坚持"比"写了什么"更重要的模式 —— 流只能看见写了的日子，
   /// 看不见漏掉的日子。颜色分四档（0/1/2/3+ 篇），比逐日列数字好扫。
@@ -204,18 +204,21 @@
 
     var counts = {};
     var monthKey = todayKey().slice(0, 7);
-    var monthDays = 0;
+    var monthSeen = {};
     state.entries.forEach(function (entry) {
       if (!entry.day) return;
       counts[entry.day] = (counts[entry.day] || 0) + 1;
-      if (String(entry.day).indexOf(monthKey) === 0) monthDays++;
+      // 这里数的是**天数**，同一天写三篇只算一天（以前写成数篇数，
+      // 于是「写了 3 篇」被念成「写了 3 天」）
+      if (String(entry.day).indexOf(monthKey) === 0) monthSeen[entry.day] = 1;
     });
+    var monthDays = Object.keys(monthSeen).length;
 
-    var weeks = 18;
+    var weeks = 24;
     var today = new Date();
     today.setHours(0, 0, 0, 0);
     var start = new Date(today);
-    // 从 (weeks*7 - 1) 天前开始，正好填满 18 列 × 7 行
+    // 从 (weeks*7 - 1) 天前开始，正好填满 24 列 × 7 行
     start.setDate(start.getDate() - (weeks * 7 - 1));
 
     var html = '';
